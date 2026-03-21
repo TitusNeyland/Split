@@ -15,6 +15,7 @@ import { StatusBar } from 'expo-status-bar';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import ProfileStatsCard from '../components/ProfileStatsCard';
 import { isFirebaseConfigured } from '../../lib/firebase';
 import {
   formatMemberSince,
@@ -147,9 +148,10 @@ export default function ProfileScreen() {
         showsVerticalScrollIndicator={false}
         bounces
       >
+        <View style={styles.heroBlock}>
         <LinearGradient
           {...HERO_GRADIENT}
-          style={[styles.hero, { paddingTop: Math.max(insets.top, 12) + 8, paddingBottom: 28 }]}
+          style={[styles.hero, { paddingTop: Math.max(insets.top, 12) + 8, paddingBottom: 44 }]}
         >
           <View style={styles.topBar}>
             <Text style={styles.pageTitle}>Profile</Text>
@@ -221,6 +223,11 @@ export default function ProfileScreen() {
           </View>
         </LinearGradient>
 
+        <View style={styles.statsOverlap}>
+          <ProfileStatsCard uid={user?.uid ?? null} demoMode={!isFirebaseConfigured()} />
+        </View>
+        </View>
+
         <View style={styles.bodyPad} />
       </ScrollView>
     </View>
@@ -235,9 +242,19 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
   },
+  heroBlock: {
+    position: 'relative',
+    zIndex: 0,
+  },
   hero: {
     borderBottomLeftRadius: 0,
     borderBottomRightRadius: 0,
+  },
+  statsOverlap: {
+    marginTop: -24,
+    paddingHorizontal: 20,
+    marginBottom: 12,
+    zIndex: 1,
   },
   topBar: {
     flexDirection: 'row',
