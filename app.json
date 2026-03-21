@@ -28,7 +28,8 @@
     },
     "scheme": "split",
     "plugins": [
-      "expo-router"
+      "expo-router",
+      "expo-font"
     ]
   }
 }
