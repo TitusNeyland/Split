@@ -12,10 +12,17 @@ import {
   Modal,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { parseReceiptImage } from '../../lib/receiptApi';
 import { setReceiptAssignSession } from '../../lib/receiptParseSession';
 import { emptyManualSession, sessionFromParse } from '../../lib/receiptMappers';
+import {
+  getRecentReceiptById,
+  loadRecentReceipts,
+  newReceiptId,
+  upsertRecentFromSession,
+} from '../../lib/recentReceipts';
+import type { AssignReceiptLine, ReceiptAssignSession, StoredReceiptRecord } from '../../lib/receiptTypes';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
@@ -51,6 +58,117 @@ const VIEWFINDER_HEIGHT = 230;
 const CORNER_INSET = 16;
 const CORNER_SIZE = 22;
 const CORNER_STROKE = 2.5;
+
+/** Set to `false` when you no longer need placeholder rows. */
+const SHOW_FAKE_RECENT_RECEIPTS = true;
+
+function previewLine(
+  id: string,
+  name: string,
+  total: number,
+  assignee: string,
+  kind: AssignReceiptLine['kind'] = 'item'
+): AssignReceiptLine {
+  return {
+    id,
+    name,
+    quantity: 1,
+    unit_price: total,
+    line_total: total,
+    kind,
+    confidence: 0.95,
+    unreadable: false,
+    assignedTo: assignee,
+    selected: true,
+  };
+}
+
+const FAKE_PREVIEW_RECEIPTS: StoredReceiptRecord[] = (() => {
+  const t = Date.now();
+  const d = (day: number) => new Date(2026, 2, day).getTime();
+
+  const olive: ReceiptAssignSession = {
+    merchantName: 'Olive Garden',
+    receiptDate: 'March 14, 2026',
+    overallConfidence: 0.92,
+    receiptId: 'fake_preview_olive',
+    splitStatus: 'confirmed',
+    readOnly: true,
+    lines: [
+      previewLine('fp_og_1', 'Chicken Alfredo', 14.99, 'Jordan'),
+      previewLine('fp_og_2', 'Fettuccine Alfredo', 12.99, 'Alex'),
+      previewLine('fp_og_3', 'Caesar Salad', 8.99, 'Sam'),
+      previewLine('fp_og_4', 'Breadsticks', 4.99, 'Split'),
+      previewLine('fp_og_5', 'Tax + tip', 7.56, 'Split', 'tax'),
+    ],
+  };
+
+  const chipotle: ReceiptAssignSession = {
+    merchantName: 'Chipotle',
+    receiptDate: 'March 10, 2026',
+    overallConfidence: 0.88,
+    receiptId: 'fake_preview_chipotle',
+    splitStatus: 'pending',
+    readOnly: false,
+    lines: [
+      previewLine('fp_ch_1', 'Burrito bowl', 12.4, 'Jordan'),
+      previewLine('fp_ch_2', 'Burrito + drink', 12.4, 'Alex'),
+    ],
+  };
+
+  const tjs: ReceiptAssignSession = {
+    merchantName: "Trader Joe's",
+    receiptDate: 'March 7, 2026',
+    overallConfidence: 0.9,
+    receiptId: 'fake_preview_tjs',
+    splitStatus: 'confirmed',
+    readOnly: true,
+    lines: [
+      previewLine('fp_tj_1', 'Groceries (split)', 45, 'Split'),
+      previewLine('fp_tj_2', 'Your items', 21.58, 'Jordan'),
+      previewLine('fp_tj_3', 'Tax', 19.76, 'Split', 'tax'),
+    ],
+  };
+
+  return [
+    {
+      id: 'fake_preview_olive',
+      updatedAt: t,
+      receiptDateMs: d(14),
+      merchantName: 'Olive Garden',
+      peopleCount: 3,
+      itemCount: 7,
+      totalAmount: 49.52,
+      yourShare: 17.51,
+      splitStatus: 'confirmed',
+      session: olive,
+    },
+    {
+      id: 'fake_preview_chipotle',
+      updatedAt: t - 1,
+      receiptDateMs: d(10),
+      merchantName: 'Chipotle',
+      peopleCount: 2,
+      itemCount: 4,
+      totalAmount: 24.8,
+      yourShare: 12.4,
+      splitStatus: 'pending',
+      session: chipotle,
+    },
+    {
+      id: 'fake_preview_tjs',
+      updatedAt: t - 2,
+      receiptDateMs: d(7),
+      merchantName: "Trader Joe's",
+      peopleCount: 4,
+      itemCount: 12,
+      totalAmount: 86.34,
+      yourShare: 21.58,
+      splitStatus: 'confirmed',
+      session: tjs,
+    },
+  ];
+})();
 
 function ViewfinderGrid({ width, height, patternId }: { width: number; height: number; patternId: string }) {
   if (width <= 0 || height <= 0) return null;
@@ -171,9 +289,16 @@ export default function ScanScreen() {
   const [vfSize, setVfSize] = useState({ w: 0, h: VIEWFINDER_HEIGHT });
   const [cameraReady, setCameraReady] = useState(false);
   const [readingReceipt, setReadingReceipt] = useState(false);
+  const [recents, setRecents] = useState<StoredReceiptRecord[]>([]);
   const cameraRef = useRef<CameraView>(null);
   const reactId = useId();
   const patternId = useMemo(() => `scanGrid${reactId.replace(/[^a-zA-Z0-9]/g, '')}`, [reactId]);
+
+  const displayRecents = useMemo(() => {
+    if (!SHOW_FAKE_RECENT_RECEIPTS) return recents;
+    const fakeIds = new Set(FAKE_PREVIEW_RECEIPTS.map((r) => r.id));
+    return [...FAKE_PREVIEW_RECEIPTS, ...recents.filter((r) => !fakeIds.has(r.id))];
+  }, [recents]);
 
   const isWeb = Platform.OS === 'web';
   const showCamera = Boolean(permission?.granted && !isWeb);
@@ -182,7 +307,16 @@ export default function ScanScreen() {
     setReadingReceipt(true);
     try {
       const parsed = await parseReceiptImage(uri, mimeType);
-      setReceiptAssignSession(sessionFromParse(parsed, uri));
+      const id = newReceiptId();
+      const session: ReceiptAssignSession = {
+        ...sessionFromParse(parsed, uri),
+        receiptId: id,
+        splitStatus: 'pending',
+        readOnly: false,
+      };
+      setReceiptAssignSession(session);
+      await upsertRecentFromSession(session);
+      setRecents(await loadRecentReceipts());
       router.push('/receipt-assign');
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Something went wrong.';
@@ -190,6 +324,52 @@ export default function ScanScreen() {
     } finally {
       setReadingReceipt(false);
     }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      let alive = true;
+      loadRecentReceipts().then((list) => {
+        if (alive) setRecents(list);
+      });
+      return () => {
+        alive = false;
+      };
+    }, [])
+  );
+
+  const openRecentReceipt = useCallback(async (id: string) => {
+    if (SHOW_FAKE_RECENT_RECEIPTS && id.startsWith('fake_preview_')) {
+      const row = FAKE_PREVIEW_RECEIPTS.find((r) => r.id === id);
+      if (row) {
+        const readOnly = row.splitStatus === 'confirmed';
+        setReceiptAssignSession({
+          ...row.session,
+          receiptId: row.id,
+          splitStatus: row.splitStatus,
+          readOnly,
+        });
+        router.push('/receipt-assign');
+      }
+      return;
+    }
+    const row = await getRecentReceiptById(id);
+    if (!row) {
+      setRecents(await loadRecentReceipts());
+      return;
+    }
+    const readOnly = row.splitStatus === 'confirmed';
+    setReceiptAssignSession({
+      ...row.session,
+      receiptId: row.id,
+      splitStatus: row.splitStatus,
+      readOnly,
+    });
+    router.push('/receipt-assign');
+  }, []);
+
+  const goActivityReceipts = useCallback(() => {
+    router.push({ pathname: '/activity', params: { filter: 'receipts' } });
   }, []);
 
   const onTakePhoto = useCallback(async () => {
@@ -232,7 +412,13 @@ export default function ScanScreen() {
   }, [isWeb, processReceiptUri]);
 
   const onEnterManually = useCallback(() => {
-    setReceiptAssignSession(emptyManualSession());
+    const session: ReceiptAssignSession = {
+      ...emptyManualSession(),
+      receiptId: newReceiptId(),
+      splitStatus: 'pending',
+      readOnly: false,
+    };
+    setReceiptAssignSession(session);
     router.push('/receipt-assign');
   }, []);
 
@@ -401,8 +587,72 @@ export default function ScanScreen() {
             <Text style={styles.actionSub}>Type items in</Text>
           </Pressable>
         </View>
+
+        <View style={styles.recentWrap}>
+          <View style={styles.recentHeader}>
+            <Text style={styles.recentHeaderTitle}>Recent receipts</Text>
+            <Pressable onPress={goActivityReceipts} hitSlop={8}>
+              <Text style={styles.recentHeaderLink}>See all</Text>
+            </Pressable>
+          </View>
+
+          {displayRecents.length === 0 ? (
+            <View style={styles.recentEmpty}>
+              <View style={styles.recentEmptyArt}>
+                <View style={styles.recentEmptyCircle} />
+                <View style={styles.recentEmptyCircle2} />
+                <View style={styles.recentEmptyIconWrap}>
+                  <Ionicons name="receipt-outline" size={42} color="rgba(83,74,183,0.35)" />
+                </View>
+              </View>
+              <Text style={styles.recentEmptyText}>
+                No receipts yet · Tap Take photo to scan your first bill
+              </Text>
+            </View>
+          ) : (
+            displayRecents.map((r) => (
+              <RecentReceiptRow key={r.id} row={r} onPress={() => void openRecentReceipt(r.id)} />
+            ))
+          )}
+        </View>
       </ScrollView>
     </View>
+  );
+}
+
+function RecentReceiptRow({
+  row,
+  onPress,
+}: {
+  row: StoredReceiptRecord;
+  onPress: () => void;
+}) {
+  const d = new Date(row.receiptDateMs);
+  const mon = d.toLocaleString('en-US', { month: 'short' }).toUpperCase();
+  const dayNum = d.getDate();
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [styles.recentRow, pressed && { opacity: 0.92 }]}
+    >
+      <View style={styles.recentDateBadge}>
+        <Text style={styles.recentMon}>{mon}</Text>
+        <Text style={styles.recentDay}>{dayNum}</Text>
+      </View>
+      <View style={styles.recentMid}>
+        <Text style={styles.recentMerchant} numberOfLines={1}>
+          {row.merchantName}
+        </Text>
+        <Text style={styles.recentMeta}>
+          {row.peopleCount} {row.peopleCount === 1 ? 'person' : 'people'} · {row.itemCount}{' '}
+          {row.itemCount === 1 ? 'item' : 'items'}
+        </Text>
+      </View>
+      <View style={styles.recentRight}>
+        <Text style={styles.recentTotal}>${row.totalAmount.toFixed(2)}</Text>
+        <Text style={styles.recentShare}>your share ${row.yourShare.toFixed(2)}</Text>
+      </View>
+    </Pressable>
   );
 }
 
@@ -580,5 +830,133 @@ const styles = StyleSheet.create({
   },
   actionSubOnPrimary: {
     color: 'rgba(255,255,255,0.6)',
+  },
+  recentWrap: {
+    paddingHorizontal: 14,
+    paddingTop: 20,
+    paddingBottom: 28,
+    flexGrow: 1,
+  },
+  recentHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  recentHeaderTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: C.muted,
+    letterSpacing: 0.65,
+    textTransform: 'uppercase',
+  },
+  recentHeaderLink: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: C.purple,
+  },
+  recentEmpty: {
+    alignItems: 'center',
+    paddingVertical: 28,
+    paddingHorizontal: 12,
+  },
+  recentEmptyArt: {
+    width: 120,
+    height: 100,
+    marginBottom: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  recentEmptyCircle: {
+    position: 'absolute',
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: 'rgba(83,74,183,0.06)',
+    top: 4,
+  },
+  recentEmptyCircle2: {
+    position: 'absolute',
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(83,74,183,0.1)',
+    bottom: 8,
+    right: 8,
+  },
+  recentEmptyIconWrap: {
+    zIndex: 1,
+  },
+  recentEmptyText: {
+    fontSize: 16,
+    color: C.muted,
+    textAlign: 'center',
+    lineHeight: 23,
+    maxWidth: 300,
+  },
+  recentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    paddingVertical: 13,
+    paddingHorizontal: 14,
+    marginBottom: 7,
+    borderWidth: 0.5,
+    borderColor: C.border,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  recentDateBadge: {
+    width: 44,
+    height: 44,
+    borderRadius: 11,
+    backgroundColor: C.lilacSurface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  recentMon: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: C.purple,
+    textTransform: 'uppercase',
+  },
+  recentDay: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: C.purple,
+    lineHeight: 20,
+    marginTop: -1,
+  },
+  recentMid: {
+    flex: 1,
+    minWidth: 0,
+  },
+  recentMerchant: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: C.text,
+  },
+  recentMeta: {
+    fontSize: 14,
+    color: C.muted,
+    marginTop: 3,
+  },
+  recentRight: {
+    alignItems: 'flex-end',
+  },
+  recentTotal: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: C.text,
+  },
+  recentShare: {
+    fontSize: 13,
+    color: C.muted,
+    marginTop: 3,
   },
 });

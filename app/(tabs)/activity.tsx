@@ -16,7 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 
 type IonIconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -904,6 +904,7 @@ function ActivityItemRow({
 
 export default function ActivityScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ filter?: string | string[] }>();
   const insets = useSafeAreaInsets();
   const [filter, setFilter] = useState<ActivityFilterId>('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -912,6 +913,12 @@ export default function ActivityScreen() {
   >({});
   const [markPaidNotes, setMarkPaidNotes] = useState<Record<string, string>>({});
   const [markPaidDrawerOpenForId, setMarkPaidDrawerOpenForId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const raw = params.filter;
+    const f = Array.isArray(raw) ? raw[0] : raw;
+    if (f === 'receipts') setFilter('receipts');
+  }, [params.filter]);
 
   const collectedDisplay = useMemo(() => '+$47.50', []);
   const trendDisplay = useMemo(() => '↑ $12 vs last month', []);
