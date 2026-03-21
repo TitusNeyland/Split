@@ -15,6 +15,7 @@ import {
 import { getFirebaseAuth, getFirebaseFirestore, getFirebaseStorage } from './firebase';
 import type { NotificationPreferences } from './notificationPreferences';
 import type { SplitPreferences } from './splitPreferences';
+import type { PrivacySettings } from './privacySettings';
 
 export type UserProfileDoc = {
   displayName?: string | null;
@@ -26,6 +27,8 @@ export type UserProfileDoc = {
   notificationPreferences?: Partial<NotificationPreferences> | null;
   /** Dispute-reduction defaults for splits (amounts, confirmations, cycle, method). */
   splitPreferences?: Partial<SplitPreferences> | null;
+  /** Visibility and export-related privacy toggles; enforce in Firestore rules. */
+  privacySettings?: Partial<PrivacySettings> | null;
   createdAt?: { toDate?: () => Date } | null;
 };
 
@@ -158,6 +161,23 @@ export async function saveUserDisplayName(displayName: string): Promise<void> {
     {
       displayName: displayName.trim() || null,
       email: user.email ?? null,
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true }
+  );
+}
+
+export async function savePrivacySettings(settings: PrivacySettings): Promise<void> {
+  const auth = getFirebaseAuth();
+  const db = getFirebaseFirestore();
+  if (!auth || !db) throw new Error('Firebase is not configured.');
+  const user = auth.currentUser;
+  if (!user) throw new Error('Sign in to update privacy settings.');
+
+  await setDoc(
+    doc(db, 'users', user.uid),
+    {
+      privacySettings: settings,
       updatedAt: serverTimestamp(),
     },
     { merge: true }
