@@ -1,12 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  Pressable,
-  Animated,
-  Alert,
-} from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, Pressable, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { User } from 'firebase/auth';
 import {
@@ -15,17 +8,14 @@ import {
   type NotificationPreferences,
 } from '../../lib/notificationPreferences';
 import { saveNotificationPreferences } from '../../lib/profile';
+import { ProfilePurpleToggleVisual } from './ProfilePurpleToggleVisual';
 
 const C = {
   text: '#1a1a18',
   muted: '#888780',
   border: 'rgba(0,0,0,0.06)',
-  purple: '#534AB7',
   divider: '#F5F3EE',
-  trackOff: '#D3D1C7',
 };
-
-const TRACK = { w: 42, h: 24, pad: 3, thumb: 18 };
 
 type RowDef = {
   key: NotificationPreferenceKey;
@@ -127,69 +117,7 @@ const styles = StyleSheet.create({
     color: C.muted,
     marginTop: 2,
   },
-  toggleTrack: {
-    borderRadius: 12,
-    justifyContent: 'center',
-  },
-  toggleThumb: {
-    position: 'absolute',
-    left: 0,
-    top: (TRACK.h - TRACK.thumb) / 2,
-    backgroundColor: '#fff',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.15,
-    shadowRadius: 2,
-    elevation: 2,
-  },
 });
-
-function PurpleToggleVisual({ value }: { value: boolean }) {
-  const anim = useRef(new Animated.Value(value ? 1 : 0)).current;
-
-  useEffect(() => {
-    Animated.timing(anim, {
-      toValue: value ? 1 : 0,
-      duration: 200,
-      useNativeDriver: false,
-    }).start();
-  }, [value, anim]);
-
-  const bg = anim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [C.trackOff, C.purple],
-  });
-  const thumbX = anim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [TRACK.pad, TRACK.w - TRACK.thumb - TRACK.pad],
-  });
-
-  return (
-    <Animated.View
-      pointerEvents="none"
-      style={[
-        styles.toggleTrack,
-        {
-          width: TRACK.w,
-          height: TRACK.h,
-          backgroundColor: bg,
-        },
-      ]}
-    >
-      <Animated.View
-        style={[
-          styles.toggleThumb,
-          {
-            width: TRACK.thumb,
-            height: TRACK.thumb,
-            borderRadius: TRACK.thumb / 2,
-            transform: [{ translateX: thumbX }],
-          },
-        ]}
-      />
-    </Animated.View>
-  );
-}
 
 type Props = {
   user: User | null;
@@ -250,7 +178,7 @@ export default function ProfileNotificationSettingsCard({
               <Text style={styles.title}>{row.title}</Text>
               <Text style={styles.sub}>{row.sub}</Text>
             </View>
-            <PurpleToggleVisual value={prefs[row.key]} />
+            <ProfilePurpleToggleVisual value={prefs[row.key]} />
           </Pressable>
         </React.Fragment>
       ))}

@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { useMergedSplitPreferences } from '../../lib/useMergedSplitPreferences';
 import {
   View,
   Text,
@@ -152,6 +153,8 @@ type SplitRow = {
   name: string;
   meta: string;
   total: number;
+  /** Shown after total when “Always show exact amounts” is on (e.g. your share of the sub). */
+  linePercent?: number;
   status: string;
   statusColor: string;
   iconBg: string;
@@ -164,6 +167,7 @@ const upcomingSplitsFilled: SplitRow[] = [
     name: 'Netflix Premium',
     meta: '3 members · bills today',
     total: 22.99,
+    linePercent: 52,
     status: 'you owe $12',
     statusColor: C.red,
     iconBg: '#E1F5EE',
@@ -174,6 +178,7 @@ const upcomingSplitsFilled: SplitRow[] = [
     name: 'Spotify Family',
     meta: '5 members · in 7 days',
     total: 16.99,
+    linePercent: 80,
     status: 'owed $13.60',
     statusColor: C.green,
     iconBg: '#EEEDFE',
@@ -186,6 +191,7 @@ const recentActivityFilled = [
     id: '1',
     title: 'Alex paid Spotify',
     amount: '+$3.40',
+    amountPercent: 20,
     amountColor: C.green,
     iconBg: '#E1F5EE',
     icon: 'checkmark' as const,
@@ -195,6 +201,7 @@ const recentActivityFilled = [
     id: '2',
     title: 'Reminder sent to Sam',
     amount: '$5.33',
+    amountPercent: 33,
     amountColor: C.orange,
     iconBg: '#FAEEDA',
     icon: 'notifications' as const,
@@ -204,6 +211,7 @@ const recentActivityFilled = [
     id: '3',
     title: 'Taylor paid Xbox',
     amount: '+$7.50',
+    amountPercent: 25,
     amountColor: C.green,
     iconBg: '#E1F5EE',
     icon: 'checkmark' as const,
@@ -211,7 +219,17 @@ const recentActivityFilled = [
   },
 ];
 
+function formatDollarWithOptionalPercent(
+  dollars: string,
+  pct: number | undefined,
+  showBoth: boolean
+): string {
+  if (!showBoth || pct == null) return dollars;
+  return `${dollars} · ${pct}%`;
+}
+
 export default function HomeScreen() {
+  const splitPrefs = useMergedSplitPreferences();
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
   const chartWidth = Math.max(120, windowWidth - 40);
@@ -266,6 +284,7 @@ export default function HomeScreen() {
     detail: 'billing Mar 18',
     whenLabel: 'Today',
     amount: '$22.99',
+    linePercent: 52,
   };
 
   const upcomingSplits = isEmpty ? [] : upcomingSplitsFilled;
@@ -454,7 +473,13 @@ export default function HomeScreen() {
                   {billPreview.name} · {billPreview.detail}
                 </Text>
                 <Text style={styles.bpWhen}>{billPreview.whenLabel}</Text>
-                <Text style={styles.bpAmt}>{billPreview.amount}</Text>
+                <Text style={styles.bpAmt}>
+                  {formatDollarWithOptionalPercent(
+                    billPreview.amount,
+                    billPreview.linePercent,
+                    splitPrefs.alwaysShowExactAmounts
+                  )}
+                </Text>
               </View>
             ) : (
               <View style={styles.billPreview}>
@@ -524,7 +549,13 @@ export default function HomeScreen() {
                     <Text style={styles.subMeta}>{item.meta}</Text>
                   </View>
                   <View style={styles.subRight}>
-                    <Text style={styles.subAmt}>${item.total.toFixed(2)}</Text>
+                    <Text style={styles.subAmt}>
+                      {formatDollarWithOptionalPercent(
+                        `$${item.total.toFixed(2)}`,
+                        item.linePercent,
+                        splitPrefs.alwaysShowExactAmounts
+                      )}
+                    </Text>
                     <Text style={[styles.subStatus, { color: item.statusColor }]}>{item.status}</Text>
                   </View>
                 </Pressable>
@@ -558,7 +589,13 @@ export default function HomeScreen() {
                     <Ionicons name={item.icon} size={14} color={item.iconColor} />
                   </View>
                   <Text style={styles.actTxt}>{item.title}</Text>
-                  <Text style={[styles.actAmt, { color: item.amountColor }]}>{item.amount}</Text>
+                  <Text style={[styles.actAmt, { color: item.amountColor }]}>
+                    {formatDollarWithOptionalPercent(
+                      item.amount,
+                      item.amountPercent,
+                      splitPrefs.alwaysShowExactAmounts
+                    )}
+                  </Text>
                 </View>
               ))}
             </View>

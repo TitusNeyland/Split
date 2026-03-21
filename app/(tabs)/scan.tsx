@@ -38,6 +38,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { PermissionStatus } from 'expo-modules-core';
+import { useMergedSplitPreferences } from '../../lib/useMergedSplitPreferences';
 
 const C = {
   bg: '#F2F0EB',
@@ -283,6 +284,7 @@ function ScanLineOverlay({ height }: { height: number }) {
 }
 
 export default function ScanScreen() {
+  const splitPrefs = useMergedSplitPreferences();
   const insets = useSafeAreaInsets();
   const [permission, requestPermission] = useCameraPermissions();
   const [torchOn, setTorchOn] = useState(false);
@@ -611,7 +613,12 @@ export default function ScanScreen() {
             </View>
           ) : (
             displayRecents.map((r) => (
-              <RecentReceiptRow key={r.id} row={r} onPress={() => void openRecentReceipt(r.id)} />
+              <RecentReceiptRow
+                key={r.id}
+                row={r}
+                alwaysShowExactAmounts={splitPrefs.alwaysShowExactAmounts}
+                onPress={() => void openRecentReceipt(r.id)}
+              />
             ))
           )}
         </View>
@@ -623,13 +630,19 @@ export default function ScanScreen() {
 function RecentReceiptRow({
   row,
   onPress,
+  alwaysShowExactAmounts,
 }: {
   row: StoredReceiptRecord;
   onPress: () => void;
+  alwaysShowExactAmounts: boolean;
 }) {
   const d = new Date(row.receiptDateMs);
   const mon = d.toLocaleString('en-US', { month: 'short' }).toUpperCase();
   const dayNum = d.getDate();
+  const sharePct =
+    row.totalAmount > 0
+      ? Math.round((row.yourShare / row.totalAmount) * 100)
+      : 0;
   return (
     <Pressable
       onPress={onPress}
@@ -650,7 +663,11 @@ function RecentReceiptRow({
       </View>
       <View style={styles.recentRight}>
         <Text style={styles.recentTotal}>${row.totalAmount.toFixed(2)}</Text>
-        <Text style={styles.recentShare}>your share ${row.yourShare.toFixed(2)}</Text>
+        <Text style={styles.recentShare}>
+          {alwaysShowExactAmounts
+            ? `your share $${row.yourShare.toFixed(2)} · ${sharePct}%`
+            : `your share $${row.yourShare.toFixed(2)}`}
+        </Text>
       </View>
     </Pressable>
   );

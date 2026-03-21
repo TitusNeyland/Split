@@ -14,6 +14,7 @@ import {
 } from 'firebase/auth';
 import { getFirebaseAuth, getFirebaseFirestore, getFirebaseStorage } from './firebase';
 import type { NotificationPreferences } from './notificationPreferences';
+import type { SplitPreferences } from './splitPreferences';
 
 export type UserProfileDoc = {
   displayName?: string | null;
@@ -23,6 +24,8 @@ export type UserProfileDoc = {
   stripeCustomerId?: string | null;
   /** Push / email toggles; FCM should respect before sending. */
   notificationPreferences?: Partial<NotificationPreferences> | null;
+  /** Dispute-reduction defaults for splits (amounts, confirmations, cycle, method). */
+  splitPreferences?: Partial<SplitPreferences> | null;
   createdAt?: { toDate?: () => Date } | null;
 };
 
@@ -155,6 +158,23 @@ export async function saveUserDisplayName(displayName: string): Promise<void> {
     {
       displayName: displayName.trim() || null,
       email: user.email ?? null,
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true }
+  );
+}
+
+export async function saveSplitPreferences(prefs: SplitPreferences): Promise<void> {
+  const auth = getFirebaseAuth();
+  const db = getFirebaseFirestore();
+  if (!auth || !db) throw new Error('Firebase is not configured.');
+  const user = auth.currentUser;
+  if (!user) throw new Error('Sign in to update split preferences.');
+
+  await setDoc(
+    doc(db, 'users', user.uid),
+    {
+      splitPreferences: prefs,
       updatedAt: serverTimestamp(),
     },
     { merge: true }
