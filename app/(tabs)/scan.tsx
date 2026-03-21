@@ -9,7 +9,13 @@ import {
   ActivityIndicator,
   Alert,
   ScrollView,
+  Modal,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
+import { router } from 'expo-router';
+import { parseReceiptImage } from '../../lib/receiptApi';
+import { setReceiptAssignSession } from '../../lib/receiptParseSession';
+import { emptyManualSession, sessionFromParse } from '../../lib/receiptMappers';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
@@ -164,12 +170,27 @@ export default function ScanScreen() {
   const [torchOn, setTorchOn] = useState(false);
   const [vfSize, setVfSize] = useState({ w: 0, h: VIEWFINDER_HEIGHT });
   const [cameraReady, setCameraReady] = useState(false);
+  const [readingReceipt, setReadingReceipt] = useState(false);
   const cameraRef = useRef<CameraView>(null);
   const reactId = useId();
   const patternId = useMemo(() => `scanGrid${reactId.replace(/[^a-zA-Z0-9]/g, '')}`, [reactId]);
 
   const isWeb = Platform.OS === 'web';
   const showCamera = Boolean(permission?.granted && !isWeb);
+
+  const processReceiptUri = useCallback(async (uri: string, mimeType: string = 'image/jpeg') => {
+    setReadingReceipt(true);
+    try {
+      const parsed = await parseReceiptImage(uri, mimeType);
+      setReceiptAssignSession(sessionFromParse(parsed, uri));
+      router.push('/receipt-assign');
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Something went wrong.';
+      Alert.alert('Could not read receipt', msg);
+    } finally {
+      setReadingReceipt(false);
+    }
+  }, []);
 
   const onTakePhoto = useCallback(async () => {
     if (Platform.OS === 'web') {
@@ -182,11 +203,38 @@ export default function ScanScreen() {
     }
     if (!cameraRef.current || !cameraReady) return;
     try {
-      await cameraRef.current.takePictureAsync({ quality: 0.85 });
+      const photo = await cameraRef.current.takePictureAsync({ quality: 0.85 });
+      if (photo?.uri) await processReceiptUri(photo.uri, 'image/jpeg');
     } catch {
       Alert.alert('Could not capture', 'Try again or check camera permissions in Settings.');
     }
-  }, [permission?.granted, requestPermission, cameraReady]);
+  }, [permission?.granted, requestPermission, cameraReady, processReceiptUri]);
+
+  const onUploadPhoto = useCallback(async () => {
+    if (isWeb) {
+      Alert.alert('Not available', 'Upload a receipt from the mobile app.');
+      return;
+    }
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Photos', 'Allow photo library access to upload a receipt, or open Settings.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      quality: 0.85,
+      allowsEditing: false,
+    });
+    if (result.canceled || !result.assets?.[0]) return;
+    const asset = result.assets[0];
+    const mime = asset.mimeType ?? 'image/jpeg';
+    await processReceiptUri(asset.uri, mime);
+  }, [isWeb, processReceiptUri]);
+
+  const onEnterManually = useCallback(() => {
+    setReceiptAssignSession(emptyManualSession());
+    router.push('/receipt-assign');
+  }, []);
 
   const openSettings = useCallback(() => {
     Linking.openSettings();
@@ -206,6 +254,12 @@ export default function ScanScreen() {
   return (
     <View style={styles.root}>
       <StatusBar style="light" />
+      <Modal visible={readingReceipt} transparent animationType="fade">
+        <View style={styles.readingOverlay}>
+          <ActivityIndicator size="large" color={C.purple} />
+          <Text style={styles.readingText}>Reading your receipt…</Text>
+        </View>
+      </Modal>
       <ScrollView
         contentContainerStyle={[styles.scrollContent, { paddingBottom: Math.max(insets.bottom, 12) }]}
         showsVerticalScrollIndicator={false}
@@ -311,7 +365,11 @@ export default function ScanScreen() {
         </View>
 
         <View style={styles.actions}>
-          <Pressable style={({ pressed }) => [styles.actionBtn, pressed && { opacity: 0.92 }]}>
+          <Pressable
+            style={({ pressed }) => [styles.actionBtn, pressed && { opacity: 0.92 }]}
+            onPress={onUploadPhoto}
+            disabled={readingReceipt}
+          >
             <View style={[styles.actionIcon, { backgroundColor: C.lilacSurface }]}>
               <Ionicons name="images-outline" size={16} color={C.purple} />
             </View>
@@ -322,6 +380,7 @@ export default function ScanScreen() {
           <Pressable
             style={({ pressed }) => [styles.actionBtn, styles.actionPrimary, pressed && { opacity: 0.92 }]}
             onPress={onTakePhoto}
+            disabled={readingReceipt}
           >
             <View style={[styles.actionIcon, { backgroundColor: 'rgba(255,255,255,0.2)' }]}>
               <Ionicons name="camera-outline" size={16} color="#fff" />
@@ -330,7 +389,11 @@ export default function ScanScreen() {
             <Text style={[styles.actionSub, styles.actionSubOnPrimary]}>Point & scan</Text>
           </Pressable>
 
-          <Pressable style={({ pressed }) => [styles.actionBtn, pressed && { opacity: 0.92 }]}>
+          <Pressable
+            style={({ pressed }) => [styles.actionBtn, pressed && { opacity: 0.92 }]}
+            onPress={onEnterManually}
+            disabled={readingReceipt}
+          >
             <View style={[styles.actionIcon, { backgroundColor: C.mintSurface }]}>
               <Ionicons name="add" size={18} color={C.mintIcon} />
             </View>
@@ -344,6 +407,20 @@ export default function ScanScreen() {
 }
 
 const styles = StyleSheet.create({
+  readingOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(242, 240, 235, 0.94)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 16,
+    paddingHorizontal: 32,
+  },
+  readingText: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: C.purple,
+    textAlign: 'center',
+  },
   root: {
     flex: 1,
     backgroundColor: C.bg,

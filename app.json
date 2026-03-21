@@ -35,7 +35,16 @@
         {
           "cameraPermission": "Allow Split to use the camera to scan receipts and split bills."
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Split to access your photos to upload a receipt."
+        }
       ]
-    ]
+    ],
+    "extra": {
+      "receiptApiUrl": "http://localhost:8787"
+    }
   }
 }
