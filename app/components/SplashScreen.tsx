@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 
 export default function SplashScreen() {
   const scale = useRef(new Animated.Value(0.9)).current;
@@ -28,7 +29,13 @@ export default function SplashScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.gradientBackground} />
+      <LinearGradient
+        colors={['#6B3FA0', '#4A1570', '#2D0D45']}
+        locations={[0, 0.55, 1]}
+        start={{ x: 0.15, y: 0 }}
+        end={{ x: 0.85, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
       <Animated.View
         style={[
           styles.content,
@@ -48,13 +55,9 @@ export default function SplashScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#3D1E72',
+    backgroundColor: '#2D0D45',
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  gradientBackground: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'transparent',
   },
   content: {
     flexDirection: 'row',

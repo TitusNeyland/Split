@@ -9,7 +9,7 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#3D1E72"
+      "backgroundColor": "#2D0D45"
     },
     "ios": {
       "supportsTablet": true
@@ -39,7 +39,7 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Allow Split to access your photos to upload a receipt."
+          "photosPermission": "Allow Split to access your photos for receipts and your profile picture."
         }
       ]
     ],
