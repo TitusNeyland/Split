@@ -16,6 +16,7 @@ import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import ProfileStatsCard from '../components/ProfileStatsCard';
+import ProfileFriendsBalancesCard from '../components/ProfileFriendsBalancesCard';
 import { isFirebaseConfigured } from '../../lib/firebase';
 import {
   formatMemberSince,
@@ -228,6 +229,11 @@ export default function ProfileScreen() {
         </View>
         </View>
 
+        <View style={styles.friendsSection}>
+          <Text style={styles.sectionHeading}>FRIENDS & GROUPS</Text>
+          <ProfileFriendsBalancesCard userInitials={initials} />
+        </View>
+
         <View style={styles.bodyPad} />
       </ScrollView>
     </View>
@@ -371,6 +377,17 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: 'rgba(255,255,255,0.45)',
     textAlign: 'center',
+  },
+  friendsSection: {
+    paddingHorizontal: 20,
+    marginBottom: 8,
+  },
+  sectionHeading: {
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.6,
+    color: '#72727F',
+    marginBottom: 10,
   },
   bodyPad: {
     minHeight: 24,

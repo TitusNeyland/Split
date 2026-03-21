@@ -17,6 +17,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { getFriendFilterDisplayName } from '../../lib/profileFriendsBalance';
 
 type IonIconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -283,6 +284,8 @@ function applyManualPaidToItem(
  */
 type ActivityFeedItem = {
   id: string;
+  /** Profile → Activity: filter feed to items involving this friend id */
+  friendLinkIds?: string[];
   kind: ActivityKind;
   icon: IonIconName;
   iconBg: string;
@@ -306,6 +309,12 @@ type ActivityFeedItem = {
 };
 
 type ActivityFeedGroup = { sectionTitle: string; items: ActivityFeedItem[] };
+
+function itemMatchesFriend(item: ActivityFeedItem, friendId: string | null): boolean {
+  if (!friendId) return true;
+  const ids = item.friendLinkIds;
+  return Boolean(ids?.includes(friendId));
+}
 
 function itemMatchesFilter(item: ActivityFeedItem, f: ActivityFilterId): boolean {
   if (f === 'all') return true;
@@ -339,6 +348,7 @@ const MOCK_ACTIVITY_GROUPS: ActivityFeedGroup[] = [
     items: [
       {
         id: 't1',
+        friendLinkIds: ['alex'],
         kind: 'received',
         icon: 'checkmark',
         iconBg: '#E1F5EE',
@@ -365,6 +375,7 @@ const MOCK_ACTIVITY_GROUPS: ActivityFeedGroup[] = [
       },
       {
         id: 't2',
+        friendLinkIds: ['sam'],
         kind: 'overdue',
         icon: 'time-outline',
         iconBg: '#FAEEDA',
@@ -390,6 +401,7 @@ const MOCK_ACTIVITY_GROUPS: ActivityFeedGroup[] = [
       },
       {
         id: 't3',
+        friendLinkIds: ['taylor'],
         kind: 'partial',
         icon: 'checkmark-done-outline',
         iconBg: '#FAEEDA',
@@ -417,6 +429,7 @@ const MOCK_ACTIVITY_GROUPS: ActivityFeedGroup[] = [
       },
       {
         id: 't4',
+        friendLinkIds: ['alex', 'sam'],
         kind: 'audit',
         icon: 'create-outline',
         iconBg: '#EEEDFE',
@@ -440,6 +453,7 @@ const MOCK_ACTIVITY_GROUPS: ActivityFeedGroup[] = [
       },
       {
         id: 't-audit-remind',
+        friendLinkIds: ['sam'],
         kind: 'audit_reminder',
         icon: 'notifications-outline',
         iconBg: '#FAEEDA',
@@ -467,6 +481,7 @@ const MOCK_ACTIVITY_GROUPS: ActivityFeedGroup[] = [
     items: [
       {
         id: 'y1',
+        friendLinkIds: ['taylor'],
         kind: 'received',
         icon: 'checkmark',
         iconBg: '#E1F5EE',
@@ -493,6 +508,7 @@ const MOCK_ACTIVITY_GROUPS: ActivityFeedGroup[] = [
       },
       {
         id: 'y2',
+        friendLinkIds: ['sam'],
         kind: 'failed',
         icon: 'alert-circle-outline',
         iconBg: '#FCEBEB',
@@ -518,6 +534,7 @@ const MOCK_ACTIVITY_GROUPS: ActivityFeedGroup[] = [
       },
       {
         id: 'y3',
+        friendLinkIds: ['alex', 'sam', 'taylor'],
         kind: 'updated',
         icon: 'information-circle-outline',
         iconBg: '#E6F1FB',
@@ -540,6 +557,7 @@ const MOCK_ACTIVITY_GROUPS: ActivityFeedGroup[] = [
       },
       {
         id: 'y-paused',
+        friendLinkIds: ['alex', 'sam', 'taylor'],
         kind: 'audit_paused',
         icon: 'pause-circle-outline',
         iconBg: '#F0EEE9',
@@ -560,6 +578,7 @@ const MOCK_ACTIVITY_GROUPS: ActivityFeedGroup[] = [
       },
       {
         id: 'y-resumed',
+        friendLinkIds: ['alex', 'sam', 'taylor'],
         kind: 'audit_resumed',
         icon: 'play-circle-outline',
         iconBg: '#E1F5EE',
@@ -605,6 +624,7 @@ const MOCK_ACTIVITY_GROUPS: ActivityFeedGroup[] = [
       },
       {
         id: 'm-join',
+        friendLinkIds: ['sam'],
         kind: 'audit_join',
         icon: 'person-add-outline',
         iconBg: '#E1F5EE',
@@ -625,6 +645,7 @@ const MOCK_ACTIVITY_GROUPS: ActivityFeedGroup[] = [
       },
       {
         id: 'm1',
+        friendLinkIds: ['alex', 'casey'],
         kind: 'receipt',
         icon: 'receipt-outline',
         iconBg: '#EEEDFE',
@@ -904,7 +925,7 @@ function ActivityItemRow({
 
 export default function ActivityScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ filter?: string | string[] }>();
+  const params = useLocalSearchParams<{ filter?: string | string[]; friendId?: string | string[] }>();
   const insets = useSafeAreaInsets();
   const [filter, setFilter] = useState<ActivityFilterId>('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -914,11 +935,21 @@ export default function ActivityScreen() {
   const [markPaidNotes, setMarkPaidNotes] = useState<Record<string, string>>({});
   const [markPaidDrawerOpenForId, setMarkPaidDrawerOpenForId] = useState<string | null>(null);
 
+  const friendIdFilter = useMemo(() => {
+    const raw = params.friendId;
+    const v = Array.isArray(raw) ? raw[0] : raw;
+    return v && String(v).trim() !== '' ? String(v).trim() : null;
+  }, [params.friendId]);
+
   useEffect(() => {
+    if (friendIdFilter) {
+      setFilter('all');
+      return;
+    }
     const raw = params.filter;
     const f = Array.isArray(raw) ? raw[0] : raw;
     if (f === 'receipts') setFilter('receipts');
-  }, [params.filter]);
+  }, [params.filter, friendIdFilter]);
 
   const collectedDisplay = useMemo(() => '+$47.50', []);
   const trendDisplay = useMemo(() => '↑ $12 vs last month', []);
@@ -951,7 +982,7 @@ export default function ActivityScreen() {
             ? applyManualPaidToItem(i, manualPaidByItemId[i.id]!)
             : i,
         )
-        .filter((i) => itemMatchesFilter(i, filter)),
+        .filter((i) => itemMatchesFilter(i, filter) && itemMatchesFriend(i, friendIdFilter)),
     })).filter((g) => g.items.length > 0);
 
     if (filter === 'audit' && groups.length > 0) {
@@ -973,7 +1004,7 @@ export default function ActivityScreen() {
     }
 
     return groups;
-  }, [filter, manualPaidByItemId]);
+  }, [filter, manualPaidByItemId, friendIdFilter]);
 
   const toggleExpanded = useCallback((id: string) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -1013,7 +1044,7 @@ export default function ActivityScreen() {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setExpandedId(null);
     setMarkPaidDrawerOpenForId(null);
-  }, [filter]);
+  }, [filter, friendIdFilter]);
 
   return (
     <View style={styles.root}>
@@ -1046,6 +1077,22 @@ export default function ActivityScreen() {
               <Ionicons name="search-outline" size={22} color="rgba(255,255,255,0.6)" />
             </Pressable>
           </View>
+
+          {friendIdFilter ? (
+            <View style={styles.friendFilterBar}>
+              <Text style={styles.friendFilterLabel} numberOfLines={1}>
+                With {getFriendFilterDisplayName(friendIdFilter)}
+              </Text>
+              <Pressable
+                onPress={() => router.replace('/activity')}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Clear friend filter"
+              >
+                <Text style={styles.friendFilterClear}>Clear</Text>
+              </Pressable>
+            </View>
+          ) : null}
 
           <View style={styles.heroStats}>
             <View style={styles.hstat}>
@@ -1132,9 +1179,11 @@ export default function ActivityScreen() {
             ) : (
               <View style={styles.feedEmpty}>
                 <Text style={styles.feedEmptyText}>
-                  {filter === 'audit'
-                    ? 'No subscription changes or audit events yet.'
-                    : 'No activity for this filter.'}
+                  {friendIdFilter
+                    ? `No activity with ${getFriendFilterDisplayName(friendIdFilter)} yet.`
+                    : filter === 'audit'
+                      ? 'No subscription changes or audit events yet.'
+                      : 'No activity for this filter.'}
                 </Text>
               </View>
             )
@@ -1206,6 +1255,31 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#fff',
     letterSpacing: -0.35,
+  },
+  friendFilterBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginBottom: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.2)',
+  },
+  friendFilterLabel: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.95)',
+  },
+  friendFilterClear: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.85)',
+    textDecorationLine: 'underline',
   },
   heroStats: {
     flexDirection: 'row',
