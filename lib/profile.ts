@@ -13,11 +13,16 @@ import {
   type User,
 } from 'firebase/auth';
 import { getFirebaseAuth, getFirebaseFirestore, getFirebaseStorage } from './firebase';
+import type { NotificationPreferences } from './notificationPreferences';
 
 export type UserProfileDoc = {
   displayName?: string | null;
   email?: string | null;
   avatarUrl?: string | null;
+  /** Stripe Customer id — card PaymentMethods live only in Stripe. */
+  stripeCustomerId?: string | null;
+  /** Push / email toggles; FCM should respect before sending. */
+  notificationPreferences?: Partial<NotificationPreferences> | null;
   createdAt?: { toDate?: () => Date } | null;
 };
 
@@ -150,6 +155,40 @@ export async function saveUserDisplayName(displayName: string): Promise<void> {
     {
       displayName: displayName.trim() || null,
       email: user.email ?? null,
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true }
+  );
+}
+
+export async function saveNotificationPreferences(prefs: NotificationPreferences): Promise<void> {
+  const auth = getFirebaseAuth();
+  const db = getFirebaseFirestore();
+  if (!auth || !db) throw new Error('Firebase is not configured.');
+  const user = auth.currentUser;
+  if (!user) throw new Error('Sign in to update notification settings.');
+
+  await setDoc(
+    doc(db, 'users', user.uid),
+    {
+      notificationPreferences: prefs,
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true }
+  );
+}
+
+export async function saveStripeCustomerId(customerId: string): Promise<void> {
+  const auth = getFirebaseAuth();
+  const db = getFirebaseFirestore();
+  if (!auth || !db) throw new Error('Firebase is not configured.');
+  const user = auth.currentUser;
+  if (!user) throw new Error('Sign in to save a payment method.');
+
+  await setDoc(
+    doc(db, 'users', user.uid),
+    {
+      stripeCustomerId: customerId,
       updatedAt: serverTimestamp(),
     },
     { merge: true }

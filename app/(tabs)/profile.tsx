@@ -17,6 +17,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import ProfileStatsCard from '../components/ProfileStatsCard';
 import ProfileFriendsBalancesCard from '../components/ProfileFriendsBalancesCard';
+import ProfilePaymentMethodsCard from '../components/ProfilePaymentMethodsCard';
+import ProfileNotificationSettingsCard from '../components/ProfileNotificationSettingsCard';
 import { isFirebaseConfigured } from '../../lib/firebase';
 import {
   formatMemberSince,
@@ -234,6 +236,24 @@ export default function ProfileScreen() {
           <ProfileFriendsBalancesCard userInitials={initials} />
         </View>
 
+        <View style={styles.paymentSection}>
+          <Text style={styles.sectionHeading}>PAYMENT METHODS</Text>
+          <ProfilePaymentMethodsCard
+            user={user}
+            userEmail={email}
+            stripeCustomerId={profile?.stripeCustomerId ?? null}
+          />
+        </View>
+
+        <View style={styles.notificationsSection}>
+          <Text style={styles.sectionHeading}>NOTIFICATIONS</Text>
+          <ProfileNotificationSettingsCard
+            user={user}
+            notificationPreferences={profile?.notificationPreferences}
+            persist={isFirebaseConfigured() && !!user}
+          />
+        </View>
+
         <View style={styles.bodyPad} />
       </ScrollView>
     </View>
@@ -379,6 +399,14 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   friendsSection: {
+    paddingHorizontal: 20,
+    marginBottom: 8,
+  },
+  paymentSection: {
+    paddingHorizontal: 20,
+    marginBottom: 8,
+  },
+  notificationsSection: {
     paddingHorizontal: 20,
     marginBottom: 8,
   },
