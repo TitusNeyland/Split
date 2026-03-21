@@ -41,6 +41,13 @@
         {
           "photosPermission": "Allow Split to access your photos for receipts and your profile picture."
         }
+      ],
+      [
+        "@stripe/stripe-react-native",
+        {
+          "merchantIdentifier": "merchant.com.split",
+          "enableGooglePay": false
+        }
       ]
     ],
     "extra": {

@@ -4,6 +4,7 @@ import cors from 'cors';
 import multer from 'multer';
 import OpenAI from 'openai';
 import { postProcessLineItems } from './postProcess.js';
+import { createStripeRouter } from './stripeRoutes.js';
 
 const PORT = Number(process.env.PORT) || 8787;
 const app = express();
@@ -58,8 +59,14 @@ function parseJsonFromContent(content) {
 }
 
 app.get('/health', (_req, res) => {
-  res.json({ ok: true, hasOpenAI: Boolean(openai) });
+  res.json({
+    ok: true,
+    hasOpenAI: Boolean(openai),
+    hasStripe: Boolean(process.env.STRIPE_SECRET_KEY),
+  });
 });
+
+app.use('/api/stripe', createStripeRouter());
 
 app.post('/api/receipt/parse', upload.single('image'), async (req, res) => {
   try {
