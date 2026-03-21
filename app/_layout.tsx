@@ -24,7 +24,24 @@ export default function RootLayout() {
   return (
     <View style={styles.root}>
       <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="(tabs)" />
+        <Stack.Screen
+          name="(tabs)"
+          options={{
+            title: 'Split',
+          }}
+        />
+        <Stack.Screen
+          name="receipt/[id]"
+          options={{
+            headerShown: true,
+            headerTitle: 'Receipt',
+            headerTintColor: '#534AB7',
+            headerStyle: { backgroundColor: '#F2F0EB' },
+            headerShadowVisible: false,
+            headerBackTitle: 'Activity',
+            headerBackTitleStyle: { fontSize: 17 },
+          }}
+        />
       </Stack>
       {showSplash && (
         <Animated.View style={[styles.splashOverlay, { opacity }]}>
