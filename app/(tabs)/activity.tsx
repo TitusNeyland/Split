@@ -180,9 +180,15 @@ type ActivityKind =
   | 'failed'
   | 'audit'
   | 'updated'
-  | 'receipt';
+  | 'receipt'
+  /** Non-payment audit / ledger events (Changes filter). */
+  | 'audit_join'
+  | 'audit_reminder'
+  | 'audit_paused'
+  | 'audit_resumed'
+  | 'audit_archived';
 
-type ActivityBadgeVariant = 'green' | 'amber' | 'red' | 'purple' | 'gray';
+type ActivityBadgeVariant = 'green' | 'amber' | 'red' | 'purple' | 'gray' | 'blue';
 
 type ActivityDetailRow = {
   label: string;
@@ -310,7 +316,15 @@ function itemMatchesFilter(item: ActivityFeedItem, f: ActivityFilterId): boolean
     case 'failed':
       return item.kind === 'failed';
     case 'audit':
-      return item.kind === 'audit' || item.kind === 'updated';
+      return (
+        item.kind === 'audit' ||
+        item.kind === 'updated' ||
+        item.kind === 'audit_join' ||
+        item.kind === 'audit_reminder' ||
+        item.kind === 'audit_paused' ||
+        item.kind === 'audit_resumed' ||
+        item.kind === 'audit_archived'
+      );
     case 'receipts':
       return item.kind === 'receipt';
     default:
@@ -423,6 +437,28 @@ const MOCK_ACTIVITY_GROUPS: ActivityFeedGroup[] = [
           ],
         },
       },
+      {
+        id: 't-audit-remind',
+        kind: 'audit_reminder',
+        icon: 'notifications-outline',
+        iconBg: '#FAEEDA',
+        iconColor: '#854F0B',
+        title: 'Auto-reminder sent to Sam',
+        sub: 'Netflix · $5.33 overdue · system-triggered',
+        time: 'Today · 9:00 AM',
+        amount: '$5.33',
+        amountColor: '#EF9F27',
+        badge: 'Reminder',
+        badgeVariant: 'amber',
+        detail: {
+          rows: [
+            { label: 'Subscription', value: 'Netflix Premium' },
+            { label: 'Amount', value: '$5.33 owed' },
+            { label: 'Trigger', value: 'System · overdue threshold' },
+            { label: 'Channel', value: 'Push notification' },
+          ],
+        },
+      },
     ],
   },
   {
@@ -497,6 +533,47 @@ const MOCK_ACTIVITY_GROUPS: ActivityFeedGroup[] = [
             { label: 'Old price', value: '$19.99/month' },
             { label: 'New price', value: '$22.99/month' },
             { label: 'Effective', value: 'Next cycle only' },
+            { label: 'Group notified', value: '3 members via push' },
+          ],
+        },
+      },
+      {
+        id: 'y-paused',
+        kind: 'audit_paused',
+        icon: 'pause-circle-outline',
+        iconBg: '#F0EEE9',
+        iconColor: '#5F5E5A',
+        title: 'Spotify Family paused',
+        sub: 'Paused by Jordan · billing suspended until resumed',
+        time: 'Mar 15 · 2:00 PM',
+        badge: 'Paused',
+        badgeVariant: 'gray',
+        amountColor: C.text,
+        detail: {
+          rows: [
+            { label: 'Subscription', value: 'Spotify Family' },
+            { label: 'Paused by', value: 'Jordan (you)' },
+            { label: 'Effective', value: 'Immediately' },
+          ],
+        },
+      },
+      {
+        id: 'y-resumed',
+        kind: 'audit_resumed',
+        icon: 'play-circle-outline',
+        iconBg: '#E1F5EE',
+        iconColor: '#0F6E56',
+        title: 'Spotify Family resumed',
+        sub: 'Resumed by Jordan · billing back on schedule',
+        time: 'Mar 15 · 3:30 PM',
+        badge: 'Resumed',
+        badgeVariant: 'green',
+        amountColor: C.text,
+        detail: {
+          rows: [
+            { label: 'Subscription', value: 'Spotify Family' },
+            { label: 'Resumed by', value: 'Jordan (you)' },
+            { label: 'Next bill', value: 'Per existing cycle' },
           ],
         },
       },
@@ -505,6 +582,46 @@ const MOCK_ACTIVITY_GROUPS: ActivityFeedGroup[] = [
   {
     sectionTitle: 'Mar 14',
     items: [
+      {
+        id: 'm-archived',
+        kind: 'audit_archived',
+        icon: 'archive-outline',
+        iconBg: '#F0EEE9',
+        iconColor: '#5F5E5A',
+        title: 'Hulu subscription archived',
+        sub: 'Archived by Jordan · removed from active splits',
+        time: 'Mar 14 · 8:00 AM',
+        badge: 'Archived',
+        badgeVariant: 'gray',
+        amountColor: C.text,
+        detail: {
+          rows: [
+            { label: 'Subscription', value: 'Hulu (ad-free)' },
+            { label: 'Archived by', value: 'Jordan (you)' },
+            { label: 'History', value: 'Retained · read-only audit trail' },
+          ],
+        },
+      },
+      {
+        id: 'm-join',
+        kind: 'audit_join',
+        icon: 'person-add-outline',
+        iconBg: '#E1F5EE',
+        iconColor: '#0F6E56',
+        title: 'Sam joined Netflix split',
+        sub: 'Invited by Jordan · payment method added',
+        time: 'Mar 14 · 10:12 AM',
+        badge: 'Joined',
+        badgeVariant: 'green',
+        amountColor: C.text,
+        detail: {
+          rows: [
+            { label: 'Member', value: 'Sam M.' },
+            { label: 'Invited by', value: 'Jordan (you)' },
+            { label: 'Payment method', value: 'Visa ···· 4242' },
+          ],
+        },
+      },
       {
         id: 'm1',
         kind: 'receipt',
@@ -581,6 +698,8 @@ function badgeStyles(v: ActivityBadgeVariant) {
       return { bg: '#FCEBEB', text: '#A32D2D' };
     case 'purple':
       return { bg: '#EEEDFE', text: '#534AB7' };
+    case 'blue':
+      return { bg: '#E6F1FB', text: '#185FA5' };
     default:
       return { bg: '#F0EEE9', text: '#5F5E5A' };
   }
@@ -801,7 +920,7 @@ export default function ActivityScreen() {
   }, []);
 
   const filteredGroups = useMemo(() => {
-    return MOCK_ACTIVITY_GROUPS.map((g) => ({
+    const groups = MOCK_ACTIVITY_GROUPS.map((g) => ({
       ...g,
       items: g.items
         .map((i) =>
@@ -811,6 +930,17 @@ export default function ActivityScreen() {
         )
         .filter((i) => itemMatchesFilter(i, filter)),
     })).filter((g) => g.items.length > 0);
+
+    if (filter !== 'audit' || groups.length === 0) {
+      return groups;
+    }
+
+    return [
+      {
+        sectionTitle: 'All changes',
+        items: groups.flatMap((g) => g.items),
+      },
+    ];
   }, [filter, manualPaidByItemId]);
 
   const toggleExpanded = useCallback((id: string) => {
@@ -954,7 +1084,11 @@ export default function ActivityScreen() {
         <View style={[styles.body, urgentCard ? styles.bodyAfterFloat : null]}>
           {filteredGroups.length === 0 ? (
             <View style={styles.feedEmpty}>
-              <Text style={styles.feedEmptyText}>No activity for this filter.</Text>
+              <Text style={styles.feedEmptyText}>
+                {filter === 'audit'
+                  ? 'No subscription changes or audit events yet.'
+                  : 'No activity for this filter.'}
+              </Text>
             </View>
           ) : (
             filteredGroups.map((group, gi) => (
