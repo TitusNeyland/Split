@@ -29,7 +29,13 @@
     "scheme": "split",
     "plugins": [
       "expo-router",
-      "expo-font"
+      "expo-font",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow Split to use the camera to scan receipts and split bills."
+        }
+      ]
     ]
   }
 }
