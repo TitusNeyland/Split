@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 
 type IonIconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -650,7 +651,7 @@ const MOCK_ACTIVITY_GROUPS: ActivityFeedGroup[] = [
         iconBg: '#EEEDFE',
         iconColor: '#534AB7',
         title: 'Chipotle',
-        sub: '2 people · 4 items · settled',
+        sub: '2 people · 4 items · Settled',
         time: 'Mar 14',
         amount: '$24.80',
         amountColor: C.text,
@@ -715,6 +716,9 @@ type ActivityItemRowProps = {
   onMarkPaidNoteChange: (text: string) => void;
   onConfirmMarkPaid: () => void;
   onDetailAction: (action: ActivityDetailAction) => void;
+  /** Receipts filter: tap row opens receipt detail instead of inline drawer. */
+  receiptNavigateMode: boolean;
+  onReceiptPress: () => void;
 };
 
 function ActivityItemRow({
@@ -727,19 +731,30 @@ function ActivityItemRow({
   onMarkPaidNoteChange,
   onConfirmMarkPaid,
   onDetailAction,
+  receiptNavigateMode,
+  onReceiptPress,
 }: ActivityItemRowProps) {
   const b = badgeStyles(item.badgeVariant);
-  const hasDetail = Boolean(
-    item.detail && (item.detail.rows.length > 0 || (item.detail.actions?.length ?? 0) > 0),
+  const receiptTapOpensDetail = receiptNavigateMode && item.kind === 'receipt';
+  const hasExpandableDetail = Boolean(
+    !receiptTapOpensDetail &&
+      item.detail &&
+      (item.detail.rows.length > 0 || (item.detail.actions?.length ?? 0) > 0),
   );
+
+  const onMainPress = () => {
+    if (receiptTapOpensDetail) onReceiptPress();
+    else if (hasExpandableDetail) onToggle();
+  };
 
   return (
     <View style={styles.actItem}>
       <Pressable
-        onPress={hasDetail ? onToggle : undefined}
+        onPress={receiptTapOpensDetail || hasExpandableDetail ? onMainPress : undefined}
         style={styles.actMain}
-        accessibilityRole={hasDetail ? 'button' : 'none'}
-        accessibilityState={hasDetail ? { expanded } : undefined}
+        accessibilityRole={receiptTapOpensDetail || hasExpandableDetail ? 'button' : 'none'}
+        accessibilityLabel={receiptTapOpensDetail ? `Open receipt ${item.title}` : undefined}
+        accessibilityState={hasExpandableDetail ? { expanded } : undefined}
       >
         <View style={styles.actLeft}>
           <View style={[styles.actIco, { backgroundColor: item.iconBg }]}>
@@ -792,7 +807,7 @@ function ActivityItemRow({
         </View>
       ) : null}
 
-      {expanded && item.detail ? (
+      {!receiptTapOpensDetail && expanded && item.detail ? (
         <View style={styles.actDetail}>
           {item.detail.rows.map((row) => (
             <View key={`${item.id}-${row.label}`} style={styles.detailRow}>
@@ -888,6 +903,7 @@ function ActivityItemRow({
 }
 
 export default function ActivityScreen() {
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const [filter, setFilter] = useState<ActivityFilterId>('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -931,16 +947,25 @@ export default function ActivityScreen() {
         .filter((i) => itemMatchesFilter(i, filter)),
     })).filter((g) => g.items.length > 0);
 
-    if (filter !== 'audit' || groups.length === 0) {
-      return groups;
+    if (filter === 'audit' && groups.length > 0) {
+      return [
+        {
+          sectionTitle: 'All changes',
+          items: groups.flatMap((g) => g.items),
+        },
+      ];
     }
 
-    return [
-      {
-        sectionTitle: 'All changes',
-        items: groups.flatMap((g) => g.items),
-      },
-    ];
+    if (filter === 'receipts' && groups.length > 0) {
+      return [
+        {
+          sectionTitle: 'Receipt splits',
+          items: groups.flatMap((g) => g.items),
+        },
+      ];
+    }
+
+    return groups;
   }, [filter, manualPaidByItemId]);
 
   const toggleExpanded = useCallback((id: string) => {
@@ -1083,13 +1108,29 @@ export default function ActivityScreen() {
 
         <View style={[styles.body, urgentCard ? styles.bodyAfterFloat : null]}>
           {filteredGroups.length === 0 ? (
-            <View style={styles.feedEmpty}>
-              <Text style={styles.feedEmptyText}>
-                {filter === 'audit'
-                  ? 'No subscription changes or audit events yet.'
-                  : 'No activity for this filter.'}
-              </Text>
-            </View>
+            filter === 'receipts' ? (
+              <View style={styles.receiptsEmpty}>
+                <Ionicons name="receipt-outline" size={40} color={C.muted} style={styles.receiptsEmptyIcon} />
+                <Text style={styles.receiptsEmptyTitle}>No receipts yet · Scan your first receipt</Text>
+                <Pressable
+                  style={styles.receiptsEmptyCta}
+                  onPress={() => router.push('/scan')}
+                  accessibilityRole="button"
+                  accessibilityLabel="Go to Scan tab"
+                >
+                  <Ionicons name="scan-outline" size={20} color="#fff" />
+                  <Text style={styles.receiptsEmptyCtaText}>Scan receipt</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <View style={styles.feedEmpty}>
+                <Text style={styles.feedEmptyText}>
+                  {filter === 'audit'
+                    ? 'No subscription changes or audit events yet.'
+                    : 'No activity for this filter.'}
+                </Text>
+              </View>
+            )
           ) : (
             filteredGroups.map((group, gi) => (
               <View key={group.sectionTitle} style={gi > 0 ? styles.feedSection : styles.feedSectionFirst}>
@@ -1121,6 +1162,8 @@ export default function ActivityScreen() {
                         setExpandedId(item.id);
                       }
                     }}
+                    receiptNavigateMode={filter === 'receipts'}
+                    onReceiptPress={() => router.push(`/receipt/${item.id}`)}
                   />
                 ))}
               </View>
@@ -1336,6 +1379,41 @@ const styles = StyleSheet.create({
     color: C.muted,
     textAlign: 'center',
     lineHeight: 22,
+  },
+  receiptsEmpty: {
+    backgroundColor: '#fff',
+    borderRadius: 18,
+    borderWidth: 0.5,
+    borderColor: C.border,
+    paddingVertical: 32,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+  },
+  receiptsEmptyIcon: {
+    marginBottom: 12,
+    opacity: 0.85,
+  },
+  receiptsEmptyTitle: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: C.text,
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 20,
+  },
+  receiptsEmptyCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: C.purple,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+  },
+  receiptsEmptyCtaText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#fff',
   },
   actItem: {
     backgroundColor: '#fff',
