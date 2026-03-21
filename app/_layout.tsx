@@ -42,6 +42,7 @@ export default function RootLayout() {
             headerBackTitleStyle: { fontSize: 17 },
           }}
         />
+        <Stack.Screen name="receipt-assign" options={{ headerShown: false }} />
       </Stack>
       {showSplash && (
         <Animated.View style={[styles.splashOverlay, { opacity }]}>
