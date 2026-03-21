@@ -10,6 +10,7 @@ import {
   Platform,
   UIManager,
   Linking,
+  TextInput,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -189,7 +190,74 @@ type ActivityDetailAction = {
   variant: 'ghost' | 'primary' | 'danger';
   /** Shows ↗ after label (e.g. open member activity). */
   external?: boolean;
+  /** Opens inline mark-as-paid row below the drawer. */
+  opensMarkPaid?: boolean;
 };
+
+type ManualSettlementRecord = {
+  status: 'paid';
+  settlementMethod: 'manual';
+  noteText: string;
+  recordedByUserId: string;
+  recordedAt: number;
+};
+
+const MOCK_CURRENT_USER_ID = 'user_jordan';
+
+async function persistManualSettlementToFirestore(
+  _activityItemId: string,
+  _record: ManualSettlementRecord,
+): Promise<void> {
+  // TODO: Firestore — e.g. update payment doc: status, settlementMethod, note, recordedBy, timestamp
+}
+
+function itemEligibleForMarkPaid(item: ActivityFeedItem): boolean {
+  return item.kind === 'overdue' || item.kind === 'partial';
+}
+
+function applyManualPaidToItem(
+  item: ActivityFeedItem,
+  record: ManualSettlementRecord,
+): ActivityFeedItem {
+  const settledAmount =
+    item.partial != null
+      ? `+$${item.partial.total.toFixed(2)}`
+      : item.amount?.startsWith('$')
+        ? item.amount
+        : item.amount;
+  return {
+    ...item,
+    kind: 'received',
+    icon: 'checkmark',
+    iconBg: '#E1F5EE',
+    iconColor: '#1D9E75',
+    badge: 'Paid',
+    badgeVariant: 'green',
+    amount: settledAmount ?? item.amount,
+    amountColor: C.green,
+    note: record.noteText ? `"${record.noteText}"` : item.note,
+    partial: undefined,
+    sub: 'Marked paid manually',
+    detail: item.detail
+      ? {
+          rows: [
+            { label: 'Method', value: 'Marked paid manually' },
+            ...(record.noteText ? [{ label: 'Settlement note', value: record.noteText }] : []),
+            { label: 'Recorded by', value: record.recordedByUserId },
+            {
+              label: 'Timestamp',
+              value: new Date(record.recordedAt).toLocaleString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                hour: 'numeric',
+                minute: '2-digit',
+              }),
+            },
+          ],
+        }
+      : undefined,
+  };
+}
 
 type ActivityFeedItem = {
   id: string;
@@ -282,7 +350,7 @@ const MOCK_ACTIVITY_GROUPS: ActivityFeedGroup[] = [
             { label: 'Subscription', value: 'Netflix Premium' },
           ],
           actions: [
-            { id: 't2-mark', label: 'Mark paid manually', variant: 'ghost' },
+            { id: 't2-mark', label: 'Mark paid manually', variant: 'ghost', opensMarkPaid: true },
             { id: 't2-remind', label: 'Send reminder', variant: 'primary' },
           ],
         },
@@ -310,7 +378,7 @@ const MOCK_ACTIVITY_GROUPS: ActivityFeedGroup[] = [
           ],
           actions: [
             { id: 't3-remind', label: 'Remind for rest', variant: 'ghost' },
-            { id: 't3-mark', label: 'Mark remainder paid', variant: 'primary' },
+            { id: 't3-mark', label: 'Mark remainder paid', variant: 'primary', opensMarkPaid: true },
           ],
         },
       },
@@ -458,6 +526,27 @@ const MOCK_ACTIVITY_GROUPS: ActivityFeedGroup[] = [
   },
 ];
 
+function findBaseActivityItem(itemId: string): ActivityFeedItem | undefined {
+  for (const g of MOCK_ACTIVITY_GROUPS) {
+    const found = g.items.find((i) => i.id === itemId);
+    if (found) return found;
+  }
+  return undefined;
+}
+
+function shouldShowMarkPaidInline(
+  itemId: string,
+  f: ActivityFilterId,
+  paidMap: Record<string, ManualSettlementRecord>,
+  drawerOpenId: string | null,
+): boolean {
+  if (paidMap[itemId]) return false;
+  const base = findBaseActivityItem(itemId);
+  if (!base || !itemEligibleForMarkPaid(base)) return false;
+  if (f === 'pending') return true;
+  return drawerOpenId === itemId;
+}
+
 function openStripeReference(displayValue: string) {
   void Linking.openURL('https://dashboard.stripe.com/').catch(() => {
     Alert.alert('Stripe reference', displayValue);
@@ -484,9 +573,24 @@ type ActivityItemRowProps = {
   showTimelineLine: boolean;
   expanded: boolean;
   onToggle: () => void;
+  showMarkPaidRow: boolean;
+  markPaidNote: string;
+  onMarkPaidNoteChange: (text: string) => void;
+  onConfirmMarkPaid: () => void;
+  onDetailAction: (action: ActivityDetailAction) => void;
 };
 
-function ActivityItemRow({ item, showTimelineLine, expanded, onToggle }: ActivityItemRowProps) {
+function ActivityItemRow({
+  item,
+  showTimelineLine,
+  expanded,
+  onToggle,
+  showMarkPaidRow,
+  markPaidNote,
+  onMarkPaidNoteChange,
+  onConfirmMarkPaid,
+  onDetailAction,
+}: ActivityItemRowProps) {
   const b = badgeStyles(item.badgeVariant);
   const hasDetail = Boolean(
     item.detail && (item.detail.rows.length > 0 || (item.detail.actions?.length ?? 0) > 0),
@@ -585,7 +689,7 @@ function ActivityItemRow({ item, showTimelineLine, expanded, onToggle }: Activit
                     a.variant === 'primary' && styles.actBtnPrimary,
                     a.variant === 'danger' && styles.actBtnDanger,
                   ]}
-                  onPress={() => {}}
+                  onPress={() => onDetailAction(a)}
                 >
                   <View style={styles.actBtnContent}>
                     <Text
@@ -614,6 +718,28 @@ function ActivityItemRow({ item, showTimelineLine, expanded, onToggle }: Activit
           ) : null}
         </View>
       ) : null}
+
+      {showMarkPaidRow ? (
+        <View style={styles.markPaidRow}>
+          <TextInput
+            style={styles.markPaidInput}
+            placeholder='Add note e.g. "Paid via Venmo"'
+            placeholderTextColor="#888780"
+            value={markPaidNote}
+            onChangeText={onMarkPaidNoteChange}
+            multiline={false}
+            accessibilityLabel="Settlement note"
+          />
+          <Pressable
+            style={styles.markPaidBtn}
+            onPress={onConfirmMarkPaid}
+            accessibilityRole="button"
+            accessibilityLabel="Mark paid"
+          >
+            <Text style={styles.markPaidBtnText}>Mark paid</Text>
+          </Pressable>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -622,6 +748,11 @@ export default function ActivityScreen() {
   const insets = useSafeAreaInsets();
   const [filter, setFilter] = useState<ActivityFilterId>('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [manualPaidByItemId, setManualPaidByItemId] = useState<
+    Record<string, ManualSettlementRecord>
+  >({});
+  const [markPaidNotes, setMarkPaidNotes] = useState<Record<string, string>>({});
+  const [markPaidDrawerOpenForId, setMarkPaidDrawerOpenForId] = useState<string | null>(null);
 
   const collectedDisplay = useMemo(() => '+$47.50', []);
   const trendDisplay = useMemo(() => '↑ $12 vs last month', []);
@@ -648,18 +779,54 @@ export default function ActivityScreen() {
   const filteredGroups = useMemo(() => {
     return MOCK_ACTIVITY_GROUPS.map((g) => ({
       ...g,
-      items: g.items.filter((i) => itemMatchesFilter(i, filter)),
+      items: g.items
+        .map((i) =>
+          manualPaidByItemId[i.id]
+            ? applyManualPaidToItem(i, manualPaidByItemId[i.id]!)
+            : i,
+        )
+        .filter((i) => itemMatchesFilter(i, filter)),
     })).filter((g) => g.items.length > 0);
-  }, [filter]);
+  }, [filter, manualPaidByItemId]);
 
   const toggleExpanded = useCallback((id: string) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setExpandedId((prev) => (prev === id ? null : id));
   }, []);
 
+  const confirmMarkPaid = useCallback(
+    async (itemId: string) => {
+      if (manualPaidByItemId[itemId]) return;
+      const note = (markPaidNotes[itemId] ?? '').trim();
+      const record: ManualSettlementRecord = {
+        status: 'paid',
+        settlementMethod: 'manual',
+        noteText: note,
+        recordedByUserId: MOCK_CURRENT_USER_ID,
+        recordedAt: Date.now(),
+      };
+      try {
+        await persistManualSettlementToFirestore(itemId, record);
+      } catch {
+        Alert.alert('Could not save', 'Try again.');
+        return;
+      }
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      setManualPaidByItemId((p) => ({ ...p, [itemId]: record }));
+      setMarkPaidDrawerOpenForId((p) => (p === itemId ? null : p));
+      setMarkPaidNotes((p) => {
+        const next = { ...p };
+        delete next[itemId];
+        return next;
+      });
+    },
+    [manualPaidByItemId, markPaidNotes],
+  );
+
   useEffect(() => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setExpandedId(null);
+    setMarkPaidDrawerOpenForId(null);
   }, [filter]);
 
   return (
@@ -668,6 +835,7 @@ export default function ActivityScreen() {
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
         bounces
       >
         <LinearGradient
@@ -777,6 +945,24 @@ export default function ActivityScreen() {
                     showTimelineLine={ii < group.items.length - 1}
                     expanded={expandedId === item.id}
                     onToggle={() => toggleExpanded(item.id)}
+                    showMarkPaidRow={shouldShowMarkPaidInline(
+                      item.id,
+                      filter,
+                      manualPaidByItemId,
+                      markPaidDrawerOpenForId,
+                    )}
+                    markPaidNote={markPaidNotes[item.id] ?? ''}
+                    onMarkPaidNoteChange={(text) =>
+                      setMarkPaidNotes((p) => ({ ...p, [item.id]: text }))
+                    }
+                    onConfirmMarkPaid={() => void confirmMarkPaid(item.id)}
+                    onDetailAction={(action) => {
+                      if (action.opensMarkPaid) {
+                        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                        setMarkPaidDrawerOpenForId(item.id);
+                        setExpandedId(item.id);
+                      }
+                    }}
                   />
                 ))}
               </View>
@@ -1193,5 +1379,37 @@ const styles = StyleSheet.create({
   },
   actBtnTextDanger: {
     color: '#A32D2D',
+  },
+  markPaidRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderTopWidth: 0.5,
+    borderTopColor: C.divider,
+    paddingVertical: 10,
+    paddingHorizontal: 13,
+    backgroundColor: '#FAFAF8',
+  },
+  markPaidInput: {
+    flex: 1,
+    backgroundColor: C.divider,
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    fontSize: 14,
+    color: C.text,
+    minHeight: 42,
+  },
+  markPaidBtn: {
+    backgroundColor: '#1D9E75',
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    flexShrink: 0,
+  },
+  markPaidBtnText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '500',
   },
 });
