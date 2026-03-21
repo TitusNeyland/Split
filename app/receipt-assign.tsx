@@ -9,6 +9,7 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
+  Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -44,7 +45,106 @@ const C = {
 
 const ASSIGN_ORDER = ['Jordan', 'Alex', 'Sam', 'Split', 'Assign →'] as const;
 
+const DINERS = ['Jordan', 'Alex', 'Sam'] as const;
+type Diner = (typeof DINERS)[number];
+
+/** Person who initiated the split (owner pays tip). */
+const SPLIT_INITIATOR: Diner = 'Jordan';
+
 const CONFIDENCE_WARN = 0.72;
+
+function isDiner(s: string): s is Diner {
+  return (DINERS as readonly string[]).includes(s);
+}
+
+function round2(n: number) {
+  return Math.round(n * 100) / 100;
+}
+
+/**
+ * Live per-person totals: food from items (Split → /3), tax/fees proportional to food,
+ * tip pooled and redistributed by tipMode (Equally / By share / Owner pays).
+ */
+function computeLiveBreakdown(
+  lines: AssignReceiptLine[],
+  tipMode: 'equal' | 'share' | 'owner'
+): { rows: { name: string; amt: number }[]; maxAmt: number } {
+  const food: Record<Diner, number> = { Jordan: 0, Alex: 0, Sam: 0 };
+
+  const addSplitFood = (t: number) => {
+    const x = t / 3;
+    food.Jordan += x;
+    food.Alex += x;
+    food.Sam += x;
+  };
+
+  let taxAndFeesPool = 0;
+  let tipPool = 0;
+
+  for (const l of lines) {
+    if (!l.selected || l.line_total == null || Number.isNaN(l.line_total)) continue;
+    const t = l.line_total;
+    const a = l.assignedTo;
+
+    if (l.kind === 'item') {
+      if (a === 'Assign →') continue;
+      if (isDiner(a)) food[a] += t;
+      else if (a === 'Split') addSplitFood(t);
+      continue;
+    }
+    if (l.kind === 'tip') {
+      tipPool += t;
+      continue;
+    }
+    taxAndFeesPool += t;
+  }
+
+  const totalFood = DINERS.reduce((s, d) => s + food[d], 0);
+
+  const taxShare: Record<Diner, number> = { Jordan: 0, Alex: 0, Sam: 0 };
+  if (taxAndFeesPool > 0) {
+    if (totalFood > 0) {
+      for (const d of DINERS) {
+        taxShare[d] = round2(taxAndFeesPool * (food[d] / totalFood));
+      }
+    } else {
+      const x = taxAndFeesPool / 3;
+      for (const d of DINERS) taxShare[d] = round2(x);
+    }
+  }
+
+  const tipShare: Record<Diner, number> = { Jordan: 0, Alex: 0, Sam: 0 };
+  if (tipPool > 0) {
+    if (tipMode === 'owner') {
+      tipShare[SPLIT_INITIATOR] = round2(tipPool);
+    } else if (tipMode === 'equal') {
+      const x = tipPool / 3;
+      for (const d of DINERS) tipShare[d] = round2(x);
+      const drift = tipPool - DINERS.reduce((s, d) => s + tipShare[d], 0);
+      if (Math.abs(drift) >= 0.005) tipShare.Jordan = round2(tipShare.Jordan + drift);
+    } else {
+      if (totalFood > 0) {
+        for (const d of DINERS) {
+          tipShare[d] = round2(tipPool * (food[d] / totalFood));
+        }
+      } else {
+        const x = tipPool / 3;
+        for (const d of DINERS) tipShare[d] = round2(x);
+      }
+      const drift = tipPool - DINERS.reduce((s, d) => s + tipShare[d], 0);
+      if (Math.abs(drift) >= 0.005) tipShare.Jordan = round2(tipShare.Jordan + drift);
+    }
+  }
+
+  const rows = DINERS.map((d) => ({
+    name: d,
+    amt: round2(food[d] + taxShare[d] + tipShare[d]),
+  }));
+
+  const maxAmt = Math.max(0.01, ...rows.map((r) => r.amt));
+
+  return { rows, maxAmt };
+}
 
 function formatMoney(n: number | null | undefined) {
   if (n == null || Number.isNaN(n)) return '—';
@@ -190,9 +290,15 @@ export default function ReceiptAssignScreen() {
       router.back();
       return;
     }
+    const unassigned = lines.filter(
+      (l) => l.selected && l.kind === 'item' && l.assignedTo === 'Assign →'
+    ).length;
+    if (unassigned > 0) return;
+
     const s = getReceiptAssignSession();
     if (!s) return;
     const id = s.receiptId ?? newReceiptId();
+    const { rows: splitRows } = computeLiveBreakdown(lines, tipMode);
     const next: ReceiptAssignSession = {
       ...s,
       lines,
@@ -201,9 +307,19 @@ export default function ReceiptAssignScreen() {
       readOnly: true,
     };
     setReceiptAssignSession(next);
-    setReadOnly(true);
     void upsertRecentFromSession(next);
-  }, [readOnly, lines]);
+
+    const summary = splitRows.map((r) => `${r.name}: ${formatMoney(r.amt)}`).join('\n');
+    Alert.alert('Payment requests', `Created for each person:\n${summary}`, [
+      {
+        text: 'View Activity',
+        onPress: () => {
+          clearReceiptAssignSession();
+          router.replace({ pathname: '/activity', params: { filter: 'receipts' } });
+        },
+      },
+    ]);
+  }, [readOnly, lines, tipMode]);
 
   const totals = useMemo(() => {
     let sum = 0;
@@ -214,22 +330,16 @@ export default function ReceiptAssignScreen() {
     return Math.round(sum * 100) / 100;
   }, [lines]);
 
-  const byPerson = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const l of lines) {
-      if (!l.selected || l.line_total == null) continue;
-      if (l.assignedTo === 'Assign →') continue;
-      const k = l.assignedTo;
-      m.set(k, (m.get(k) ?? 0) + l.line_total);
-    }
-    return Array.from(m.entries()).map(([name, amt]) => ({
-      name,
-      amt: Math.round(amt * 100) / 100,
-    }));
-  }, [lines]);
+  const { rows: breakdownRows, maxAmt } = useMemo(
+    () => computeLiveBreakdown(lines, tipMode),
+    [lines, tipMode]
+  );
 
-  const maxPerson = useMemo(() => Math.max(1, ...byPerson.map((p) => p.amt)), [byPerson]);
-  const unassignedCount = lines.filter((l) => l.selected && l.assignedTo === 'Assign →').length;
+  const unassignedCount = lines.filter(
+    (l) => l.selected && l.kind === 'item' && l.assignedTo === 'Assign →'
+  ).length;
+
+  const confirmDisabled = !readOnly && unassignedCount > 0;
 
   const itemCount = lines.filter((l) => l.kind === 'item').length;
 
@@ -411,23 +521,21 @@ export default function ReceiptAssignScreen() {
           <View style={styles.totalsCard}>
             <View style={styles.totalsHeader}>
               <Text style={styles.totalsTitle}>Breakdown</Text>
-              <Text style={styles.totalsMeta}>
+              <Text style={[styles.totalsMeta, unassignedCount > 0 && styles.totalsMetaWarn]}>
                 {unassignedCount > 0 ? `${unassignedCount} unassigned` : 'All assigned'}
               </Text>
             </View>
-            {byPerson.map((p) => {
-              const pct = maxPerson > 0 ? Math.round((p.amt / maxPerson) * 100) : 0;
+            {breakdownRows.map((p) => {
+              const pct = maxAmt > 0 ? Math.round((p.amt / maxAmt) * 100) : 0;
               const barColors: Record<string, string> = {
                 Jordan: C.purple,
                 Alex: '#1D9E75',
                 Sam: '#D85A30',
-                Split: C.muted,
               };
               const pipColors: Record<string, { bg: string; fg: string }> = {
                 Jordan: { bg: C.lilac, fg: C.purple },
                 Alex: { bg: C.mint, fg: C.mintTxt },
                 Sam: { bg: C.peach, fg: C.peachTxt },
-                Split: { bg: '#F0EEE9', fg: '#5F5E5A' },
               };
               const bar = barColors[p.name] ?? C.purple;
               const pip = pipColors[p.name] ?? { bg: C.lilac, fg: C.purple };
@@ -456,8 +564,12 @@ export default function ReceiptAssignScreen() {
             </View>
           </View>
 
-          <Pressable style={styles.confirmBtn} onPress={onConfirmOrDone}>
-            <Text style={styles.confirmBtnTxt}>
+          <Pressable
+            style={[styles.confirmBtn, confirmDisabled && styles.confirmBtnDisabled]}
+            disabled={confirmDisabled}
+            onPress={onConfirmOrDone}
+          >
+            <Text style={[styles.confirmBtnTxt, confirmDisabled && styles.confirmBtnTxtDisabled]}>
               {readOnly ? 'Done' : 'Confirm & request payment'}
             </Text>
           </Pressable>
@@ -662,6 +774,7 @@ const styles = StyleSheet.create({
   totalsHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
   totalsTitle: { fontSize: 12, fontWeight: '600', color: C.muted, textTransform: 'uppercase', letterSpacing: 0.6 },
   totalsMeta: { fontSize: 11, color: C.muted },
+  totalsMetaWarn: { color: '#C62828', fontWeight: '600' },
   personRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
   ptPip: {
     width: 28,
@@ -693,7 +806,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 14,
   },
+  confirmBtnDisabled: {
+    backgroundColor: '#B8B3E0',
+    opacity: 0.85,
+  },
   confirmBtnTxt: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  confirmBtnTxtDisabled: { color: 'rgba(255,255,255,0.85)' },
   modalRoot: {
     flex: 1,
     justifyContent: 'flex-end',
