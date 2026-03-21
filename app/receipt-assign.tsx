@@ -20,7 +20,8 @@ import {
   setReceiptAssignSession,
   clearReceiptAssignSession,
 } from '../lib/receiptParseSession';
-import type { AssignReceiptLine } from '../lib/receiptTypes';
+import { newReceiptId, upsertRecentFromSession } from '../lib/recentReceipts';
+import type { AssignReceiptLine, ReceiptAssignSession } from '../lib/receiptTypes';
 
 const C = {
   bg: '#F2F0EB',
@@ -69,33 +70,53 @@ export default function ReceiptAssignScreen() {
   const insets = useSafeAreaInsets();
   const initial = getReceiptAssignSession();
   const [lines, setLines] = useState<AssignReceiptLine[]>(() => initial?.lines ?? []);
+  const [readOnly, setReadOnly] = useState(
+    () => Boolean(initial?.readOnly ?? initial?.splitStatus === 'confirmed')
+  );
   const merchant = initial?.merchantName ?? 'Receipt';
   const dateLabel = initial?.receiptDate ?? '';
   const overallConfidence = initial?.overallConfidence ?? null;
   const [tipMode, setTipMode] = useState<'equal' | 'share' | 'owner'>('share');
   const [editId, setEditId] = useState<string | null>(null);
 
-  const editLine = editId ? lines.find((l) => l.id === editId) : null;
   const [editName, setEditName] = useState('');
   const [editQty, setEditQty] = useState('1');
   const [editUnit, setEditUnit] = useState('');
   const [editTotal, setEditTotal] = useState('');
 
+  const persistSessionRef = useCallback((next: AssignReceiptLine[]) => {
+    const s = getReceiptAssignSession();
+    if (!s) return;
+    const updated: ReceiptAssignSession = { ...s, lines: next };
+    setReceiptAssignSession(updated);
+    if (!readOnly && updated.splitStatus === 'pending' && updated.receiptId) {
+      void upsertRecentFromSession(updated);
+    }
+  }, [readOnly]);
+
+  const persistSession = useCallback(
+    (next: AssignReceiptLine[]) => {
+      persistSessionRef(next);
+    },
+    [persistSessionRef]
+  );
+
   const openEdit = useCallback((row: AssignReceiptLine) => {
+    if (readOnly) return;
     setEditId(row.id);
     setEditName(row.name);
     setEditQty(String(row.quantity || 1));
     setEditUnit(row.unit_price != null ? String(row.unit_price) : '');
     setEditTotal(row.line_total != null ? String(row.line_total) : '');
-  }, []);
+  }, [readOnly]);
 
   const saveEdit = useCallback(() => {
-    if (!editId) return;
+    if (readOnly || !editId) return;
     const qty = Math.max(1, Number.parseInt(editQty, 10) || 1);
     const unit = parseMoneyInput(editUnit);
     const total = parseMoneyInput(editTotal);
-    setLines((prev) =>
-      prev.map((l) => {
+    setLines((prev) => {
+      const next = prev.map((l) => {
         if (l.id !== editId) return l;
         let line_total = total;
         let unit_price = unit;
@@ -111,29 +132,28 @@ export default function ReceiptAssignScreen() {
           unreadable: false,
           confidence: Math.max(l.confidence, 0.85),
         };
-      })
-    );
+      });
+      persistSessionRef(next);
+      return next;
+    });
     setEditId(null);
-  }, [editId, editName, editQty, editUnit, editTotal]);
-
-  const persistSession = useCallback((next: AssignReceiptLine[]) => {
-    const s = getReceiptAssignSession();
-    if (s) setReceiptAssignSession({ ...s, lines: next });
-  }, []);
+  }, [readOnly, editId, editName, editQty, editUnit, editTotal, persistSessionRef]);
 
   const toggleCheck = useCallback(
     (id: string) => {
+      if (readOnly) return;
       setLines((prev) => {
         const next = prev.map((l) => (l.id === id ? { ...l, selected: !l.selected } : l));
         persistSession(next);
         return next;
       });
     },
-    [persistSession]
+    [readOnly, persistSession]
   );
 
   const cycleAssignee = useCallback(
     (id: string) => {
+      if (readOnly) return;
       setLines((prev) => {
         const next = prev.map((l) => {
           if (l.id !== id) return l;
@@ -145,10 +165,11 @@ export default function ReceiptAssignScreen() {
         return next;
       });
     },
-    [persistSession]
+    [readOnly, persistSession]
   );
 
   const splitAllEqually = useCallback(() => {
+    if (readOnly) return;
     setLines((prev) => {
       const cycle = ['Jordan', 'Alex', 'Sam'];
       let k = 0;
@@ -161,7 +182,28 @@ export default function ReceiptAssignScreen() {
       persistSession(next);
       return next;
     });
-  }, [persistSession]);
+  }, [readOnly, persistSession]);
+
+  const onConfirmOrDone = useCallback(() => {
+    if (readOnly) {
+      clearReceiptAssignSession();
+      router.back();
+      return;
+    }
+    const s = getReceiptAssignSession();
+    if (!s) return;
+    const id = s.receiptId ?? newReceiptId();
+    const next: ReceiptAssignSession = {
+      ...s,
+      lines,
+      receiptId: id,
+      splitStatus: 'confirmed',
+      readOnly: true,
+    };
+    setReceiptAssignSession(next);
+    setReadOnly(true);
+    void upsertRecentFromSession(next);
+  }, [readOnly, lines]);
 
   const totals = useMemo(() => {
     let sum = 0;
@@ -192,9 +234,16 @@ export default function ReceiptAssignScreen() {
   const itemCount = lines.filter((l) => l.kind === 'item').length;
 
   const onBack = useCallback(() => {
+    const s = getReceiptAssignSession();
+    if (s?.receiptId && s.splitStatus === 'pending' && !readOnly) {
+      const worthwhile =
+        lines.some((l) => (l.name?.trim().length ?? 0) > 1) ||
+        lines.some((l) => l.line_total != null && l.line_total > 0);
+      if (worthwhile) void upsertRecentFromSession({ ...s, lines });
+    }
     clearReceiptAssignSession();
     router.back();
-  }, []);
+  }, [lines, readOnly]);
 
   if (!initial && lines.length === 0) {
     return (
@@ -243,15 +292,27 @@ export default function ReceiptAssignScreen() {
             </View>
           </View>
           <View style={styles.aiBadge}>
-            <Ionicons name="checkmark-circle-outline" size={14} color="rgba(255,255,255,0.8)" />
-            <Text style={styles.aiTxt}>AI read items — tap a row to edit values or assign</Text>
+            <Ionicons
+              name={readOnly ? 'lock-closed-outline' : 'checkmark-circle-outline'}
+              size={14}
+              color="rgba(255,255,255,0.8)"
+            />
+            <Text style={styles.aiTxt}>
+              {readOnly
+                ? 'This split was confirmed · view only'
+                : 'AI read items — tap a row to edit values or assign'}
+            </Text>
           </View>
         </LinearGradient>
 
         <View style={styles.floatCard}>
           <View style={styles.afHeader}>
             <Text style={styles.afTitle}>Assign items</Text>
-            <Pressable onPress={splitAllEqually} style={styles.splitAllWrap}>
+            <Pressable
+              onPress={splitAllEqually}
+              disabled={readOnly}
+              style={[styles.splitAllWrap, readOnly && { opacity: 0.45 }]}
+            >
               <Text style={styles.splitAllBtn}>Split all equally</Text>
             </Pressable>
           </View>
@@ -269,7 +330,8 @@ export default function ReceiptAssignScreen() {
                 <Pressable
                   onPress={() => toggleCheck(row.id)}
                   hitSlop={6}
-                  style={[styles.liCheck, row.selected && styles.liCheckOn]}
+                  disabled={readOnly}
+                  style={[styles.liCheck, row.selected && styles.liCheckOn, readOnly && { opacity: 0.85 }]}
                 >
                   {row.selected ? (
                     <Ionicons name="checkmark" size={12} color="#fff" />
@@ -277,7 +339,11 @@ export default function ReceiptAssignScreen() {
                     <View style={styles.liCheckDot} />
                   )}
                 </Pressable>
-                <Pressable style={styles.liMain} onPress={() => openEdit(row)}>
+                <Pressable
+                  style={styles.liMain}
+                  onPress={() => openEdit(row)}
+                  disabled={readOnly}
+                >
                   <View style={styles.liTitleRow}>
                     <Text
                       style={[styles.liName, mutedRow && styles.liNameMuted, !row.selected && styles.liStrike]}
@@ -300,7 +366,8 @@ export default function ReceiptAssignScreen() {
                 )}
                 <Pressable
                   onPress={() => cycleAssignee(row.id)}
-                  style={[styles.assignPill, { backgroundColor: pill.bg }]}
+                  disabled={readOnly}
+                  style={[styles.assignPill, { backgroundColor: pill.bg }, readOnly && { opacity: 0.9 }]}
                 >
                   <Text style={[styles.assignPillTxt, { color: pill.fg }]} numberOfLines={1}>
                     {row.assignedTo}
@@ -325,8 +392,17 @@ export default function ReceiptAssignScreen() {
                   ['owner', 'Owner pays'],
                 ] as const
               ).map(([key, label]) => (
-                <Pressable key={key} onPress={() => setTipMode(key)} style={styles.tipOptWrap}>
-                  <Text style={[styles.tipOpt, tipMode === key && styles.tipOptOn]}>{label}</Text>
+                <Pressable
+                  key={key}
+                  onPress={() => !readOnly && setTipMode(key)}
+                  disabled={readOnly}
+                  style={styles.tipOptWrap}
+                >
+                  <Text
+                    style={[styles.tipOpt, tipMode === key && styles.tipOptOn, readOnly && { opacity: 0.55 }]}
+                  >
+                    {label}
+                  </Text>
                 </Pressable>
               ))}
             </View>
@@ -380,8 +456,10 @@ export default function ReceiptAssignScreen() {
             </View>
           </View>
 
-          <Pressable style={styles.confirmBtn}>
-            <Text style={styles.confirmBtnTxt}>Confirm & request payment</Text>
+          <Pressable style={styles.confirmBtn} onPress={onConfirmOrDone}>
+            <Text style={styles.confirmBtnTxt}>
+              {readOnly ? 'Done' : 'Confirm & request payment'}
+            </Text>
           </Pressable>
         </View>
       </ScrollView>
