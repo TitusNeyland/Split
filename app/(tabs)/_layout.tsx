@@ -1,19 +1,18 @@
 import React from 'react';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../../constants/theme';
-
 export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.textSecondary,
+        tabBarActiveTintColor: '#534AB7',
+        tabBarInactiveTintColor: '#888780',
         tabBarStyle: {
-          backgroundColor: colors.bgPrimary,
-          borderTopColor: colors.borderDefault,
+          backgroundColor: '#FFFFFF',
+          borderTopColor: '#E8E6E1',
           borderTopWidth: 0.5,
         },
+        tabBarLabelStyle: { fontSize: 9, fontWeight: '600' },
         headerShown: false,
       }}
     >
@@ -31,7 +30,7 @@ export default function TabLayout() {
         options={{
           title: 'Subs',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="list-outline" color={color} size={size} />
+            <Ionicons name="time-outline" color={color} size={size} />
           ),
         }}
       />
@@ -40,7 +39,7 @@ export default function TabLayout() {
         options={{
           title: 'Scan',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="qr-code-outline" color={color} size={size} />
+            <Ionicons name="phone-portrait-outline" color={color} size={size} />
           ),
         }}
       />
