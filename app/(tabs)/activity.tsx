@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,10 @@ import {
   ScrollView,
   Pressable,
   Alert,
+  LayoutAnimation,
+  Platform,
+  UIManager,
+  Linking,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -13,6 +17,10 @@ import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 
 type IonIconName = React.ComponentProps<typeof Ionicons>['name'];
+
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 const C = {
   bg: '#F2F0EB',
@@ -175,6 +183,14 @@ type ActivityBadgeVariant = 'green' | 'amber' | 'red' | 'purple' | 'gray';
 
 type ActivityDetailRow = { label: string; value: string; link?: boolean };
 
+type ActivityDetailAction = {
+  id: string;
+  label: string;
+  variant: 'ghost' | 'primary' | 'danger';
+  /** Shows ↗ after label (e.g. open member activity). */
+  external?: boolean;
+};
+
 type ActivityFeedItem = {
   id: string;
   kind: ActivityKind;
@@ -192,7 +208,7 @@ type ActivityFeedItem = {
   partial?: { paid: number; total: number };
   detail?: {
     rows: ActivityDetailRow[];
-    actions?: { label: string; variant: 'ghost' | 'primary' | 'danger' }[];
+    actions?: ActivityDetailAction[];
   };
 };
 
@@ -238,11 +254,11 @@ const MOCK_ACTIVITY_GROUPS: ActivityFeedGroup[] = [
             { label: 'From', value: 'Alex L. · Visa ···· 4242' },
             { label: 'For', value: 'Spotify Family — March' },
             { label: 'Method', value: 'Auto-charged via Stripe' },
-            { label: 'Stripe ref', value: 'pi_3Nx8aB···', link: true },
+            { label: 'Stripe reference', value: 'pi_3Nx8aB···', link: true },
           ],
           actions: [
-            { label: 'View receipt', variant: 'ghost' },
-            { label: 'See all from Alex', variant: 'primary' },
+            { id: 't1-receipt', label: 'View receipt', variant: 'ghost' },
+            { id: 't1-alex', label: 'All from Alex', variant: 'primary', external: true },
           ],
         },
       },
@@ -262,12 +278,12 @@ const MOCK_ACTIVITY_GROUPS: ActivityFeedGroup[] = [
         detail: {
           rows: [
             { label: 'Status', value: '3 days overdue' },
-            { label: 'Reminders', value: '2 sent · last Mar 16' },
+            { label: 'Reminders', value: '2 sent · last sent Mar 16' },
             { label: 'Subscription', value: 'Netflix Premium' },
           ],
           actions: [
-            { label: 'Mark paid manually', variant: 'ghost' },
-            { label: 'Send reminder', variant: 'primary' },
+            { id: 't2-mark', label: 'Mark paid manually', variant: 'ghost' },
+            { id: 't2-remind', label: 'Send reminder', variant: 'primary' },
           ],
         },
       },
@@ -293,8 +309,8 @@ const MOCK_ACTIVITY_GROUPS: ActivityFeedGroup[] = [
             { label: 'Note from Taylor', value: '"Will send the rest Friday"' },
           ],
           actions: [
-            { label: 'Remind for rest', variant: 'ghost' },
-            { label: 'Mark remainder paid', variant: 'primary' },
+            { id: 't3-remind', label: 'Remind for rest', variant: 'ghost' },
+            { id: 't3-mark', label: 'Mark remainder paid', variant: 'primary' },
           ],
         },
       },
@@ -317,7 +333,7 @@ const MOCK_ACTIVITY_GROUPS: ActivityFeedGroup[] = [
             { label: 'Jordan', value: '33% → 40%' },
             { label: 'Alex', value: '33% → 30%' },
             { label: 'Sam', value: '34% → 30%' },
-            { label: 'Effective', value: 'Next cycle · Apr 18' },
+            { label: 'Effective date', value: 'Next cycle · Apr 18' },
           ],
         },
       },
@@ -342,9 +358,13 @@ const MOCK_ACTIVITY_GROUPS: ActivityFeedGroup[] = [
         badgeVariant: 'green',
         detail: {
           rows: [
+            { label: 'From', value: 'Taylor R. · manual payment' },
+            { label: 'For', value: 'Xbox Game Pass — March' },
             { label: 'Method', value: 'Marked paid manually' },
-            { label: 'Recorded by', value: 'Taylor R.' },
-            { label: 'Timestamp', value: 'Mar 15 · 4:22 PM' },
+          ],
+          actions: [
+            { id: 'y1-receipt', label: 'View receipt', variant: 'ghost' },
+            { id: 'y1-taylor', label: 'All from Taylor', variant: 'primary', external: true },
           ],
         },
       },
@@ -363,13 +383,13 @@ const MOCK_ACTIVITY_GROUPS: ActivityFeedGroup[] = [
         badgeVariant: 'red',
         detail: {
           rows: [
-            { label: 'Reason', value: 'Card declined' },
-            { label: 'Retry', value: 'Attempt 2 of 4 · next in 2 days' },
-            { label: 'Stripe ref', value: 'pi_err_3Nx···', link: true },
+            { label: 'Failure reason', value: 'Card declined' },
+            { label: 'Retry', value: 'Attempt 2 of 4 · next retry in 2 days' },
+            { label: 'Stripe error reference', value: 'pi_err_3Nx···', link: true },
           ],
           actions: [
-            { label: 'Message Sam', variant: 'ghost' },
-            { label: 'Retry now', variant: 'danger' },
+            { id: 'y2-msg', label: 'Message Sam', variant: 'ghost' },
+            { id: 'y2-retry', label: 'Retry now', variant: 'danger' },
           ],
         },
       },
@@ -417,7 +437,7 @@ const MOCK_ACTIVITY_GROUPS: ActivityFeedGroup[] = [
             { label: 'Total', value: '$49.52' },
             { label: 'Your share', value: '$16.51' },
           ],
-          actions: [{ label: 'Open receipt', variant: 'primary' }],
+          actions: [{ id: 'm1-open', label: 'Open receipt', variant: 'primary' }],
         },
       },
       {
@@ -437,6 +457,12 @@ const MOCK_ACTIVITY_GROUPS: ActivityFeedGroup[] = [
     ],
   },
 ];
+
+function openStripeReference(displayValue: string) {
+  void Linking.openURL('https://dashboard.stripe.com/').catch(() => {
+    Alert.alert('Stripe reference', displayValue);
+  });
+}
 
 function badgeStyles(v: ActivityBadgeVariant) {
   switch (v) {
@@ -530,19 +556,29 @@ function ActivityItemRow({ item, showTimelineLine, expanded, onToggle }: Activit
           {item.detail.rows.map((row) => (
             <View key={`${item.id}-${row.label}`} style={styles.detailRow}>
               <Text style={styles.drLbl}>{row.label}</Text>
-              <Text
-                style={[styles.drVal, row.link && styles.drValLink]}
-                numberOfLines={2}
-              >
-                {row.value}
-              </Text>
+              {row.link ? (
+                <Pressable
+                  onPress={() => openStripeReference(row.value)}
+                  style={styles.drValPressable}
+                  accessibilityRole="link"
+                  accessibilityLabel={`Stripe reference ${row.value}`}
+                >
+                  <Text style={styles.drValLinkText} numberOfLines={2}>
+                    {row.value}
+                  </Text>
+                </Pressable>
+              ) : (
+                <Text style={styles.drVal} numberOfLines={3}>
+                  {row.value}
+                </Text>
+              )}
             </View>
           ))}
           {item.detail.actions && item.detail.actions.length > 0 ? (
             <View style={styles.actionRow}>
               {item.detail.actions.map((a) => (
                 <Pressable
-                  key={a.label}
+                  key={a.id}
                   style={[
                     styles.actBtn,
                     a.variant === 'ghost' && styles.actBtnGhost,
@@ -551,17 +587,27 @@ function ActivityItemRow({ item, showTimelineLine, expanded, onToggle }: Activit
                   ]}
                   onPress={() => {}}
                 >
-                  <Text
-                    style={[
-                      styles.actBtnText,
-                      a.variant === 'ghost' && styles.actBtnTextGhost,
-                      a.variant === 'primary' && styles.actBtnTextPrimary,
-                      a.variant === 'danger' && styles.actBtnTextDanger,
-                    ]}
-                    numberOfLines={1}
-                  >
-                    {a.label}
-                  </Text>
+                  <View style={styles.actBtnContent}>
+                    <Text
+                      style={[
+                        styles.actBtnText,
+                        a.variant === 'ghost' && styles.actBtnTextGhost,
+                        a.variant === 'primary' && styles.actBtnTextPrimary,
+                        a.variant === 'danger' && styles.actBtnTextDanger,
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {a.label}
+                    </Text>
+                    {a.external ? (
+                      <Ionicons
+                        name="open-outline"
+                        size={15}
+                        color={a.variant === 'primary' ? '#fff' : '#5F5E5A'}
+                        style={styles.actBtnExternalIcon}
+                      />
+                    ) : null}
+                  </View>
                 </Pressable>
               ))}
             </View>
@@ -575,7 +621,7 @@ function ActivityItemRow({ item, showTimelineLine, expanded, onToggle }: Activit
 export default function ActivityScreen() {
   const insets = useSafeAreaInsets();
   const [filter, setFilter] = useState<ActivityFilterId>('all');
-  const [expandedIds, setExpandedIds] = useState<Record<string, boolean>>({});
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const collectedDisplay = useMemo(() => '+$47.50', []);
   const trendDisplay = useMemo(() => '↑ $12 vs last month', []);
@@ -607,11 +653,13 @@ export default function ActivityScreen() {
   }, [filter]);
 
   const toggleExpanded = useCallback((id: string) => {
-    setExpandedIds((prev) => ({ ...prev, [id]: !prev[id] }));
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setExpandedId((prev) => (prev === id ? null : id));
   }, []);
 
-  React.useEffect(() => {
-    setExpandedIds({});
+  useEffect(() => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setExpandedId(null);
   }, [filter]);
 
   return (
@@ -727,7 +775,7 @@ export default function ActivityScreen() {
                     key={item.id}
                     item={item}
                     showTimelineLine={ii < group.items.length - 1}
-                    expanded={Boolean(expandedIds[item.id])}
+                    expanded={expandedId === item.id}
                     onToggle={() => toggleExpanded(item.id)}
                   />
                 ))}
@@ -1079,6 +1127,12 @@ const styles = StyleSheet.create({
     flexShrink: 0,
     lineHeight: 18,
   },
+  drValPressable: {
+    flex: 1,
+    alignSelf: 'stretch',
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+  },
   drVal: {
     flex: 1,
     fontSize: 13,
@@ -1087,8 +1141,24 @@ const styles = StyleSheet.create({
     textAlign: 'right',
     lineHeight: 18,
   },
-  drValLink: {
+  drValLinkText: {
+    fontSize: 13,
+    fontWeight: '500',
     color: C.purple,
+    textAlign: 'right',
+    lineHeight: 18,
+    textDecorationLine: 'underline',
+    maxWidth: '100%',
+  },
+  actBtnContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    maxWidth: '100%',
+  },
+  actBtnExternalIcon: {
+    marginTop: 1,
   },
   actionRow: {
     flexDirection: 'row',
