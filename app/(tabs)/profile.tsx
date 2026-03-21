@@ -20,6 +20,7 @@ import ProfileFriendsBalancesCard from '../components/ProfileFriendsBalancesCard
 import ProfilePaymentMethodsCard from '../components/ProfilePaymentMethodsCard';
 import ProfileNotificationSettingsCard from '../components/ProfileNotificationSettingsCard';
 import ProfileSplitPreferencesCard from '../components/ProfileSplitPreferencesCard';
+import ProfilePrivacyCard from '../components/ProfilePrivacyCard';
 import { isFirebaseConfigured } from '../../lib/firebase';
 import {
   formatMemberSince,
@@ -264,6 +265,16 @@ export default function ProfileScreen() {
           />
         </View>
 
+        <View style={styles.privacySection}>
+          <Text style={styles.sectionHeading}>PRIVACY</Text>
+          <ProfilePrivacyCard
+            user={user}
+            privacySettings={profile?.privacySettings}
+            persist={isFirebaseConfigured() && !!user}
+            userLabelForExport={displayName}
+          />
+        </View>
+
         <View style={styles.bodyPad} />
       </ScrollView>
     </View>
@@ -421,6 +432,10 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   splitPreferencesSection: {
+    paddingHorizontal: 20,
+    marginBottom: 8,
+  },
+  privacySection: {
     paddingHorizontal: 20,
     marginBottom: 8,
   },
