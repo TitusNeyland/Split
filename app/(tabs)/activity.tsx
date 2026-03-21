@@ -32,6 +32,8 @@ const C = {
   divider: '#F0EEE9',
   green: '#1D9E75',
   orange: '#EF9F27',
+  /** Partial progress + remaining (HTML partial-fill). */
+  partialAmber: '#EF9F27',
   red: '#E24B4A',
   amberIconBg: '#FAEEDA',
   amberIcon: '#854F0B',
@@ -182,7 +184,13 @@ type ActivityKind =
 
 type ActivityBadgeVariant = 'green' | 'amber' | 'red' | 'purple' | 'gray';
 
-type ActivityDetailRow = { label: string; value: string; link?: boolean };
+type ActivityDetailRow = {
+  label: string;
+  value: string;
+  link?: boolean;
+  /** Remaining / emphasis in drawer (amber). */
+  valueAccent?: 'amber';
+};
 
 type ActivityDetailAction = {
   id: string;
@@ -208,7 +216,7 @@ async function persistManualSettlementToFirestore(
   _activityItemId: string,
   _record: ManualSettlementRecord,
 ): Promise<void> {
-  // TODO: Firestore — e.g. update payment doc: status, settlementMethod, note, recordedBy, timestamp
+  // TODO: Firestore — payment doc: status, partial_amount, note, settlementMethod, recordedBy, timestamp
 }
 
 function itemEligibleForMarkPaid(item: ActivityFeedItem): boolean {
@@ -235,7 +243,7 @@ function applyManualPaidToItem(
     badgeVariant: 'green',
     amount: settledAmount ?? item.amount,
     amountColor: C.green,
-    note: record.noteText ? `"${record.noteText}"` : item.note,
+    payerNote: record.noteText ? `"${record.noteText}"` : item.payerNote,
     partial: undefined,
     sub: 'Marked paid manually',
     detail: item.detail
@@ -259,6 +267,13 @@ function applyManualPaidToItem(
   };
 }
 
+/**
+ * Activity list row; aligns with `payments` (or ledger) docs:
+ * - `status` ↔ kind (e.g. partial, overdue, received)
+ * - `partial_amount` ↔ partial.paid (amount received toward total)
+ * - `amount` / total owed ↔ partial.total when partial
+ * - `note` ↔ payerNote (optional message from payer)
+ */
 type ActivityFeedItem = {
   id: string;
   kind: ActivityKind;
@@ -267,12 +282,15 @@ type ActivityFeedItem = {
   iconColor: string;
   title: string;
   sub: string;
-  note?: string;
+  /** Free-form payer message (italic blue in UI). Maps to Firestore `note`. */
+  payerNote?: string;
   time: string;
+  /** For partial: show amount paid (e.g. +$1.25), not full balance. */
   amount?: string;
   amountColor: string;
   badge: string;
   badgeVariant: ActivityBadgeVariant;
+  /** Partial settlement: paid ↔ partial_amount, total ↔ amount due. */
   partial?: { paid: number; total: number };
   detail?: {
     rows: ActivityDetailRow[];
@@ -363,7 +381,7 @@ const MOCK_ACTIVITY_GROUPS: ActivityFeedGroup[] = [
         iconColor: '#854F0B',
         title: 'Taylor paid partial · iCloud',
         sub: 'Paid $1.25 of $2.50 · balance remaining',
-        note: '"Will send the rest Friday"',
+        payerNote: 'Will send the rest Friday',
         time: '1 hr ago',
         amount: '+$1.25',
         amountColor: '#EF9F27',
@@ -373,8 +391,8 @@ const MOCK_ACTIVITY_GROUPS: ActivityFeedGroup[] = [
         detail: {
           rows: [
             { label: 'Paid so far', value: '$1.25' },
-            { label: 'Remaining', value: '$1.25' },
-            { label: 'Note from Taylor', value: '"Will send the rest Friday"' },
+            { label: 'Remaining', value: '$1.25', valueAccent: 'amber' },
+            { label: 'Note from payer', value: '"Will send the rest Friday"' },
           ],
           actions: [
             { id: 't3-remind', label: 'Remind for rest', variant: 'ghost' },
@@ -418,7 +436,7 @@ const MOCK_ACTIVITY_GROUPS: ActivityFeedGroup[] = [
         iconColor: '#1D9E75',
         title: 'Taylor paid Xbox Game Pass',
         sub: 'Mar cycle · marked manually',
-        note: '"Sent via Venmo @taylor_r"',
+        payerNote: 'Sent via Venmo @taylor_r',
         time: 'Mar 15 · 4:22 PM',
         amount: '+$7.50',
         amountColor: '#1D9E75',
@@ -617,9 +635,9 @@ function ActivityItemRow({
           <Text style={styles.actSub} numberOfLines={2}>
             {item.sub}
           </Text>
-          {item.note ? (
+          {item.payerNote ? (
             <Text style={styles.actNote} numberOfLines={2}>
-              {item.note}
+              {`"${item.payerNote}"`}
             </Text>
           ) : null}
           <Text style={styles.actTime}>{item.time}</Text>
@@ -672,7 +690,13 @@ function ActivityItemRow({
                   </Text>
                 </Pressable>
               ) : (
-                <Text style={styles.drVal} numberOfLines={3}>
+                <Text
+                  style={[
+                    styles.drVal,
+                    row.valueAccent === 'amber' && styles.drValAmber,
+                  ]}
+                  numberOfLines={3}
+                >
                   {row.value}
                 </Text>
               )}
@@ -1280,10 +1304,10 @@ const styles = StyleSheet.create({
   partialAmt: {
     fontSize: 13,
     fontWeight: '500',
-    color: C.orange,
+    color: C.partialAmber,
   },
   partialTrack: {
-    height: 5,
+    height: 4,
     backgroundColor: C.divider,
     borderRadius: 2,
     overflow: 'hidden',
@@ -1291,7 +1315,7 @@ const styles = StyleSheet.create({
   partialFill: {
     height: '100%',
     borderRadius: 2,
-    backgroundColor: C.orange,
+    backgroundColor: C.partialAmber,
   },
   actDetail: {
     borderTopWidth: 0.5,
@@ -1326,6 +1350,10 @@ const styles = StyleSheet.create({
     color: C.text,
     textAlign: 'right',
     lineHeight: 18,
+  },
+  drValAmber: {
+    color: C.partialAmber,
+    fontWeight: '600',
   },
   drValLinkText: {
     fontSize: 13,
