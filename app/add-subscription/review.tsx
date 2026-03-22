@@ -52,6 +52,7 @@ function parseMembersJson(raw: string | undefined): ReviewMember[] {
       percent: typeof m.percent === 'number' && Number.isFinite(m.percent) ? m.percent : 0,
       amountCents:
         typeof m.amountCents === 'number' && Number.isFinite(m.amountCents) ? m.amountCents : 0,
+      invitePending: m.invitePending === true,
     }));
   } catch {
     return [];
@@ -367,6 +368,9 @@ export default function AddSubscriptionReviewScreen() {
                       </View>
                     ) : null}
                   </View>
+                  {m.role !== 'owner' && m.invitePending ? (
+                    <Text style={styles.memPending}>Invited · pending</Text>
+                  ) : null}
                 </View>
                 <Text style={styles.memPct}>{formatPercent(m.percent)}</Text>
                 <Text style={styles.memAmt}>{fmtCents(m.amountCents)}</Text>
@@ -593,6 +597,11 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
     color: C.purple,
+  },
+  memPending: {
+    fontSize: 12,
+    color: C.muted,
+    marginTop: 4,
   },
   memPct: {
     fontSize: 14,

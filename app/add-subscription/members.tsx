@@ -10,7 +10,7 @@ import {
   FlatList,
   KeyboardAvoidingView,
   Platform,
-  Alert,
+  Share,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -53,6 +53,8 @@ export type WizardMember = {
   avatarBg: string;
   avatarColor: string;
   isOwner: boolean;
+  /** Not on the app yet — slot reserved until they join and add payment. */
+  invitePending?: boolean;
 };
 
 const JORDAN: WizardMember = {
@@ -64,15 +66,32 @@ const JORDAN: WizardMember = {
   isOwner: true,
 };
 
-type MockFriend = Omit<WizardMember, 'isOwner'>;
+type SheetFriend = Omit<WizardMember, 'isOwner' | 'invitePending'> & {
+  mutualSubscriptionsCount: number;
+};
 
-const MOCK_FRIENDS: MockFriend[] = [
+const INVITE_URL = 'https://mysplit.app/join';
+
+function deriveInitials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '?';
+  if (parts.length === 1) {
+    const w = parts[0]!;
+    return w.length >= 2 ? w.slice(0, 2).toUpperCase() : `${w}`.toUpperCase();
+  }
+  const a = parts[0]![0] ?? '';
+  const b = parts[parts.length - 1]![0] ?? '';
+  return `${a}${b}`.toUpperCase();
+}
+
+const MOCK_FRIENDS: SheetFriend[] = [
   {
     memberId: 'friend-alex',
     displayName: 'Alex L.',
     initials: 'AL',
     avatarBg: '#E1F5EE',
     avatarColor: '#0F6E56',
+    mutualSubscriptionsCount: 2,
   },
   {
     memberId: 'friend-sam',
@@ -80,6 +99,7 @@ const MOCK_FRIENDS: MockFriend[] = [
     initials: 'SM',
     avatarBg: '#FAECE7',
     avatarColor: '#993C1D',
+    mutualSubscriptionsCount: 0,
   },
   {
     memberId: 'friend-taylor',
@@ -87,6 +107,7 @@ const MOCK_FRIENDS: MockFriend[] = [
     initials: 'TK',
     avatarBg: '#E6F1FB',
     avatarColor: '#1a5f8a',
+    mutualSubscriptionsCount: 5,
   },
   {
     memberId: 'friend-riley',
@@ -94,6 +115,7 @@ const MOCK_FRIENDS: MockFriend[] = [
     initials: 'RP',
     avatarBg: '#E8E4FF',
     avatarColor: '#4338CA',
+    mutualSubscriptionsCount: 1,
   },
 ];
 
@@ -280,32 +302,104 @@ export default function AddSubscriptionMembersScreen() {
     });
   };
 
-  const addMember = (friend: MockFriend) => {
-    if (members.some((m) => m.memberId === friend.memberId)) return;
-    const nn = members.length + 1;
-    setMembers((prev) => [...prev, { ...friend, isOwner: false }]);
-    if (mode === 'equal') {
-      setCustomPercentStr(equalIntegerPercents(nn).map(String));
-      setFixedDollarStr(equalCentsSplit(totalCents, nn).map((c) => (c / 100).toFixed(2)));
-    } else if (mode === 'ownerLess') {
-      setCustomPercentStr(ownerLessIntegerPercents(nn).map(String));
-      setFixedDollarStr(ownerLessCentsSplit(totalCents, nn).map((c) => (c / 100).toFixed(2)));
-    } else if (mode === 'customPercent') {
-      setCustomPercentStr((p) => [...p, '0']);
-      setFixedDollarStr(equalCentsSplit(totalCents, nn).map((c) => (c / 100).toFixed(2)));
-    } else {
-      setFixedDollarStr((p) => [...p, '0.00']);
-      setCustomPercentStr(equalIntegerPercents(nn).map(String));
-    }
-    setPickerOpen(false);
-    setFriendQuery('');
-  };
+  const appendMemberCore = useCallback(
+    (newMember: WizardMember): boolean => {
+      let added = false;
+      let newN = 0;
+      setMembers((prev) => {
+        if (prev.some((m) => m.memberId === newMember.memberId)) return prev;
+        added = true;
+        const next = [...prev, newMember];
+        newN = next.length;
+        return next;
+      });
+      if (!added) return false;
+      if (mode === 'equal') {
+        setCustomPercentStr(equalIntegerPercents(newN).map(String));
+        setFixedDollarStr(equalCentsSplit(totalCents, newN).map((c) => (c / 100).toFixed(2)));
+      } else if (mode === 'ownerLess') {
+        setCustomPercentStr(ownerLessIntegerPercents(newN).map(String));
+        setFixedDollarStr(ownerLessCentsSplit(totalCents, newN).map((c) => (c / 100).toFixed(2)));
+      } else if (mode === 'customPercent') {
+        setCustomPercentStr((p) => [...p, '0']);
+        setFixedDollarStr(equalCentsSplit(totalCents, newN).map((c) => (c / 100).toFixed(2)));
+      } else {
+        setFixedDollarStr((p) => [...p, '0.00']);
+        setCustomPercentStr(equalIntegerPercents(newN).map(String));
+      }
+      return true;
+    },
+    [mode, totalCents],
+  );
 
-  const inviteNew = () => {
-    setPickerOpen(false);
-    setFriendQuery('');
-    Alert.alert('Invite', 'Invites will be available in a future update.');
-  };
+  const shareAppInvite = useCallback(async () => {
+    try {
+      await Share.share({
+        message:
+          Platform.OS === 'ios'
+            ? `Join me on mySplit — split subscriptions together.`
+            : `Join me on mySplit — split subscriptions together.\n${INVITE_URL}`,
+      });
+    } catch {
+      /* dismissed */
+    }
+  }, []);
+
+  const shareNamedInvite = useCallback(async (name: string) => {
+    try {
+      await Share.share({
+        message:
+          Platform.OS === 'ios'
+            ? `I'm inviting ${name} to split subscriptions with me on mySplit.`
+            : `I'm inviting ${name} to split subscriptions with me on mySplit.\n${INVITE_URL}`,
+      });
+    } catch {
+      /* dismissed */
+    }
+  }, []);
+
+  const onPickFriend = useCallback(
+    (friend: SheetFriend) => {
+      if (members.some((m) => m.memberId === friend.memberId)) {
+        setPickerOpen(false);
+        setFriendQuery('');
+        return;
+      }
+      const ok = appendMemberCore({
+        memberId: friend.memberId,
+        displayName: friend.displayName,
+        initials: friend.initials,
+        avatarBg: friend.avatarBg,
+        avatarColor: friend.avatarColor,
+        isOwner: false,
+      });
+      if (ok) {
+        setPickerOpen(false);
+        setFriendQuery('');
+      }
+    },
+    [members, appendMemberCore],
+  );
+
+  const inviteSearchNameToSplit = useCallback(
+    (name: string) => {
+      const trim = name.trim();
+      if (!trim) return;
+      const ok = appendMemberCore({
+        memberId: `pending-invite-${Date.now()}`,
+        displayName: trim,
+        initials: deriveInitials(trim),
+        avatarBg: C.purpleTint,
+        avatarColor: C.purple,
+        isOwner: false,
+        invitePending: true,
+      });
+      if (ok) void shareNamedInvite(trim);
+      setPickerOpen(false);
+      setFriendQuery('');
+    },
+    [appendMemberCore, shareNamedInvite],
+  );
 
   const validationBarVisible = mode === 'customPercent';
   const canContinue =
@@ -328,6 +422,7 @@ export default function AddSubscriptionMembersScreen() {
       role: m.isOwner ? ('owner' as const) : ('member' as const),
       percent: displayPercents[i] ?? 0,
       amountCents: rowCents[i] ?? 0,
+      invitePending: m.invitePending === true,
     }));
     const payload = encodeURIComponent(JSON.stringify({ members: reviewMembers }));
     router.push({
@@ -347,13 +442,14 @@ export default function AddSubscriptionMembersScreen() {
     });
   };
 
-  const filteredFriends = useMemo(() => {
-    const ids = new Set(members.map((m) => m.memberId));
+  const friendsForSheet = useMemo(() => {
     const q = friendQuery.trim().toLowerCase();
-    return MOCK_FRIENDS.filter((f) => !ids.has(f.memberId)).filter(
+    return MOCK_FRIENDS.filter(
       (f) => q === '' || f.displayName.toLowerCase().includes(q),
     );
-  }, [members, friendQuery]);
+  }, [friendQuery]);
+
+  const addedMemberIds = useMemo(() => new Set(members.map((m) => m.memberId)), [members]);
 
   const inputLocked = mode === 'equal' || mode === 'ownerLess';
 
@@ -470,8 +566,11 @@ export default function AddSubscriptionMembersScreen() {
                     {m.displayName}
                   </Text>
                   <Text style={styles.memberRole}>
-                    {m.isOwner ? 'Owner' : 'Member'}
-                    {m.isOwner ? ' · pays subscription' : ''}
+                    {m.isOwner
+                      ? 'Owner · pays subscription'
+                      : m.invitePending
+                        ? 'Invited · pending'
+                        : 'Member'}
                   </Text>
                 </View>
                 <View style={[styles.inputShell, inputLocked && styles.inputShellLocked]}>
@@ -544,51 +643,88 @@ export default function AddSubscriptionMembersScreen() {
           <Pressable style={styles.modalBackdrop} onPress={() => setPickerOpen(false)} />
           <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 16) }]}>
             <View style={styles.sheetHandle} />
-            <Text style={styles.sheetTitle}>Add someone</Text>
-            <Text style={styles.sheetSub}>Search friends or invite someone new</Text>
             <TextInput
               value={friendQuery}
               onChangeText={setFriendQuery}
-              placeholder="Search by name"
+              placeholder="Search friends…"
               placeholderTextColor={C.muted}
               style={styles.sheetSearch}
+              accessibilityLabel="Search friends"
             />
+            <Text style={styles.sheetSectionLbl}>Your friends</Text>
             <FlatList
-              data={filteredFriends}
+              data={friendsForSheet}
               keyExtractor={(item) => item.memberId}
               style={styles.sheetList}
               keyboardShouldPersistTaps="handled"
               ListEmptyComponent={
-                <Text style={styles.sheetEmpty}>No friends match your search.</Text>
-              }
-              renderItem={({ item }) => (
-                <Pressable
-                  style={styles.friendRow}
-                  onPress={() => addMember(item)}
-                  accessibilityRole="button"
-                >
-                  <View style={[styles.memberAv, { backgroundColor: item.avatarBg }]}>
-                    <Text style={[styles.memberAvTxt, { color: item.avatarColor }]}>
-                      {item.initials}
+                friendQuery.trim() ? (
+                  <Pressable
+                    style={styles.sheetEmptyInvite}
+                    onPress={() => inviteSearchNameToSplit(friendQuery.trim())}
+                    accessibilityRole="button"
+                    accessibilityLabel={`No friends found, invite ${friendQuery.trim()} to mySplit`}
+                  >
+                    <Text style={styles.sheetEmptyInviteTxt}>
+                      No friends found · Invite {friendQuery.trim()} to mySplit
                     </Text>
-                  </View>
-                  <Text style={styles.friendName}>{item.displayName}</Text>
-                  <Ionicons name="chevron-forward" size={18} color={C.muted} />
-                </Pressable>
-              )}
+                  </Pressable>
+                ) : (
+                  <Text style={styles.sheetEmpty}>No friends yet.</Text>
+                )
+              }
+              renderItem={({ item }) => {
+                const added = addedMemberIds.has(item.memberId);
+                return (
+                  <Pressable
+                    style={styles.friendRow}
+                    onPress={() => onPickFriend(item)}
+                    accessibilityRole="button"
+                    accessibilityLabel={
+                      added ? `${item.displayName}, already added` : `Add ${item.displayName}`
+                    }
+                  >
+                    <View style={styles.sheetAvatarWrap}>
+                      <View style={[styles.memberAv, { backgroundColor: item.avatarBg }]}>
+                        <Text style={[styles.memberAvTxt, { color: item.avatarColor }]}>
+                          {item.initials}
+                        </Text>
+                      </View>
+                      {added ? (
+                        <View style={styles.sheetAddedBadge} accessibilityLabel="Added to split">
+                          <Ionicons name="checkmark" size={11} color="#fff" />
+                        </View>
+                      ) : null}
+                    </View>
+                    <View style={styles.friendMeta}>
+                      <Text style={styles.friendName} numberOfLines={1}>
+                        {item.displayName}
+                      </Text>
+                      <Text style={styles.friendMutual} numberOfLines={1}>
+                        {item.mutualSubscriptionsCount === 0
+                          ? 'No mutual subscriptions'
+                          : item.mutualSubscriptionsCount === 1
+                            ? '1 mutual subscription'
+                            : `${item.mutualSubscriptionsCount} mutual subscriptions`}
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color={C.muted} />
+                  </Pressable>
+                );
+              }}
             />
             <Pressable
-              style={styles.inviteRow}
-              onPress={inviteNew}
+              style={styles.sheetInviteRow}
+              onPress={() => void shareAppInvite()}
               accessibilityRole="button"
-              accessibilityLabel="Invite someone new"
+              accessibilityLabel="Invite to mySplit, share link"
             >
-              <View style={styles.inviteIco}>
-                <Ionicons name="person-add-outline" size={20} color={C.purple} />
+              <View style={styles.sheetInviteIco}>
+                <Ionicons name="share-outline" size={20} color={C.purple} />
               </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.inviteTitle}>Invite someone new</Text>
-                <Text style={styles.inviteSub}>Share a link or send an invite</Text>
+              <View style={styles.sheetInviteCopy}>
+                <Text style={styles.sheetInviteTitle}>Invite to mySplit</Text>
+                <Text style={styles.sheetInviteSub}>Share an invite link</Text>
               </View>
             </Pressable>
           </View>
@@ -910,23 +1046,12 @@ const styles = StyleSheet.create({
     maxHeight: '88%',
   },
   sheetHandle: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
+    width: 44,
+    height: 5,
+    borderRadius: 3,
     backgroundColor: '#D3D1C7',
     alignSelf: 'center',
-    marginBottom: 14,
-  },
-  sheetTitle: {
-    fontSize: 19,
-    fontWeight: '600',
-    color: C.text,
-  },
-  sheetSub: {
-    fontSize: 14,
-    color: C.muted,
-    marginTop: 4,
-    marginBottom: 12,
+    marginBottom: 16,
   },
   sheetSearch: {
     backgroundColor: C.segBg,
@@ -935,16 +1060,35 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     fontSize: 16,
     color: C.text,
-    marginBottom: 8,
+    marginBottom: 12,
+  },
+  sheetSectionLbl: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: C.muted,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    marginBottom: 6,
   },
   sheetList: {
-    maxHeight: 280,
+    maxHeight: 320,
   },
   sheetEmpty: {
     fontSize: 15,
     color: C.muted,
     paddingVertical: 20,
     textAlign: 'center',
+  },
+  sheetEmptyInvite: {
+    paddingVertical: 18,
+    paddingHorizontal: 8,
+  },
+  sheetEmptyInviteTxt: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: C.purple,
+    textAlign: 'center',
+    lineHeight: 22,
   },
   friendRow: {
     flexDirection: 'row',
@@ -954,21 +1098,47 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: C.divider,
   },
-  friendName: {
+  sheetAvatarWrap: {
+    position: 'relative',
+  },
+  sheetAddedBadge: {
+    position: 'absolute',
+    right: -4,
+    bottom: -4,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: C.purple,
+    borderWidth: 2,
+    borderColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  friendMeta: {
     flex: 1,
+    minWidth: 0,
+  },
+  friendName: {
     fontSize: 16,
     fontWeight: '500',
     color: C.text,
   },
-  inviteRow: {
+  friendMutual: {
+    fontSize: 12,
+    color: C.muted,
+    marginTop: 3,
+  },
+  sheetInviteRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    marginTop: 8,
+    marginTop: 4,
     paddingVertical: 14,
     paddingHorizontal: 4,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: C.divider,
   },
-  inviteIco: {
+  sheetInviteIco: {
     width: 44,
     height: 44,
     borderRadius: 12,
@@ -976,12 +1146,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  inviteTitle: {
+  sheetInviteCopy: {
+    flex: 1,
+  },
+  sheetInviteTitle: {
     fontSize: 16,
     fontWeight: '600',
     color: C.text,
   },
-  inviteSub: {
+  sheetInviteSub: {
     fontSize: 13,
     color: C.muted,
     marginTop: 2,

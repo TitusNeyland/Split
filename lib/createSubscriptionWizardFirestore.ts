@@ -12,6 +12,8 @@ export type WizardMemberRow = {
   role: 'owner' | 'member';
   percent: number;
   amountCents: number;
+  /** Invited by link / not on app yet — charged after they join and add payment. */
+  invitePending?: boolean;
 };
 
 export type CreateSubscriptionWizardInput = {
@@ -59,11 +61,18 @@ export async function createSubscriptionFromWizard(
     initials: m.initials,
     avatarBg: m.avatarBg,
     avatarColor: m.avatarColor,
+    invitePending: Boolean(m.invitePending),
   }));
 
   const memberPaymentStatus: Record<string, string> = {};
   for (const m of input.members) {
-    memberPaymentStatus[m.memberId] = m.role === 'owner' ? 'owner' : 'pending';
+    if (m.role === 'owner') {
+      memberPaymentStatus[m.memberId] = 'owner';
+    } else if (m.invitePending) {
+      memberPaymentStatus[m.memberId] = 'invited_pending';
+    } else {
+      memberPaymentStatus[m.memberId] = 'pending';
+    }
   }
 
   const col = collection(db, 'subscriptions');
