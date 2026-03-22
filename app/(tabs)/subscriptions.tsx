@@ -7,7 +7,7 @@ import {
   Pressable,
   useWindowDimensions,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
@@ -46,6 +46,9 @@ function formatBadgeCount(n: number): string {
 
 export default function SubscriptionsScreen() {
   const router = useRouter();
+  const { calendar: calendarParam } = useLocalSearchParams<{ calendar?: string | string[] }>();
+  const fromHomeCalendar =
+    calendarParam === '1' || (Array.isArray(calendarParam) && calendarParam[0] === '1');
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const [user, setUser] = useState<User | null>(null);
@@ -177,6 +180,16 @@ export default function SubscriptionsScreen() {
         </LinearGradient>
 
         {SUBSCRIPTIONS_DEMO_MODE ? <SubscriptionsDemoFloatCard /> : null}
+
+        {fromHomeCalendar ? (
+          <View style={styles.calendarFromHome}>
+            <Text style={styles.calendarFromHomeTitle}>Billing calendar</Text>
+            <Text style={styles.calendarFromHomeBody}>
+              Full month view and filters will live here. For now, use the week strip on Home for the next
+              charge; subscription cards below still reflect your active filters.
+            </Text>
+          </View>
+        ) : null}
 
         <View style={[styles.body, { minHeight: Math.max(320, width * 0.9) }]}>
           {SUBSCRIPTIONS_DEMO_MODE ? (
@@ -378,6 +391,28 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: '700',
     color: '#fff',
+  },
+  calendarFromHome: {
+    marginHorizontal: 14,
+    marginTop: 12,
+    marginBottom: 4,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    borderWidth: 0.5,
+    borderColor: 'rgba(0,0,0,0.06)',
+  },
+  calendarFromHomeTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: C.text,
+    marginBottom: 6,
+  },
+  calendarFromHomeBody: {
+    fontSize: 14,
+    color: C.muted,
+    lineHeight: 20,
   },
   body: {
     paddingHorizontal: 14,

@@ -26,6 +26,11 @@ import {
   subscribeHomeSavings,
   type HomeSavingsSnapshot,
 } from '../../lib/homeSavingsFirestore';
+import {
+  buildCalendarStripDays,
+  getHomeDemoBills,
+  pickNextBillPreview,
+} from '../../lib/homeWeekCalendar';
 import { HomeDonutChart, HOME_DONUT_SIZE } from '../components/HomeDonutChart';
 import { HomeHeroDonutLegend } from '../components/HomeHeroDonutLegend';
 import { HomeSavingsPill } from '../components/HomeSavingsPill';
@@ -51,10 +56,6 @@ const C = {
   divider: '#F0EEE9',
   rowDivider: '#F5F3EE',
 };
-
-function dateKey(d: Date) {
-  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
-}
 
 function initialHomeFinancialPosition(): HomeFinancialPosition {
   if (HOME_PREVIEW === 'empty') {
@@ -239,50 +240,17 @@ export default function HomeScreen() {
     return formatMemberTenureMonths(savings.joinedAt);
   }, [isEmpty, user?.uid, savings.joinedAt]);
 
-  const calendarDays = useMemo(() => {
-    const now = new Date();
-    const start = new Date(now);
-    const dow = start.getDay();
-    const fromMon = dow === 0 ? -6 : 1 - dow;
-    start.setDate(start.getDate() + fromMon);
-    start.setHours(0, 0, 0, 0);
-    const today = new Date(now);
-    today.setHours(0, 0, 0, 0);
+  const homeCalendarBills = useMemo(() => getHomeDemoBills(isEmpty), [isEmpty]);
 
-    const billKeys = new Set<string>();
-    if (!isEmpty) {
-      billKeys.add(dateKey(today));
-      const d2 = new Date(today);
-      d2.setDate(d2.getDate() + 5);
-      billKeys.add(dateKey(d2));
-      const d3 = new Date(today);
-      d3.setDate(d3.getDate() + 7);
-      billKeys.add(dateKey(d3));
-    }
+  const calendarDays = useMemo(
+    () => buildCalendarStripDays(new Date(), homeCalendarBills, 21),
+    [homeCalendarBills]
+  );
 
-    const days: { key: string; dow: string; num: number; isToday: boolean; hasBill: boolean }[] = [];
-    for (let i = 0; i < 10; i++) {
-      const cell = new Date(start);
-      cell.setDate(start.getDate() + i);
-      const isToday = cell.getTime() === today.getTime();
-      days.push({
-        key: dateKey(cell),
-        dow: cell.toLocaleDateString('en-US', { weekday: 'short' }),
-        num: cell.getDate(),
-        isToday,
-        hasBill: billKeys.has(dateKey(cell)),
-      });
-    }
-    return days;
-  }, [isEmpty]);
-
-  const billPreview = {
-    serviceName: 'Netflix',
-    name: 'Netflix',
-    detail: 'billing Mar 18',
-    whenLabel: 'Today',
-    amount: '$22.99',
-  };
+  const billPreview = useMemo(
+    () => pickNextBillPreview(homeCalendarBills, new Date()),
+    [homeCalendarBills]
+  );
 
   const upcomingSplits = isEmpty ? [] : upcomingSplitsFilled;
   const friendBalances = isEmpty ? [] : friendBalancesFilled;
@@ -501,9 +469,16 @@ export default function HomeScreen() {
         />
 
         <View style={styles.body}>
-          <View style={styles.sh}>
-            <Text style={styles.shTitle}>This week</Text>
-            <Text style={styles.shAction}>Full calendar</Text>
+          <View style={[styles.sh, styles.weekSectionHeader]}>
+            <Text style={[styles.shTitle, styles.weekSectionTitle]}>This week</Text>
+            <Pressable
+              onPress={() => router.push('/subscriptions?calendar=1')}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Open full billing calendar on Subscriptions"
+            >
+              <Text style={[styles.shAction, styles.weekSectionAction]}>Full calendar</Text>
+            </Pressable>
           </View>
           <View style={styles.calStrip}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.calDays}>
@@ -521,6 +496,7 @@ export default function HomeScreen() {
                       styles.calDayName,
                       d.isToday && styles.calDayNameOn,
                       !d.isToday && d.hasBill && styles.calDayNameBill,
+                      !d.isToday && !d.hasBill && styles.calDayNamePlain,
                     ]}
                   >
                     {d.dow}
@@ -530,6 +506,7 @@ export default function HomeScreen() {
                       styles.calDayNum,
                       d.isToday && styles.calDayNumOn,
                       !d.isToday && d.hasBill && styles.calDayNumBill,
+                      !d.isToday && !d.hasBill && styles.calDayNumPlain,
                     ]}
                   >
                     {d.num}
@@ -539,29 +516,38 @@ export default function HomeScreen() {
                       styles.calDot,
                       d.isToday && styles.calDotToday,
                       !d.isToday && d.hasBill && styles.calDotBill,
-                      !d.isToday && !d.hasBill && styles.calDotHidden,
+                      !d.isToday && !d.hasBill && styles.calDotPlain,
                     ]}
                   />
                 </Pressable>
               ))}
             </ScrollView>
-            {!isEmpty ? (
+            {!isEmpty && billPreview ? (
               <View style={styles.billPreview}>
                 <View style={styles.bpIco}>
-                  <ServiceIcon serviceName={billPreview.serviceName} size={26} />
+                  <ServiceIcon serviceName={billPreview.serviceName} size={30} />
                 </View>
-                <Text style={styles.bpName} numberOfLines={1}>
-                  {billPreview.name} · {billPreview.detail}
+                <Text style={styles.bpName} numberOfLines={2}>
+                  {billPreview.serviceName}
+                  <Text style={styles.bpBillingMeta}> · {billPreview.billingDetail}</Text>
                 </Text>
-                <Text style={styles.bpWhen}>{billPreview.whenLabel}</Text>
-                <Text style={styles.bpAmt}>{billPreview.amount}</Text>
+                <Text
+                  style={[styles.bpWhen, billPreview.whenIsToday ? styles.bpWhenToday : styles.bpWhenUpcoming]}
+                >
+                  {billPreview.whenLabel}
+                </Text>
+                <Text style={styles.bpAmt}>{billPreview.amountFormatted}</Text>
               </View>
             ) : (
               <View style={styles.billPreview}>
                 <View style={[styles.bpIco, { backgroundColor: '#EEEDFE' }]}>
-                  <Ionicons name="calendar-outline" size={16} color={C.purple} />
+                  <Ionicons name="calendar-outline" size={20} color={C.purple} />
                 </View>
-                <Text style={styles.bpNameEmpty}>No bills scheduled this week</Text>
+                <Text style={styles.bpNameEmpty} numberOfLines={2}>
+                  {isEmpty
+                    ? 'No bills scheduled this week'
+                    : 'No upcoming bills in the next 14 days'}
+                </Text>
               </View>
             )}
           </View>
@@ -832,32 +818,43 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: C.purple,
   },
+  weekSectionHeader: {
+    marginBottom: 12,
+  },
+  weekSectionTitle: {
+    fontSize: 15,
+    letterSpacing: 1.15,
+  },
+  weekSectionAction: {
+    fontSize: 16,
+  },
   quickActionsBelowFloat: {
     marginTop: 12,
     marginBottom: 4,
   },
   calStrip: {
     backgroundColor: '#fff',
-    borderRadius: 18,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
+    borderRadius: 20,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
     borderWidth: 0.5,
     borderColor: C.border,
   },
   calDays: {
     flexDirection: 'row',
-    gap: 5,
+    gap: 6,
+    paddingBottom: 4,
   },
   calDay: {
     alignItems: 'center',
     gap: 5,
-    paddingVertical: 8,
-    paddingHorizontal: 6,
+    paddingVertical: 9,
+    paddingHorizontal: 8,
     borderRadius: 12,
-    minWidth: 40,
+    minWidth: 42,
   },
   calDayToday: {
-    backgroundColor: C.purple,
+    backgroundColor: '#534AB7',
   },
   calDayBill: {
     backgroundColor: '#EEEDFE',
@@ -865,45 +862,76 @@ const styles = StyleSheet.create({
   calDayName: {
     fontSize: 11,
     fontWeight: '500',
-    color: C.muted,
     textTransform: 'uppercase',
+    lineHeight: 13,
   },
-  calDayNameOn: { color: 'rgba(255,255,255,0.75)' },
+  calDayNameOn: { color: '#ffffff' },
   calDayNameBill: { color: C.purple },
+  calDayNamePlain: { color: C.muted },
   calDayNum: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '600',
-    color: C.text,
+    lineHeight: 21,
   },
-  calDayNumOn: { color: '#fff' },
+  calDayNumOn: { color: '#ffffff' },
   calDayNumBill: { color: C.purple },
+  calDayNumPlain: { color: C.text },
   calDot: {
     width: 5,
     height: 5,
     borderRadius: 2.5,
   },
-  calDotToday: { backgroundColor: 'rgba(255,255,255,0.75)' },
+  calDotToday: { backgroundColor: '#ffffff' },
   calDotBill: { backgroundColor: C.purple },
-  calDotHidden: { backgroundColor: 'transparent' },
+  calDotPlain: { backgroundColor: 'transparent' },
   billPreview: {
     marginTop: 10,
-    paddingTop: 10,
+    paddingTop: 12,
     borderTopWidth: 0.5,
-    borderTopColor: C.divider,
+    borderTopColor: '#F0EEE9',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 12,
   },
   bpIco: {
-    width: 26,
-    height: 26,
+    width: 30,
+    height: 30,
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
-  bpName: { flex: 1, fontSize: 14, fontWeight: '500', color: C.text },
-  bpNameEmpty: { flex: 1, fontSize: 14, fontWeight: '500', color: C.muted },
-  bpWhen: { fontSize: 13, color: C.red, fontWeight: '500' },
-  bpAmt: { fontSize: 14, fontWeight: '600', color: C.red, marginLeft: 4 },
+  bpName: {
+    flex: 1,
+    minWidth: 0,
+    fontSize: 15,
+    fontWeight: '500',
+    color: C.text,
+    lineHeight: 19,
+  },
+  bpBillingMeta: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: C.muted,
+  },
+  bpNameEmpty: {
+    flex: 1,
+    minWidth: 0,
+    fontSize: 15,
+    fontWeight: '500',
+    color: C.muted,
+    lineHeight: 20,
+  },
+  bpWhen: { fontSize: 13, fontWeight: '600', flexShrink: 0 },
+  bpWhenToday: { color: C.red },
+  bpWhenUpcoming: { color: C.muted },
+  bpAmt: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: C.text,
+    marginLeft: 'auto',
+    flexShrink: 0,
+    textAlign: 'right',
+  },
   listCard: {
     backgroundColor: '#fff',
     borderRadius: 18,
