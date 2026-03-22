@@ -43,13 +43,13 @@ const C = {
   warn: '#B45309',
 };
 
-const ASSIGN_ORDER = ['Jordan', 'Alex', 'Sam', 'Split', 'Assign →'] as const;
+const ASSIGN_ORDER = ['Titus', 'Alex', 'Sam', 'Split', 'Assign →'] as const;
 
-const DINERS = ['Jordan', 'Alex', 'Sam'] as const;
+const DINERS = ['Titus', 'Alex', 'Sam'] as const;
 type Diner = (typeof DINERS)[number];
 
 /** Person who initiated the split (owner pays tip). */
-const SPLIT_INITIATOR: Diner = 'Jordan';
+const SPLIT_INITIATOR: Diner = 'Titus';
 
 const CONFIDENCE_WARN = 0.72;
 
@@ -69,11 +69,11 @@ function computeLiveBreakdown(
   lines: AssignReceiptLine[],
   tipMode: 'equal' | 'share' | 'owner'
 ): { rows: { name: string; amt: number }[]; maxAmt: number } {
-  const food: Record<Diner, number> = { Jordan: 0, Alex: 0, Sam: 0 };
+  const food: Record<Diner, number> = { Titus: 0, Alex: 0, Sam: 0 };
 
   const addSplitFood = (t: number) => {
     const x = t / 3;
-    food.Jordan += x;
+    food.Titus += x;
     food.Alex += x;
     food.Sam += x;
   };
@@ -101,7 +101,7 @@ function computeLiveBreakdown(
 
   const totalFood = DINERS.reduce((s, d) => s + food[d], 0);
 
-  const taxShare: Record<Diner, number> = { Jordan: 0, Alex: 0, Sam: 0 };
+  const taxShare: Record<Diner, number> = { Titus: 0, Alex: 0, Sam: 0 };
   if (taxAndFeesPool > 0) {
     if (totalFood > 0) {
       for (const d of DINERS) {
@@ -113,7 +113,7 @@ function computeLiveBreakdown(
     }
   }
 
-  const tipShare: Record<Diner, number> = { Jordan: 0, Alex: 0, Sam: 0 };
+  const tipShare: Record<Diner, number> = { Titus: 0, Alex: 0, Sam: 0 };
   if (tipPool > 0) {
     if (tipMode === 'owner') {
       tipShare[SPLIT_INITIATOR] = round2(tipPool);
@@ -121,7 +121,7 @@ function computeLiveBreakdown(
       const x = tipPool / 3;
       for (const d of DINERS) tipShare[d] = round2(x);
       const drift = tipPool - DINERS.reduce((s, d) => s + tipShare[d], 0);
-      if (Math.abs(drift) >= 0.005) tipShare.Jordan = round2(tipShare.Jordan + drift);
+      if (Math.abs(drift) >= 0.005) tipShare.Titus = round2(tipShare.Titus + drift);
     } else {
       if (totalFood > 0) {
         for (const d of DINERS) {
@@ -132,7 +132,7 @@ function computeLiveBreakdown(
         for (const d of DINERS) tipShare[d] = round2(x);
       }
       const drift = tipPool - DINERS.reduce((s, d) => s + tipShare[d], 0);
-      if (Math.abs(drift) >= 0.005) tipShare.Jordan = round2(tipShare.Jordan + drift);
+      if (Math.abs(drift) >= 0.005) tipShare.Titus = round2(tipShare.Titus + drift);
     }
   }
 
@@ -159,7 +159,7 @@ function parseMoneyInput(s: string): number | null {
 }
 
 const PILLS: Record<string, { bg: string; fg: string }> = {
-  Jordan: { bg: C.lilac, fg: C.purple },
+  Titus: { bg: C.lilac, fg: C.purple },
   Alex: { bg: C.mint, fg: C.mintTxt },
   Sam: { bg: C.peach, fg: C.peachTxt },
   Split: { bg: '#F0EEE9', fg: '#5F5E5A' },
@@ -271,7 +271,7 @@ export default function ReceiptAssignScreen() {
   const splitAllEqually = useCallback(() => {
     if (readOnly) return;
     setLines((prev) => {
-      const cycle = ['Jordan', 'Alex', 'Sam'];
+      const cycle = ['Titus', 'Alex', 'Sam'];
       let k = 0;
       const next = prev.map((l) => {
         if (l.kind !== 'item') return { ...l, assignedTo: 'Split' };
@@ -528,12 +528,12 @@ export default function ReceiptAssignScreen() {
             {breakdownRows.map((p) => {
               const pct = maxAmt > 0 ? Math.round((p.amt / maxAmt) * 100) : 0;
               const barColors: Record<string, string> = {
-                Jordan: C.purple,
+                Titus: C.purple,
                 Alex: '#1D9E75',
                 Sam: '#D85A30',
               };
               const pipColors: Record<string, { bg: string; fg: string }> = {
-                Jordan: { bg: C.lilac, fg: C.purple },
+                Titus: { bg: C.lilac, fg: C.purple },
                 Alex: { bg: C.mint, fg: C.mintTxt },
                 Sam: { bg: C.peach, fg: C.peachTxt },
               };

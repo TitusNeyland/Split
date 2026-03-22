@@ -37,7 +37,7 @@ const RECEIPT_DETAILS: Record<string, ReceiptDetail> = {
     peopleCount: 3,
     itemCount: 7,
     lines: [
-      { label: 'Chicken Parm', assignedTo: 'Jordan', amount: '$18.99', status: 'Paid' },
+      { label: 'Chicken Parm', assignedTo: 'Titus', amount: '$18.99', status: 'Paid' },
       { label: 'Fettuccine Alfredo', assignedTo: 'Alex', amount: '$16.99', status: 'Paid' },
       { label: 'Salad + soup', assignedTo: 'Sam', amount: '$13.54', status: 'Pending' },
     ],
@@ -49,7 +49,7 @@ const RECEIPT_DETAILS: Record<string, ReceiptDetail> = {
     peopleCount: 2,
     itemCount: 4,
     lines: [
-      { label: 'Burrito bowl', assignedTo: 'Jordan', amount: '$12.40', status: 'Paid' },
+      { label: 'Burrito bowl', assignedTo: 'Titus', amount: '$12.40', status: 'Paid' },
       { label: 'Burrito + drink', assignedTo: 'Taylor', amount: '$12.40', status: 'Paid' },
     ],
   },

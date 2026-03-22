@@ -218,7 +218,7 @@ type ManualSettlementRecord = {
   recordedAt: number;
 };
 
-const MOCK_CURRENT_USER_ID = 'user_jordan';
+const MOCK_CURRENT_USER_ID = 'user_titus';
 
 async function persistManualSettlementToFirestore(
   _activityItemId: string,
@@ -435,16 +435,16 @@ const MOCK_ACTIVITY_GROUPS: ActivityFeedGroup[] = [
         iconBg: '#EEEDFE',
         iconColor: '#534AB7',
         title: 'Split percentages updated',
-        sub: 'Netflix · changed by Jordan · effective next cycle',
+        sub: 'Netflix · changed by Titus · effective next cycle',
         time: '3 hrs ago',
         badge: 'Audit',
         badgeVariant: 'purple',
         amountColor: C.text,
         detail: {
           rows: [
-            { label: 'Changed by', value: 'Jordan (you)' },
+            { label: 'Changed by', value: 'Titus (you)' },
             { label: 'Subscription', value: 'Netflix Premium' },
-            { label: 'Jordan', value: '33% → 40%' },
+            { label: 'Titus', value: '33% → 40%' },
             { label: 'Alex', value: '33% → 30%' },
             { label: 'Sam', value: '34% → 30%' },
             { label: 'Effective date', value: 'Next cycle · Apr 18' },
@@ -540,14 +540,14 @@ const MOCK_ACTIVITY_GROUPS: ActivityFeedGroup[] = [
         iconBg: '#E6F1FB',
         iconColor: '#185FA5',
         title: 'Netflix price updated',
-        sub: '$19.99 → $22.99 · updated by Jordan · group notified',
+        sub: '$19.99 → $22.99 · updated by Titus · group notified',
         time: 'Mar 15 · 8:00 AM',
         badge: 'Updated',
         badgeVariant: 'gray',
         amountColor: C.text,
         detail: {
           rows: [
-            { label: 'Updated by', value: 'Jordan (you)' },
+            { label: 'Updated by', value: 'Titus (you)' },
             { label: 'Old price', value: '$19.99/month' },
             { label: 'New price', value: '$22.99/month' },
             { label: 'Effective', value: 'Next cycle only' },
@@ -563,7 +563,7 @@ const MOCK_ACTIVITY_GROUPS: ActivityFeedGroup[] = [
         iconBg: '#F0EEE9',
         iconColor: '#5F5E5A',
         title: 'Spotify Family paused',
-        sub: 'Paused by Jordan · billing suspended until resumed',
+        sub: 'Paused by Titus · billing suspended until resumed',
         time: 'Mar 15 · 2:00 PM',
         badge: 'Paused',
         badgeVariant: 'gray',
@@ -571,7 +571,7 @@ const MOCK_ACTIVITY_GROUPS: ActivityFeedGroup[] = [
         detail: {
           rows: [
             { label: 'Subscription', value: 'Spotify Family' },
-            { label: 'Paused by', value: 'Jordan (you)' },
+            { label: 'Paused by', value: 'Titus (you)' },
             { label: 'Effective', value: 'Immediately' },
           ],
         },
@@ -584,7 +584,7 @@ const MOCK_ACTIVITY_GROUPS: ActivityFeedGroup[] = [
         iconBg: '#E1F5EE',
         iconColor: '#0F6E56',
         title: 'Spotify Family resumed',
-        sub: 'Resumed by Jordan · billing back on schedule',
+        sub: 'Resumed by Titus · billing back on schedule',
         time: 'Mar 15 · 3:30 PM',
         badge: 'Resumed',
         badgeVariant: 'green',
@@ -592,7 +592,7 @@ const MOCK_ACTIVITY_GROUPS: ActivityFeedGroup[] = [
         detail: {
           rows: [
             { label: 'Subscription', value: 'Spotify Family' },
-            { label: 'Resumed by', value: 'Jordan (you)' },
+            { label: 'Resumed by', value: 'Titus (you)' },
             { label: 'Next bill', value: 'Per existing cycle' },
           ],
         },
@@ -609,7 +609,7 @@ const MOCK_ACTIVITY_GROUPS: ActivityFeedGroup[] = [
         iconBg: '#F0EEE9',
         iconColor: '#5F5E5A',
         title: 'Hulu subscription archived',
-        sub: 'Archived by Jordan · removed from active splits',
+        sub: 'Archived by Titus · removed from active splits',
         time: 'Mar 14 · 8:00 AM',
         badge: 'Archived',
         badgeVariant: 'gray',
@@ -617,7 +617,7 @@ const MOCK_ACTIVITY_GROUPS: ActivityFeedGroup[] = [
         detail: {
           rows: [
             { label: 'Subscription', value: 'Hulu (ad-free)' },
-            { label: 'Archived by', value: 'Jordan (you)' },
+            { label: 'Archived by', value: 'Titus (you)' },
             { label: 'History', value: 'Retained · read-only audit trail' },
           ],
         },
@@ -630,7 +630,7 @@ const MOCK_ACTIVITY_GROUPS: ActivityFeedGroup[] = [
         iconBg: '#E1F5EE',
         iconColor: '#0F6E56',
         title: 'Sam joined Netflix split',
-        sub: 'Invited by Jordan · payment method added',
+        sub: 'Invited by Titus · payment method added',
         time: 'Mar 14 · 10:12 AM',
         badge: 'Joined',
         badgeVariant: 'green',
@@ -638,7 +638,7 @@ const MOCK_ACTIVITY_GROUPS: ActivityFeedGroup[] = [
         detail: {
           rows: [
             { label: 'Member', value: 'Sam M.' },
-            { label: 'Invited by', value: 'Jordan (you)' },
+            { label: 'Invited by', value: 'Titus (you)' },
             { label: 'Payment method', value: 'Visa ···· 4242' },
           ],
         },
