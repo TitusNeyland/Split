@@ -146,35 +146,38 @@ const upcomingSplitsFilled: SplitRow[] = [
 
 type HomeRecentActivityItem = {
   id: string;
+  kind: 'payment' | 'reminder';
   title: string;
+  timestamp: string;
   amount: string;
+  /** Received / paid → green; reminder / pending tone → amber. */
   amountColor: string;
   serviceMark?: string;
-  icon?: React.ComponentProps<typeof Ionicons>['name'];
-  iconBg?: string;
-  iconColor?: string;
 };
 
 const recentActivityFilled: HomeRecentActivityItem[] = [
   {
     id: '1',
+    kind: 'payment',
     title: 'Alex paid Spotify',
+    timestamp: '2 min ago',
     amount: '+$3.40',
     amountColor: C.green,
     serviceMark: 'Spotify',
   },
   {
     id: '2',
+    kind: 'reminder',
     title: 'Reminder sent to Sam',
+    timestamp: '1 hr ago',
     amount: '$5.33',
     amountColor: C.orange,
-    iconBg: '#FAEEDA',
-    icon: 'notifications',
-    iconColor: '#854F0B',
   },
   {
     id: '3',
+    kind: 'payment',
     title: 'Taylor paid Xbox',
+    timestamp: 'Yesterday',
     amount: '+$7.50',
     amountColor: C.green,
     serviceMark: 'Xbox',
@@ -254,7 +257,7 @@ export default function HomeScreen() {
 
   const upcomingSplits = isEmpty ? [] : upcomingSplitsFilled;
   const friendBalances = isEmpty ? [] : friendBalancesFilled;
-  const recentActivity = isEmpty ? [] : recentActivityFilled;
+  const recentActivity = isEmpty ? [] : recentActivityFilled.slice(0, 3);
 
   const heroLegendCopy = useMemo(() => {
     if (isEmpty) {
@@ -631,7 +634,14 @@ export default function HomeScreen() {
 
           <View style={styles.sh}>
             <Text style={styles.shTitle}>Recent activity</Text>
-            <Text style={styles.shAction}>See all</Text>
+            <Pressable
+              onPress={() => router.push('/activity')}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="See all activity"
+            >
+              <Text style={styles.shAction}>See all</Text>
+            </Pressable>
           </View>
           {recentActivity.length > 0 ? (
             <View style={styles.listCard}>
@@ -640,16 +650,21 @@ export default function HomeScreen() {
                   key={item.id}
                   style={[styles.actRow, i === recentActivity.length - 1 && styles.rowLast]}
                 >
-                  {item.serviceMark ? (
-                    <View style={styles.actIco}>
-                      <ServiceIcon serviceName={item.serviceMark} size={30} />
+                  {item.kind === 'payment' && item.serviceMark ? (
+                    <View style={styles.actIcoWrap}>
+                      <ServiceIcon serviceName={item.serviceMark} size={26} />
                     </View>
-                  ) : item.icon ? (
-                    <View style={[styles.actIco, { backgroundColor: item.iconBg ?? '#F0EEE9' }]}>
-                      <Ionicons name={item.icon} size={14} color={item.iconColor ?? C.muted} />
+                  ) : (
+                    <View style={[styles.actIcoWrap, styles.actReminderCircle]}>
+                      <Ionicons name="notifications-outline" size={24} color="#854F0B" />
                     </View>
-                  ) : null}
-                  <Text style={styles.actTxt}>{item.title}</Text>
+                  )}
+                  <View style={styles.actMid}>
+                    <Text style={styles.actTitle} numberOfLines={2}>
+                      {item.title}
+                    </Text>
+                    <Text style={styles.actTime}>{item.timestamp}</Text>
+                  </View>
                   <Text style={[styles.actAmt, { color: item.amountColor }]}>{item.amount}</Text>
                 </View>
               ))}
@@ -1022,21 +1037,46 @@ const styles = StyleSheet.create({
   actRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    paddingVertical: 10,
+    gap: 12,
+    paddingVertical: 12,
     paddingHorizontal: 14,
     borderBottomWidth: 0.5,
     borderBottomColor: C.rowDivider,
   },
-  actIco: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+  actIcoWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
-  actTxt: { flex: 1, fontSize: 14, color: C.muted },
-  actAmt: { fontSize: 14, fontWeight: '500' },
+  actReminderCircle: {
+    backgroundColor: '#FAEEDA',
+  },
+  actMid: {
+    flex: 1,
+    minWidth: 0,
+    justifyContent: 'center',
+  },
+  actTitle: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: C.text,
+  },
+  actTime: {
+    fontSize: 13,
+    color: C.muted,
+    marginTop: 1,
+  },
+  actAmt: {
+    fontSize: 15,
+    fontWeight: '500',
+    flexShrink: 0,
+    textAlign: 'right',
+    minWidth: 56,
+  },
   emptyActivity: {
     backgroundColor: '#fff',
     borderRadius: 18,
