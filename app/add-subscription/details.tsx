@@ -50,10 +50,24 @@ function parseMoneyToCents(s: string): number | null {
 export default function AddSubscriptionDetailsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { serviceName, iconColor, priceSuggestionCents } = useLocalSearchParams<{
+  const {
+    serviceName,
+    iconColor,
+    priceSuggestionCents,
+    planName: planNameParam,
+    totalCents: totalCentsParam,
+    billingCycle: billingCycleParam,
+    billingDay: billingDayParam,
+    autoCharge: autoChargeParam,
+  } = useLocalSearchParams<{
     serviceName?: string;
     iconColor?: string;
     priceSuggestionCents?: string;
+    planName?: string;
+    totalCents?: string;
+    billingCycle?: string;
+    billingDay?: string;
+    autoCharge?: string;
   }>();
 
   const baseServiceName = typeof serviceName === 'string' ? serviceName.trim() : '';
@@ -65,14 +79,30 @@ export default function AddSubscriptionDetailsScreen() {
   const suggestedCents =
     Number.isFinite(suggestedCentsRaw) && suggestedCentsRaw >= 0 ? suggestedCentsRaw : null;
 
-  const [planName, setPlanName] = useState(() => baseServiceName);
-  const [amountText, setAmountText] = useState(() =>
-    suggestedCents !== null ? (suggestedCents / 100).toFixed(2) : '',
+  const prefillTotalParsed =
+    typeof totalCentsParam === 'string' && totalCentsParam !== ''
+      ? parseInt(totalCentsParam, 10)
+      : NaN;
+  const prefillTotalCents =
+    Number.isFinite(prefillTotalParsed) && prefillTotalParsed > 0 ? prefillTotalParsed : null;
+
+  const prefillPlan =
+    typeof planNameParam === 'string' && planNameParam.trim() !== '' ? planNameParam.trim() : '';
+
+  const [planName, setPlanName] = useState(() => prefillPlan || baseServiceName);
+  const [amountText, setAmountText] = useState(() => {
+    if (prefillTotalCents !== null) return (prefillTotalCents / 100).toFixed(2);
+    if (suggestedCents !== null) return (suggestedCents / 100).toFixed(2);
+    return '';
+  });
+  const [billingCycle, setBillingCycle] = useState<BillingCycle>(() =>
+    billingCycleParam === 'yearly' ? 'yearly' : 'monthly',
   );
-  const [billingCycle, setBillingCycle] = useState<BillingCycle>('monthly');
-  const [billingDay, setBillingDay] = useState('');
+  const [billingDay, setBillingDay] = useState(() =>
+    typeof billingDayParam === 'string' ? billingDayParam : '',
+  );
   const [payerDisplay] = useState('Me (owner)');
-  const [autoCharge, setAutoCharge] = useState(true);
+  const [autoCharge, setAutoCharge] = useState(() => autoChargeParam !== '0');
   const [costFocused, setCostFocused] = useState(false);
 
   const onAmountChange = useCallback((t: string) => {
