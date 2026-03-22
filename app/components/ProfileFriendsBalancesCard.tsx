@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, Alert } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Alert, Image } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { CURRENT_USER_AVATAR, getFriendAvatarColors } from '../../lib/friendAvatar';
@@ -28,6 +28,8 @@ const STACK_SHOW = 4;
 
 type Props = {
   userInitials: string;
+  /** Current user profile photo from Firestore `avatarUrl`. */
+  userAvatarUrl?: string | null;
 };
 
 function NetBalanceBar({ owedToYou, youOwe }: { owedToYou: number; youOwe: number }) {
@@ -75,7 +77,22 @@ function NetBalanceBar({ owedToYou, youOwe }: { owedToYou: number; youOwe: numbe
   );
 }
 
-function FriendAvatarLarge({ initials, colors }: { initials: string; colors: { backgroundColor: string; color: string } }) {
+function FriendAvatarLarge({
+  initials,
+  colors,
+  imageUrl,
+}: {
+  initials: string;
+  colors: { backgroundColor: string; color: string };
+  imageUrl?: string | null;
+}) {
+  if (imageUrl) {
+    return (
+      <View style={avatarLg.circle}>
+        <Image source={{ uri: imageUrl }} style={avatarLg.photo} accessibilityLabel="Your profile photo" />
+      </View>
+    );
+  }
   return (
     <View style={[avatarLg.circle, { backgroundColor: colors.backgroundColor }]}>
       <Text style={[avatarLg.initials, { color: colors.color }]} numberOfLines={1}>
@@ -112,10 +129,12 @@ function FriendAvatarStackChip({
 function BalanceRow({
   row,
   userInitials,
+  userAvatarUrl,
   onPress,
 }: {
   row: ProfileFriendBalanceRow;
   userInitials: string;
+  userAvatarUrl?: string | null;
   onPress: () => void;
 }) {
   const isYouOwe = row.kind === 'you_owe';
@@ -147,7 +166,11 @@ function BalanceRow({
       accessibilityRole="button"
       accessibilityLabel={`${name}, ${rightText}`}
     >
-      <FriendAvatarLarge initials={initials} colors={colors} />
+      <FriendAvatarLarge
+        initials={initials}
+        colors={colors}
+        imageUrl={isYouOwe ? userAvatarUrl : null}
+      />
       <View style={rowStyles.mid}>
         <Text style={rowStyles.name} numberOfLines={1}>
           {name}
@@ -166,7 +189,7 @@ function BalanceRow({
   );
 }
 
-export default function ProfileFriendsBalancesCard({ userInitials }: Props) {
+export default function ProfileFriendsBalancesCard({ userInitials, userAvatarUrl }: Props) {
   const [expanded, setExpanded] = useState(false);
   const { owedToYou, youOwe } = useMemo(() => computeNetBarTotals(PROFILE_FRIEND_BALANCES), []);
   const stackEntries = useMemo(() => getProfileFriendStackEntries(), []);
@@ -223,7 +246,12 @@ export default function ProfileFriendsBalancesCard({ userInitials }: Props) {
             <View key={row.id}>
               {i > 0 ? <View style={styles.rowDividerInset} /> : null}
               <View style={styles.expandedRowPad}>
-                <BalanceRow row={row} userInitials={userInitials} onPress={() => openFriendActivity(row.id)} />
+                <BalanceRow
+                  row={row}
+                  userInitials={userInitials}
+                  userAvatarUrl={userAvatarUrl}
+                  onPress={() => openFriendActivity(row.id)}
+                />
               </View>
             </View>
           ))}
@@ -327,6 +355,12 @@ const avatarLg = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
+    overflow: 'hidden',
+  },
+  photo: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
   },
   initials: {
     fontSize: 13,

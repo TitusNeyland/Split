@@ -1,11 +1,12 @@
 import {
+  deleteField,
   doc,
   onSnapshot,
   serverTimestamp,
   setDoc,
   type Unsubscribe,
 } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import {
   onAuthStateChanged,
   signInAnonymously,
@@ -160,6 +161,33 @@ export async function uploadProfileAvatar(localUri: string): Promise<string> {
   );
 
   return url;
+}
+
+export async function removeProfileAvatar(): Promise<void> {
+  const auth = getFirebaseAuth();
+  const storage = getFirebaseStorage();
+  const db = getFirebaseFirestore();
+  if (!auth || !storage || !db) throw new Error('Firebase is not configured.');
+  const user = auth.currentUser;
+  if (!user) throw new Error('Sign in to update your profile photo.');
+
+  const uid = user.uid;
+  const storageRef = ref(storage, `users/${uid}/avatar.jpg`);
+  try {
+    await deleteObject(storageRef);
+  } catch (e: unknown) {
+    const code = typeof e === 'object' && e && 'code' in e ? String((e as { code: string }).code) : '';
+    if (code !== 'storage/object-not-found') throw e;
+  }
+
+  await setDoc(
+    doc(db, 'users', uid),
+    {
+      avatarUrl: deleteField(),
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true }
+  );
 }
 
 export async function saveUserDisplayName(displayName: string): Promise<void> {

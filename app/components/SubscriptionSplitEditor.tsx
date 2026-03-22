@@ -7,6 +7,7 @@ import {
   TextInput,
   ActivityIndicator,
   Alert,
+  Image,
 } from 'react-native';
 import { getFirebaseAuth } from '../../lib/firebase';
 import {
@@ -40,6 +41,7 @@ export type SplitEditorMember = {
   initials: string;
   avatarBg: string;
   avatarColor: string;
+  avatarUrl?: string | null;
 };
 
 export type SubscriptionSplitEditorProps = {
@@ -317,8 +319,16 @@ export function SubscriptionSplitEditor({
 
         return (
           <View key={m.memberId} style={[styles.splitRow, isLast && styles.splitRowLast]}>
-            <View style={[styles.splitAv, { backgroundColor: m.avatarBg }]}>
-              <Text style={[styles.splitAvTxt, { color: m.avatarColor }]}>{m.initials}</Text>
+            <View style={[styles.splitAv, m.avatarUrl ? styles.splitAvPhoto : { backgroundColor: m.avatarBg }]}>
+              {m.avatarUrl ? (
+                <Image
+                  source={{ uri: m.avatarUrl }}
+                  style={styles.splitAvImg}
+                  accessibilityLabel={m.displayName}
+                />
+              ) : (
+                <Text style={[styles.splitAvTxt, { color: m.avatarColor }]}>{m.initials}</Text>
+              )}
             </View>
             <Text style={styles.splitName} numberOfLines={1}>
               {m.displayName}
@@ -454,6 +464,15 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  splitAvPhoto: {
+    backgroundColor: '#E8E6E1',
+  },
+  splitAvImg: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
   },
   splitAvTxt: {
     fontSize: 13,

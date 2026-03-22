@@ -7,6 +7,7 @@ import { ServiceIcon } from './ServiceIcon';
 import { SUBSCRIPTIONS_DEMO_MODE } from '../../lib/subscriptionsScreenDemo';
 import { useSubscriptionPriceBanner } from '../../lib/useSubscriptionPriceBanner';
 import { useFirebaseUid } from '../../lib/useFirebaseUid';
+import { useProfileAvatarUrl } from '../hooks/useProfileAvatarUrl';
 import {
   perPersonAmountLabelEqualSplit,
   type SubscriptionPriceBannerFields,
@@ -132,7 +133,7 @@ function demoNetflixPriceBannerFields(): SubscriptionPriceBannerFields {
   };
 }
 
-function NetflixCard() {
+function NetflixCard({ userAvatarUrl }: { userAvatarUrl: string | null }) {
   const [editorOpen, setEditorOpen] = useState(false);
   const uid = useFirebaseUid();
   const nextCycleStart = useNextBillingCycleStart();
@@ -171,7 +172,7 @@ function NetflixCard() {
       totalAmount="$22.99"
       perPersonAmount={perPersonAmountLabelEqualSplit(NETFLIX_TOTAL_CENTS, NETFLIX_MEMBER_COUNT)}
       members={[
-        { id: '1', initials: 'TN', backgroundColor: '#EEEDFE', color: C.purple },
+        { id: '1', initials: 'TN', backgroundColor: '#EEEDFE', color: C.purple, avatarUrl: userAvatarUrl },
         { id: '2', initials: 'AL', backgroundColor: '#E1F5EE', color: C.greenDark },
         { id: '3', initials: 'SM', backgroundColor: '#FAECE7', color: '#993C1D' },
       ]}
@@ -194,7 +195,9 @@ function NetflixCard() {
           <SubscriptionSplitEditor
             subscriptionId="demo-netflix-premium"
             totalCents={NETFLIX_TOTAL_CENTS}
-            members={[...NETFLIX_SPLIT_MEMBERS]}
+            members={NETFLIX_SPLIT_MEMBERS.map((m, i) =>
+              i === 0 ? { ...m, avatarUrl: userAvatarUrl } : m
+            )}
             nextCycleEffectiveFrom={nextCycleStart}
             skipFirestore={SUBSCRIPTIONS_DEMO_MODE}
             onCancel={() => setEditorOpen(false)}
@@ -206,7 +209,7 @@ function NetflixCard() {
   );
 }
 
-function SpotifyCard() {
+function SpotifyCard({ userAvatarUrl }: { userAvatarUrl: string | null }) {
   const [editorOpen, setEditorOpen] = useState(false);
   const nextCycleStart = useNextBillingCycleStart();
 
@@ -219,7 +222,7 @@ function SpotifyCard() {
       totalAmount="$16.99"
       perPersonAmount="$3.40/person"
       members={[
-        { id: '1', initials: 'TN', backgroundColor: '#EEEDFE', color: C.purple },
+        { id: '1', initials: 'TN', backgroundColor: '#EEEDFE', color: C.purple, avatarUrl: userAvatarUrl },
         { id: '2', initials: 'AL', backgroundColor: '#E1F5EE', color: C.greenDark },
         { id: '3', initials: 'SM', backgroundColor: '#FAECE7', color: '#993C1D' },
         { id: '4', initials: 'TR', backgroundColor: '#E6F1FB', color: '#185FA5' },
@@ -245,7 +248,9 @@ function SpotifyCard() {
           <SubscriptionSplitEditor
             subscriptionId="demo-spotify-family"
             totalCents={1699}
-            members={[...SPOTIFY_SPLIT_MEMBERS]}
+            members={SPOTIFY_SPLIT_MEMBERS.map((m, i) =>
+              i === 0 ? { ...m, avatarUrl: userAvatarUrl } : m
+            )}
             nextCycleEffectiveFrom={nextCycleStart}
             skipFirestore={SUBSCRIPTIONS_DEMO_MODE}
             onCancel={() => setEditorOpen(false)}
@@ -257,7 +262,7 @@ function SpotifyCard() {
   );
 }
 
-function ICloudCard() {
+function ICloudCard({ userAvatarUrl }: { userAvatarUrl: string | null }) {
   const [editorOpen, setEditorOpen] = useState(false);
   const nextCycleStart = useNextBillingCycleStart();
 
@@ -270,7 +275,7 @@ function ICloudCard() {
       totalAmount="$9.99"
       perPersonAmount="$2.50/person"
       members={[
-        { id: '1', initials: 'TN', backgroundColor: '#EEEDFE', color: C.purple },
+        { id: '1', initials: 'TN', backgroundColor: '#EEEDFE', color: C.purple, avatarUrl: userAvatarUrl },
         { id: '2', initials: 'AL', backgroundColor: '#E1F5EE', color: C.greenDark },
         { id: '3', initials: 'SM', backgroundColor: '#FAECE7', color: '#993C1D' },
         { id: '4', initials: 'TR', backgroundColor: '#E6F1FB', color: '#185FA5' },
@@ -296,7 +301,9 @@ function ICloudCard() {
           <SubscriptionSplitEditor
             subscriptionId="demo-icloud-2tb"
             totalCents={999}
-            members={[...ICLOUD_SPLIT_MEMBERS]}
+            members={ICLOUD_SPLIT_MEMBERS.map((m, i) =>
+              i === 0 ? { ...m, avatarUrl: userAvatarUrl } : m
+            )}
             nextCycleEffectiveFrom={nextCycleStart}
             skipFirestore={SUBSCRIPTIONS_DEMO_MODE}
             onCancel={() => setEditorOpen(false)}
@@ -395,6 +402,8 @@ function XboxPausedCard() {
 }
 
 export function SubscriptionsDemoPanel({ filter }: { filter: FilterId }) {
+  const { avatarUrl: userAvatarUrl } = useProfileAvatarUrl();
+
   if (filter === 'active') {
     return (
       <View style={styles.panel}>
@@ -402,9 +411,9 @@ export function SubscriptionsDemoPanel({ filter }: { filter: FilterId }) {
           <Text style={[styles.shTitle, styles.activeSplitsShTitle]}>Active splits</Text>
           <Text style={[styles.shAction, styles.activeSplitsShAction]}>Sort</Text>
         </View>
-        <NetflixCard />
-        <SpotifyCard />
-        <ICloudCard />
+        <NetflixCard userAvatarUrl={userAvatarUrl} />
+        <SpotifyCard userAvatarUrl={userAvatarUrl} />
+        <ICloudCard userAvatarUrl={userAvatarUrl} />
       </View>
     );
   }
