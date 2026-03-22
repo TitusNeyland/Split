@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SubscriptionCard } from './SubscriptionCard';
+import { SubscriptionSplitEditor } from './SubscriptionSplitEditor';
+import { SUBSCRIPTIONS_DEMO_MODE } from '../../lib/subscriptionsScreenDemo';
 
 const C = {
   purple: '#534AB7',
@@ -61,72 +63,59 @@ function OwnerBadgeRow() {
   );
 }
 
-function NetflixSplitEditor() {
-  return (
-    <View style={styles.splitEditor}>
-      <View style={styles.seHeader}>
-        <Text style={styles.seTitle}>Split method</Text>
-        <View style={styles.seMethod}>
-          <View style={[styles.seOpt, styles.seOptOn]}>
-            <Text style={[styles.seOptTxt, styles.seOptTxtOn]}>Equal</Text>
-          </View>
-          <View style={styles.seOpt}>
-            <Text style={styles.seOptTxt}>Custom %</Text>
-          </View>
-          <View style={styles.seOpt}>
-            <Text style={styles.seOptTxt}>Fixed $</Text>
-          </View>
-        </View>
-      </View>
-      <View style={styles.splitRow}>
-        <View style={[styles.splitAv, { backgroundColor: '#EEEDFE' }]}>
-          <Text style={[styles.splitAvTxt, { color: C.purple }]}>JD</Text>
-        </View>
-        <Text style={styles.splitName}>Jordan (you)</Text>
-        <View style={styles.splitInputFake}>
-          <Text style={styles.splitInputFakeTxt}>33%</Text>
-        </View>
-        <Text style={styles.splitAmount}>$7.66</Text>
-      </View>
-      <View style={styles.splitRow}>
-        <View style={[styles.splitAv, { backgroundColor: '#E1F5EE' }]}>
-          <Text style={[styles.splitAvTxt, { color: C.greenDark }]}>AL</Text>
-        </View>
-        <Text style={styles.splitName}>Alex L.</Text>
-        <View style={styles.splitInputFake}>
-          <Text style={styles.splitInputFakeTxt}>33%</Text>
-        </View>
-        <Text style={styles.splitAmount}>$7.66</Text>
-      </View>
-      <View style={[styles.splitRow, styles.splitRowLast]}>
-        <View style={[styles.splitAv, { backgroundColor: '#FAECE7' }]}>
-          <Text style={[styles.splitAvTxt, { color: '#993C1D' }]}>SM</Text>
-        </View>
-        <Text style={styles.splitName}>Sam M.</Text>
-        <View style={styles.splitInputFake}>
-          <Text style={styles.splitInputFakeTxt}>34%</Text>
-        </View>
-        <Text style={styles.splitAmount}>$7.67</Text>
-      </View>
-      <View style={[styles.pctTotal, styles.pctOk]}>
-        <Text style={styles.pctOkTxt}>Total: 100%</Text>
-        <Text style={styles.pctOkTxt}>$22.99 ✓</Text>
-      </View>
-      <View style={styles.editorActions}>
-        <Pressable style={styles.cancelEditorBtn}>
-          <Text style={styles.cancelEditorTxt}>Cancel</Text>
-        </Pressable>
-        <Pressable style={styles.saveEditorBtn}>
-          <Text style={styles.saveEditorTxt}>Save · effective next cycle</Text>
-        </Pressable>
-      </View>
-    </View>
-  );
+function useNextBillingCycleStart() {
+  return useMemo(() => {
+    const d = new Date();
+    d.setMonth(d.getMonth() + 1);
+    d.setDate(1);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }, []);
 }
+
+const NETFLIX_SPLIT_MEMBERS = [
+  {
+    memberId: '1',
+    displayName: 'Jordan (you)',
+    initials: 'JD',
+    avatarBg: '#EEEDFE',
+    avatarColor: C.purple,
+  },
+  {
+    memberId: '2',
+    displayName: 'Alex L.',
+    initials: 'AL',
+    avatarBg: '#E1F5EE',
+    avatarColor: C.greenDark,
+  },
+  {
+    memberId: '3',
+    displayName: 'Sam M.',
+    initials: 'SM',
+    avatarBg: '#FAECE7',
+    avatarColor: '#993C1D',
+  },
+] as const;
+
+const SPOTIFY_SPLIT_MEMBERS = [
+  { memberId: '1', displayName: 'Jordan (you)', initials: 'JD', avatarBg: '#EEEDFE', avatarColor: C.purple },
+  { memberId: '2', displayName: 'Alex L.', initials: 'AL', avatarBg: '#E1F5EE', avatarColor: C.greenDark },
+  { memberId: '3', displayName: 'Sam M.', initials: 'SM', avatarBg: '#FAECE7', avatarColor: '#993C1D' },
+  { memberId: '4', displayName: 'Taylor R.', initials: 'TR', avatarBg: '#E6F1FB', avatarColor: '#185FA5' },
+  { memberId: '5', displayName: 'Kim P.', initials: 'KP', avatarBg: '#EAF3DE', avatarColor: '#3B6D11' },
+] as const;
+
+const ICLOUD_SPLIT_MEMBERS = [
+  { memberId: '1', displayName: 'Jordan (you)', initials: 'JD', avatarBg: '#EEEDFE', avatarColor: C.purple },
+  { memberId: '2', displayName: 'Alex L.', initials: 'AL', avatarBg: '#E1F5EE', avatarColor: C.greenDark },
+  { memberId: '3', displayName: 'Sam M.', initials: 'SM', avatarBg: '#FAECE7', avatarColor: '#993C1D' },
+  { memberId: '4', displayName: 'Taylor R.', initials: 'TR', avatarBg: '#E6F1FB', avatarColor: '#185FA5' },
+] as const;
 
 function NetflixCard() {
   const [editorOpen, setEditorOpen] = useState(false);
   const [priceBannerVisible, setPriceBannerVisible] = useState(true);
+  const nextCycleStart = useNextBillingCycleStart();
 
   return (
     <SubscriptionCard
@@ -164,12 +153,27 @@ function NetflixCard() {
       }}
       onEditSplitPress={() => setEditorOpen((o) => !o)}
       editSplitButtonLabel={editorOpen ? 'Close editor' : 'Edit split'}
-      belowEditSplit={editorOpen ? <NetflixSplitEditor /> : null}
+      belowEditSplit={
+        editorOpen ? (
+          <SubscriptionSplitEditor
+            subscriptionId="demo-netflix-premium"
+            totalCents={2299}
+            members={[...NETFLIX_SPLIT_MEMBERS]}
+            nextCycleEffectiveFrom={nextCycleStart}
+            skipFirestore={SUBSCRIPTIONS_DEMO_MODE}
+            onCancel={() => setEditorOpen(false)}
+            onSaved={() => setEditorOpen(false)}
+          />
+        ) : null
+      }
     />
   );
 }
 
 function SpotifyCard() {
+  const [editorOpen, setEditorOpen] = useState(false);
+  const nextCycleStart = useNextBillingCycleStart();
+
   return (
     <SubscriptionCard
       icon={{ emoji: '🎵', backgroundColor: '#EEEDFE' }}
@@ -198,12 +202,29 @@ function SpotifyCard() {
         rightLabel: 'Complete',
         isComplete: true,
       }}
-      onEditSplitPress={() => {}}
+      onEditSplitPress={() => setEditorOpen((o) => !o)}
+      editSplitButtonLabel={editorOpen ? 'Close editor' : 'Edit split'}
+      belowEditSplit={
+        editorOpen ? (
+          <SubscriptionSplitEditor
+            subscriptionId="demo-spotify-family"
+            totalCents={1699}
+            members={[...SPOTIFY_SPLIT_MEMBERS]}
+            nextCycleEffectiveFrom={nextCycleStart}
+            skipFirestore={SUBSCRIPTIONS_DEMO_MODE}
+            onCancel={() => setEditorOpen(false)}
+            onSaved={() => setEditorOpen(false)}
+          />
+        ) : null
+      }
     />
   );
 }
 
 function ICloudCard() {
+  const [editorOpen, setEditorOpen] = useState(false);
+  const nextCycleStart = useNextBillingCycleStart();
+
   return (
     <SubscriptionCard
       icon={{ emoji: '☁️', backgroundColor: '#E6F1FB' }}
@@ -232,7 +253,21 @@ function ICloudCard() {
         rightLabelColor: C.muted,
         barColor: C.muted,
       }}
-      onEditSplitPress={() => {}}
+      onEditSplitPress={() => setEditorOpen((o) => !o)}
+      editSplitButtonLabel={editorOpen ? 'Close editor' : 'Edit split'}
+      belowEditSplit={
+        editorOpen ? (
+          <SubscriptionSplitEditor
+            subscriptionId="demo-icloud-2tb"
+            totalCents={999}
+            members={[...ICLOUD_SPLIT_MEMBERS]}
+            nextCycleEffectiveFrom={nextCycleStart}
+            skipFirestore={SUBSCRIPTIONS_DEMO_MODE}
+            onCancel={() => setEditorOpen(false)}
+            onSaved={() => setEditorOpen(false)}
+          />
+        ) : null
+      }
     />
   );
 }
@@ -643,143 +678,6 @@ const styles = StyleSheet.create({
   progAmt: {
     fontSize: 11,
     fontWeight: '600',
-  },
-  splitEditor: {
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderTopWidth: 0.5,
-    borderTopColor: C.divider,
-    backgroundColor: '#FAFAF8',
-  },
-  seHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 10,
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  seTitle: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: C.muted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-  },
-  seMethod: {
-    flexDirection: 'row',
-    backgroundColor: '#F0EEE9',
-    borderRadius: 8,
-    padding: 2,
-    gap: 0,
-  },
-  seOpt: {
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: 7,
-  },
-  seOptOn: {
-    backgroundColor: '#fff',
-  },
-  seOptTxt: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: C.muted,
-  },
-  seOptTxtOn: {
-    color: C.purple,
-  },
-  splitRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 6,
-    borderBottomWidth: 0.5,
-    borderBottomColor: '#F5F3EE',
-  },
-  splitRowLast: {
-    borderBottomWidth: 0,
-  },
-  splitAv: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  splitAvTxt: {
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  splitName: {
-    flex: 1,
-    fontSize: 15,
-    color: C.text,
-  },
-  splitInputFake: {
-    width: 44,
-    backgroundColor: '#F0EEE9',
-    borderRadius: 6,
-    paddingVertical: 4,
-    paddingHorizontal: 6,
-    alignItems: 'center',
-  },
-  splitInputFakeTxt: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: C.text,
-  },
-  splitAmount: {
-    width: 56,
-    textAlign: 'right',
-    fontSize: 15,
-    fontWeight: '600',
-    color: C.text,
-  },
-  pctTotal: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 6,
-    paddingHorizontal: 8,
-    borderRadius: 8,
-    marginTop: 6,
-  },
-  pctOk: {
-    backgroundColor: '#E1F5EE',
-  },
-  pctOkTxt: {
-    fontSize: 13,
-    color: C.greenDark,
-    fontWeight: '500',
-  },
-  editorActions: {
-    flexDirection: 'row',
-    gap: 7,
-    marginTop: 10,
-  },
-  cancelEditorBtn: {
-    flex: 1,
-    paddingVertical: 10,
-    backgroundColor: '#F0EEE9',
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  cancelEditorTxt: {
-    fontSize: 15,
-    fontWeight: '500',
-    color: '#5F5E5A',
-  },
-  saveEditorBtn: {
-    flex: 2,
-    paddingVertical: 10,
-    backgroundColor: C.purple,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  saveEditorTxt: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#fff',
   },
   empty: {
     alignItems: 'center',
