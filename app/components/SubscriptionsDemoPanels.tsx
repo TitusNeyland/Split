@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Pressable, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SubscriptionCard } from './SubscriptionCard';
 import { SubscriptionSplitEditor } from './SubscriptionSplitEditor';
+import { ServiceIcon } from './ServiceIcon';
 import { SUBSCRIPTIONS_DEMO_MODE } from '../../lib/subscriptionsScreenDemo';
 import { useSubscriptionPriceBanner } from '../../lib/useSubscriptionPriceBanner';
 import { useFirebaseUid } from '../../lib/useFirebaseUid';
@@ -46,9 +47,7 @@ function ProgressBar({ pct, color }: { pct: number; color: string }) {
 export function SubscriptionsDemoFloatCard() {
   return (
     <View style={styles.floatCard}>
-      <View style={[styles.fcIcon, { backgroundColor: C.cream }]}>
-        <Ionicons name="time-outline" size={20} color={C.brown} />
-      </View>
+      <ServiceIcon serviceName="Netflix" size={40} />
       <View style={styles.fcMid}>
         <Text style={styles.fcTitle}>Netflix bills today</Text>
         <Text style={styles.fcSub}>2 of 3 members have paid · Sam still pending</Text>
@@ -164,7 +163,7 @@ function NetflixCard() {
             }
           : undefined
       }
-      icon={{ emoji: '📺', backgroundColor: '#E1F5EE' }}
+      serviceName="Netflix Premium"
       name="Netflix Premium"
       cycleLine="Monthly · Mar 18"
       isOwner
@@ -213,7 +212,7 @@ function SpotifyCard() {
 
   return (
     <SubscriptionCard
-      icon={{ emoji: '🎵', backgroundColor: '#EEEDFE' }}
+      serviceName="Spotify Family"
       name="Spotify Family"
       cycleLine="Monthly · Mar 25"
       autoCharge="on"
@@ -264,7 +263,7 @@ function ICloudCard() {
 
   return (
     <SubscriptionCard
-      icon={{ emoji: '☁️', backgroundColor: '#E6F1FB' }}
+      serviceName="iCloud 2TB"
       name="iCloud 2TB"
       cycleLine="Monthly · Apr 3"
       autoCharge="off"
@@ -321,9 +320,7 @@ function HuluOverdueCard() {
       </View>
       <View style={styles.subMain}>
         <View style={styles.subTop}>
-          <View style={[styles.subIco, { backgroundColor: '#FCEBEB' }]}>
-            <Text style={styles.subEmoji}>🎬</Text>
-          </View>
+          <ServiceIcon serviceName="Hulu" size={40} />
           <View style={styles.subInfo}>
             <Text style={styles.subName}>Hulu</Text>
             <View style={styles.subMetaRow}>
@@ -370,9 +367,7 @@ function XboxPausedCard() {
       </View>
       <View style={styles.subMain}>
         <View style={styles.subTop}>
-          <View style={[styles.subIco, { backgroundColor: '#F0EEE9' }]}>
-            <Text style={styles.subEmoji}>🎮</Text>
-          </View>
+          <ServiceIcon serviceName="Xbox Game Pass" size={40} />
           <View style={styles.subInfo}>
             <Text style={[styles.subName, { color: C.muted }]}>Xbox Game Pass</Text>
             <View style={styles.subMetaRow}>

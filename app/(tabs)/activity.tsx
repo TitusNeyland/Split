@@ -18,6 +18,7 @@ import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { getFriendFilterDisplayName } from '../../lib/profileFriendsBalance';
+import { ServiceIcon } from '../components/ServiceIcon';
 
 type IonIconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -287,6 +288,8 @@ type ActivityFeedItem = {
   /** Profile → Activity: filter feed to items involving this friend id */
   friendLinkIds?: string[];
   kind: ActivityKind;
+  /** Letter-mark icon for subscription or receipt merchant; when set, overrides `icon`. */
+  serviceMark?: string;
   icon: IonIconName;
   iconBg: string;
   iconColor: string;
@@ -350,6 +353,7 @@ const MOCK_ACTIVITY_GROUPS: ActivityFeedGroup[] = [
         id: 't1',
         friendLinkIds: ['alex'],
         kind: 'received',
+        serviceMark: 'Spotify Family',
         icon: 'checkmark',
         iconBg: '#E1F5EE',
         iconColor: '#1D9E75',
@@ -377,6 +381,7 @@ const MOCK_ACTIVITY_GROUPS: ActivityFeedGroup[] = [
         id: 't2',
         friendLinkIds: ['sam'],
         kind: 'overdue',
+        serviceMark: 'Netflix Premium',
         icon: 'time-outline',
         iconBg: '#FAEEDA',
         iconColor: '#854F0B',
@@ -403,6 +408,7 @@ const MOCK_ACTIVITY_GROUPS: ActivityFeedGroup[] = [
         id: 't3',
         friendLinkIds: ['taylor'],
         kind: 'partial',
+        serviceMark: 'iCloud',
         icon: 'checkmark-done-outline',
         iconBg: '#FAEEDA',
         iconColor: '#854F0B',
@@ -431,6 +437,7 @@ const MOCK_ACTIVITY_GROUPS: ActivityFeedGroup[] = [
         id: 't4',
         friendLinkIds: ['alex', 'sam'],
         kind: 'audit',
+        serviceMark: 'Netflix Premium',
         icon: 'create-outline',
         iconBg: '#EEEDFE',
         iconColor: '#534AB7',
@@ -455,6 +462,7 @@ const MOCK_ACTIVITY_GROUPS: ActivityFeedGroup[] = [
         id: 't-audit-remind',
         friendLinkIds: ['sam'],
         kind: 'audit_reminder',
+        serviceMark: 'Netflix Premium',
         icon: 'notifications-outline',
         iconBg: '#FAEEDA',
         iconColor: '#854F0B',
@@ -483,6 +491,7 @@ const MOCK_ACTIVITY_GROUPS: ActivityFeedGroup[] = [
         id: 'y1',
         friendLinkIds: ['taylor'],
         kind: 'received',
+        serviceMark: 'Xbox Game Pass',
         icon: 'checkmark',
         iconBg: '#E1F5EE',
         iconColor: '#1D9E75',
@@ -510,6 +519,7 @@ const MOCK_ACTIVITY_GROUPS: ActivityFeedGroup[] = [
         id: 'y2',
         friendLinkIds: ['sam'],
         kind: 'failed',
+        serviceMark: 'Hulu',
         icon: 'alert-circle-outline',
         iconBg: '#FCEBEB',
         iconColor: '#A32D2D',
@@ -536,6 +546,7 @@ const MOCK_ACTIVITY_GROUPS: ActivityFeedGroup[] = [
         id: 'y3',
         friendLinkIds: ['alex', 'sam', 'taylor'],
         kind: 'updated',
+        serviceMark: 'Netflix',
         icon: 'information-circle-outline',
         iconBg: '#E6F1FB',
         iconColor: '#185FA5',
@@ -559,6 +570,7 @@ const MOCK_ACTIVITY_GROUPS: ActivityFeedGroup[] = [
         id: 'y-paused',
         friendLinkIds: ['alex', 'sam', 'taylor'],
         kind: 'audit_paused',
+        serviceMark: 'Spotify Family',
         icon: 'pause-circle-outline',
         iconBg: '#F0EEE9',
         iconColor: '#5F5E5A',
@@ -580,6 +592,7 @@ const MOCK_ACTIVITY_GROUPS: ActivityFeedGroup[] = [
         id: 'y-resumed',
         friendLinkIds: ['alex', 'sam', 'taylor'],
         kind: 'audit_resumed',
+        serviceMark: 'Spotify Family',
         icon: 'play-circle-outline',
         iconBg: '#E1F5EE',
         iconColor: '#0F6E56',
@@ -605,6 +618,7 @@ const MOCK_ACTIVITY_GROUPS: ActivityFeedGroup[] = [
       {
         id: 'm-archived',
         kind: 'audit_archived',
+        serviceMark: 'Hulu',
         icon: 'archive-outline',
         iconBg: '#F0EEE9',
         iconColor: '#5F5E5A',
@@ -626,6 +640,7 @@ const MOCK_ACTIVITY_GROUPS: ActivityFeedGroup[] = [
         id: 'm-join',
         friendLinkIds: ['sam'],
         kind: 'audit_join',
+        serviceMark: 'Netflix Premium',
         icon: 'person-add-outline',
         iconBg: '#E1F5EE',
         iconColor: '#0F6E56',
@@ -647,6 +662,7 @@ const MOCK_ACTIVITY_GROUPS: ActivityFeedGroup[] = [
         id: 'm1',
         friendLinkIds: ['alex', 'casey'],
         kind: 'receipt',
+        serviceMark: 'Olive Garden',
         icon: 'receipt-outline',
         iconBg: '#EEEDFE',
         iconColor: '#534AB7',
@@ -668,6 +684,7 @@ const MOCK_ACTIVITY_GROUPS: ActivityFeedGroup[] = [
       {
         id: 'm2',
         kind: 'receipt',
+        serviceMark: 'Chipotle',
         icon: 'receipt-outline',
         iconBg: '#EEEDFE',
         iconColor: '#534AB7',
@@ -778,9 +795,15 @@ function ActivityItemRow({
         accessibilityState={hasExpandableDetail ? { expanded } : undefined}
       >
         <View style={styles.actLeft}>
-          <View style={[styles.actIco, { backgroundColor: item.iconBg }]}>
-            <Ionicons name={item.icon} size={18} color={item.iconColor} />
-          </View>
+          {item.serviceMark ? (
+            <View style={styles.actIcoPlain}>
+              <ServiceIcon serviceName={item.serviceMark} size={40} />
+            </View>
+          ) : (
+            <View style={[styles.actIco, { backgroundColor: item.iconBg }]}>
+              <Ionicons name={item.icon} size={18} color={item.iconColor} />
+            </View>
+          )}
           {showTimelineLine ? <View style={styles.actLine} /> : null}
         </View>
         <View style={styles.actContent}>
@@ -1514,6 +1537,12 @@ const styles = StyleSheet.create({
   actLeft: {
     width: 40,
     alignItems: 'center',
+  },
+  actIcoPlain: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   actIco: {
     width: 40,

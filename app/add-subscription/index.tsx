@@ -13,6 +13,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { getServiceIconBackgroundColor, ServiceIcon } from '../components/ServiceIcon';
 
 const C = {
   bg: '#F2F0EB',
@@ -26,44 +27,20 @@ const C = {
 export type PresetService = {
   id: string;
   name: string;
-  letter: string;
-  iconBg: string;
-  letterColor: string;
   /** Lowest common “from” price in cents for suggestions in later steps. */
   priceCents: number;
 };
 
 const PRESETS: PresetService[] = [
-  { id: 'netflix', name: 'Netflix', letter: 'N', iconBg: '#E1F5EE', letterColor: '#0F6E56', priceCents: 699 },
-  { id: 'spotify', name: 'Spotify', letter: 'S', iconBg: '#EEEDFE', letterColor: '#534AB7', priceCents: 999 },
-  { id: 'icloud', name: 'iCloud', letter: 'I', iconBg: '#E6F1FB', letterColor: '#1a5f8a', priceCents: 99 },
-  { id: 'xbox', name: 'Xbox', letter: 'X', iconBg: '#FAECE7', letterColor: '#993C1D', priceCents: 999 },
-  { id: 'hulu', name: 'Hulu', letter: 'H', iconBg: '#FCEBEB', letterColor: '#B42318', priceCents: 799 },
-  {
-    id: 'youtube',
-    name: 'YouTube Premium',
-    letter: 'Y',
-    iconBg: '#EAF3DE',
-    letterColor: '#3d5c1a',
-    priceCents: 1399,
-  },
-  { id: 'disney', name: 'Disney+', letter: 'D', iconBg: '#E8E4FF', letterColor: '#4338CA', priceCents: 799 },
-  {
-    id: 'amazon',
-    name: 'Amazon Prime',
-    letter: 'A',
-    iconBg: '#FFF4E6',
-    letterColor: '#B45309',
-    priceCents: 1499,
-  },
-  {
-    id: 'appletv',
-    name: 'Apple TV+',
-    letter: 'A',
-    iconBg: '#F0EEE9',
-    letterColor: '#1a1a18',
-    priceCents: 999,
-  },
+  { id: 'netflix', name: 'Netflix', priceCents: 699 },
+  { id: 'spotify', name: 'Spotify', priceCents: 999 },
+  { id: 'icloud', name: 'iCloud', priceCents: 99 },
+  { id: 'xbox', name: 'Xbox', priceCents: 999 },
+  { id: 'hulu', name: 'Hulu', priceCents: 799 },
+  { id: 'youtube', name: 'YouTube Premium', priceCents: 1399 },
+  { id: 'disney', name: 'Disney+', priceCents: 799 },
+  { id: 'amazon', name: 'Amazon Prime', priceCents: 1499 },
+  { id: 'appletv', name: 'Apple TV+', priceCents: 999 },
 ];
 
 function formatFromPrice(cents: number): string {
@@ -114,7 +91,7 @@ export default function AddSubscriptionStep1Screen() {
         pathname: '/add-subscription/details',
         params: {
           serviceName: selectedPreset.name,
-          iconColor: selectedPreset.iconBg,
+          iconColor: getServiceIconBackgroundColor(selectedPreset.name),
           priceSuggestionCents: String(selectedPreset.priceCents),
         },
       });
@@ -124,7 +101,7 @@ export default function AddSubscriptionStep1Screen() {
       pathname: '/add-subscription/details',
       params: {
         serviceName: customTrimmed,
-        iconColor: '#EEEDFE',
+        iconColor: getServiceIconBackgroundColor(customTrimmed),
       },
     });
   }, [canContinue, selectedPreset, customTrimmed, router]);
@@ -185,9 +162,7 @@ export default function AddSubscriptionStep1Screen() {
                 accessibilityState={{ selected }}
                 accessibilityLabel={`${p.name}, ${formatFromPrice(p.priceCents)}`}
               >
-                <View style={[styles.presetIco, { backgroundColor: p.iconBg }]}>
-                  <Text style={[styles.presetLetter, { color: p.letterColor }]}>{p.letter}</Text>
-                </View>
+                <ServiceIcon serviceName={p.name} size={42} />
                 <Text style={styles.presetName} numberOfLines={2}>
                   {p.name}
                 </Text>
@@ -318,17 +293,6 @@ const styles = StyleSheet.create({
   },
   presetBtnPressed: {
     opacity: 0.92,
-  },
-  presetIco: {
-    width: 42,
-    height: 42,
-    borderRadius: 11,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  presetLetter: {
-    fontSize: 20,
-    fontWeight: '700',
   },
   presetName: {
     fontSize: 16,

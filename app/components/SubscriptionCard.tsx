@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { ServiceIcon } from './ServiceIcon';
 
 const C = {
   purple: '#534AB7',
@@ -30,7 +31,9 @@ export type SubscriptionCardProps = {
     message: string;
     onDismiss: () => void | Promise<void>;
   };
-  icon: { emoji: string; backgroundColor: string };
+  /** Letter-mark icon from service name (category color, no brand artwork). */
+  serviceName: string;
+  iconSize?: number;
   name: string;
   nameColor?: string;
   /** Cycle and billing date, e.g. "Monthly · Mar 18". */
@@ -94,7 +97,8 @@ function CollectionBar({ pct, color }: { pct: number; color: string }) {
 
 export function SubscriptionCard({
   priceChange,
-  icon,
+  serviceName,
+  iconSize = 40,
   name,
   nameColor = C.text,
   cycleLine,
@@ -143,9 +147,7 @@ export function SubscriptionCard({
 
       <View style={styles.main}>
         <View style={styles.topRow}>
-          <View style={[styles.iconBox, { backgroundColor: icon.backgroundColor }]}>
-            <Text style={styles.iconEmoji}>{icon.emoji}</Text>
-          </View>
+          <ServiceIcon serviceName={serviceName} size={iconSize} />
           <View style={styles.info}>
             <Text style={[styles.name, { color: nameColor }]}>{name}</Text>
             <Text style={styles.cycle}>{cycleLine}</Text>
@@ -267,16 +269,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
     marginBottom: 11,
-  },
-  iconBox: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  iconEmoji: {
-    fontSize: 20,
   },
   info: {
     flex: 1,

@@ -29,6 +29,7 @@ import {
   parsePercent,
   percentTotalIsExactly100,
 } from '../../lib/addSubscriptionSplitMath';
+import { getServiceIconBackgroundColor } from '../components/ServiceIcon';
 
 const C = {
   purple: '#534AB7',
@@ -153,7 +154,12 @@ export default function AddSubscriptionMembersScreen() {
   }>();
 
   const serviceName = typeof params.serviceName === 'string' ? params.serviceName.trim() : '';
-  const iconColor = typeof params.iconColor === 'string' ? params.iconColor : '#EEEDFE';
+  const iconColor =
+    serviceName.length > 0
+      ? getServiceIconBackgroundColor(serviceName)
+      : typeof params.iconColor === 'string'
+        ? params.iconColor
+        : getServiceIconBackgroundColor('Subscription');
   const planName = typeof params.planName === 'string' ? params.planName.trim() : serviceName;
   const totalCentsRaw = typeof params.totalCents === 'string' ? parseInt(params.totalCents, 10) : NaN;
   const totalCents =

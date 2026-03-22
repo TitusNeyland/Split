@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { useLocalSearchParams, Stack } from 'expo-router';
+import { ServiceIcon } from '../components/ServiceIcon';
 
 const C = {
   bg: '#F2F0EB',
@@ -88,7 +89,10 @@ export default function ReceiptDetailScreen() {
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.merchant}>{detail.merchant}</Text>
+        <View style={styles.merchantRow}>
+          <ServiceIcon serviceName={detail.merchant} size={40} />
+          <Text style={styles.merchant}>{detail.merchant}</Text>
+        </View>
         <Text style={styles.meta}>
           {detail.peopleCount} people · {detail.itemCount} items · {detail.dateLabel}
         </Text>
@@ -172,7 +176,13 @@ const styles = StyleSheet.create({
     marginTop: 8,
     textAlign: 'center',
   },
+  merchantRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
   merchant: {
+    flex: 1,
     fontSize: 22,
     fontWeight: '600',
     color: C.text,
@@ -181,7 +191,7 @@ const styles = StyleSheet.create({
   meta: {
     fontSize: 13,
     color: C.muted,
-    marginTop: 6,
+    marginTop: 10,
     lineHeight: 18,
   },
   totalCard: {

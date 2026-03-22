@@ -21,6 +21,7 @@ import {
   type WizardMemberRow,
   type WizardSplitMethod,
 } from '../../lib/createSubscriptionWizardFirestore';
+import { getServiceIconBackgroundColor, ServiceIcon } from '../components/ServiceIcon';
 
 const C = {
   purple: '#534AB7',
@@ -83,12 +84,6 @@ function isWizardSplitMethod(s: string): s is WizardSplitMethod {
   );
 }
 
-function serviceLetter(name: string): string {
-  const t = name.trim();
-  if (!t) return '?';
-  return t[0]!.toUpperCase();
-}
-
 function formatPercent(p: number): string {
   if (Number.isInteger(p) || Math.abs(p - Math.round(p)) < 1e-6) return `${Math.round(p)}%`;
   return `${p.toFixed(1)}%`;
@@ -131,8 +126,8 @@ export default function AddSubscriptionReviewScreen() {
   }>();
 
   const serviceName = typeof params.serviceName === 'string' ? params.serviceName.trim() : '';
-  const iconColor = typeof params.iconColor === 'string' ? params.iconColor : '#EEEDFE';
   const planName = typeof params.planName === 'string' ? params.planName.trim() : '';
+  const iconColor = getServiceIconBackgroundColor(serviceName || planName || 'Subscription');
   const totalCentsRaw = typeof params.totalCents === 'string' ? parseInt(params.totalCents, 10) : NaN;
   const totalCents = Number.isFinite(totalCentsRaw) && totalCentsRaw >= 0 ? totalCentsRaw : 0;
   const billingCycle: 'monthly' | 'yearly' =
@@ -311,9 +306,7 @@ export default function AddSubscriptionReviewScreen() {
           <View style={styles.reviewRow}>
             <Text style={styles.rvLbl}>Service</Text>
             <View style={styles.serviceVal}>
-              <View style={[styles.serviceIco, { backgroundColor: iconColor }]}>
-                <Text style={styles.serviceLetter}>{serviceLetter(serviceName || planName)}</Text>
-              </View>
+              <ServiceIcon serviceName={serviceName || planName || 'Subscription'} size={32} />
               <Text style={styles.rvVal} numberOfLines={2}>
                 {planName || serviceName || '—'}
               </Text>
@@ -535,18 +528,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'flex-end',
     gap: 8,
-  },
-  serviceIco: {
-    width: 32,
-    height: 32,
-    borderRadius: 9,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  serviceLetter: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: C.text,
   },
   memRow: {
     flexDirection: 'row',
