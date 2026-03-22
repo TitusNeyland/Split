@@ -81,8 +81,8 @@ function useNextBillingCycleStart() {
 const NETFLIX_SPLIT_MEMBERS = [
   {
     memberId: '1',
-    displayName: 'Jordan (you)',
-    initials: 'JD',
+    displayName: 'Titus (you)',
+    initials: 'TN',
     avatarBg: '#EEEDFE',
     avatarColor: C.purple,
   },
@@ -103,7 +103,7 @@ const NETFLIX_SPLIT_MEMBERS = [
 ] as const;
 
 const SPOTIFY_SPLIT_MEMBERS = [
-  { memberId: '1', displayName: 'Jordan (you)', initials: 'JD', avatarBg: '#EEEDFE', avatarColor: C.purple },
+  { memberId: '1', displayName: 'Titus (you)', initials: 'TN', avatarBg: '#EEEDFE', avatarColor: C.purple },
   { memberId: '2', displayName: 'Alex L.', initials: 'AL', avatarBg: '#E1F5EE', avatarColor: C.greenDark },
   { memberId: '3', displayName: 'Sam M.', initials: 'SM', avatarBg: '#FAECE7', avatarColor: '#993C1D' },
   { memberId: '4', displayName: 'Taylor R.', initials: 'TR', avatarBg: '#E6F1FB', avatarColor: '#185FA5' },
@@ -111,7 +111,7 @@ const SPOTIFY_SPLIT_MEMBERS = [
 ] as const;
 
 const ICLOUD_SPLIT_MEMBERS = [
-  { memberId: '1', displayName: 'Jordan (you)', initials: 'JD', avatarBg: '#EEEDFE', avatarColor: C.purple },
+  { memberId: '1', displayName: 'Titus (you)', initials: 'TN', avatarBg: '#EEEDFE', avatarColor: C.purple },
   { memberId: '2', displayName: 'Alex L.', initials: 'AL', avatarBg: '#E1F5EE', avatarColor: C.greenDark },
   { memberId: '3', displayName: 'Sam M.', initials: 'SM', avatarBg: '#FAECE7', avatarColor: '#993C1D' },
   { memberId: '4', displayName: 'Taylor R.', initials: 'TR', avatarBg: '#E6F1FB', avatarColor: '#185FA5' },
@@ -171,7 +171,7 @@ function NetflixCard() {
       totalAmount="$22.99"
       perPersonAmount={perPersonAmountLabelEqualSplit(NETFLIX_TOTAL_CENTS, NETFLIX_MEMBER_COUNT)}
       members={[
-        { id: '1', initials: 'JD', backgroundColor: '#EEEDFE', color: C.purple },
+        { id: '1', initials: 'TN', backgroundColor: '#EEEDFE', color: C.purple },
         { id: '2', initials: 'AL', backgroundColor: '#E1F5EE', color: C.greenDark },
         { id: '3', initials: 'SM', backgroundColor: '#FAECE7', color: '#993C1D' },
       ]}
@@ -219,7 +219,7 @@ function SpotifyCard() {
       totalAmount="$16.99"
       perPersonAmount="$3.40/person"
       members={[
-        { id: '1', initials: 'JD', backgroundColor: '#EEEDFE', color: C.purple },
+        { id: '1', initials: 'TN', backgroundColor: '#EEEDFE', color: C.purple },
         { id: '2', initials: 'AL', backgroundColor: '#E1F5EE', color: C.greenDark },
         { id: '3', initials: 'SM', backgroundColor: '#FAECE7', color: '#993C1D' },
         { id: '4', initials: 'TR', backgroundColor: '#E6F1FB', color: '#185FA5' },
@@ -270,7 +270,7 @@ function ICloudCard() {
       totalAmount="$9.99"
       perPersonAmount="$2.50/person"
       members={[
-        { id: '1', initials: 'JD', backgroundColor: '#EEEDFE', color: C.purple },
+        { id: '1', initials: 'TN', backgroundColor: '#EEEDFE', color: C.purple },
         { id: '2', initials: 'AL', backgroundColor: '#E1F5EE', color: C.greenDark },
         { id: '3', initials: 'SM', backgroundColor: '#FAECE7', color: '#993C1D' },
         { id: '4', initials: 'TR', backgroundColor: '#E6F1FB', color: '#185FA5' },

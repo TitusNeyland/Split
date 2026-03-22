@@ -373,7 +373,10 @@ export function SubscriptionSplitEditor({
           {saving ? (
             <ActivityIndicator color="#fff" />
           ) : (
-            <Text style={styles.saveEditorTxt}>Save · effective next cycle</Text>
+            <Text style={styles.saveEditorTxt}>
+            Save{' '}
+            <Text style={styles.saveEditorSubTxt}>· effective next cycle</Text>
+          </Text>
           )}
         </Pressable>
       </View>
@@ -555,6 +558,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#fff',
     textAlign: 'center',
+  },
+  saveEditorSubTxt: {
+    fontSize: 12,
+    fontWeight: '400',
+    color: 'rgba(255,255,255,0.75)',
   },
   btnDisabled: {
     opacity: 0.6,
