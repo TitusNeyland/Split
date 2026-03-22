@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
+import { getServiceIconBackgroundColor } from '../components/ServiceIcon';
 
 const C = {
   purple: '#534AB7',
@@ -71,7 +72,12 @@ export default function AddSubscriptionDetailsScreen() {
   }>();
 
   const baseServiceName = typeof serviceName === 'string' ? serviceName.trim() : '';
-  const iconTint = typeof iconColor === 'string' ? iconColor : '#EEEDFE';
+  const iconTint =
+    baseServiceName.length > 0
+      ? getServiceIconBackgroundColor(baseServiceName)
+      : typeof iconColor === 'string'
+        ? iconColor
+        : getServiceIconBackgroundColor('Subscription');
   const suggestedCentsRaw =
     typeof priceSuggestionCents === 'string' && priceSuggestionCents !== ''
       ? parseInt(priceSuggestionCents, 10)

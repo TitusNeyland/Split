@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Svg, { Circle, Defs, LinearGradient as SvgLinearGradient, Path, Stop } from 'react-native-svg';
 import { spacing } from '../../constants/theme';
 import { getFriendAvatarColors } from '../../lib/friendAvatar';
+import { ServiceIcon } from '../components/ServiceIcon';
 
 /** Toggle to `'empty'` to preview the new-user home (zeros + setup CTAs). */
 const HOME_PREVIEW: 'filled' | 'empty' = 'filled';
@@ -159,8 +160,7 @@ type SplitRow = {
   linePercent?: number;
   status: string;
   statusColor: string;
-  iconBg: string;
-  iconEmoji: string;
+  serviceName: string;
 };
 
 const upcomingSplitsFilled: SplitRow[] = [
@@ -172,8 +172,7 @@ const upcomingSplitsFilled: SplitRow[] = [
     linePercent: 52,
     status: 'you owe $12',
     statusColor: C.red,
-    iconBg: '#E1F5EE',
-    iconEmoji: '📺',
+    serviceName: 'Netflix Premium',
   },
   {
     id: 'spotify',
@@ -183,21 +182,30 @@ const upcomingSplitsFilled: SplitRow[] = [
     linePercent: 80,
     status: 'owed $13.60',
     statusColor: C.green,
-    iconBg: '#EEEDFE',
-    iconEmoji: '🎵',
+    serviceName: 'Spotify Family',
   },
 ];
 
-const recentActivityFilled = [
+type HomeRecentActivityItem = {
+  id: string;
+  title: string;
+  amount: string;
+  amountPercent: number;
+  amountColor: string;
+  serviceMark?: string;
+  icon?: React.ComponentProps<typeof Ionicons>['name'];
+  iconBg?: string;
+  iconColor?: string;
+};
+
+const recentActivityFilled: HomeRecentActivityItem[] = [
   {
     id: '1',
     title: 'Alex paid Spotify',
     amount: '+$3.40',
     amountPercent: 20,
     amountColor: C.green,
-    iconBg: '#E1F5EE',
-    icon: 'checkmark' as const,
-    iconColor: C.green,
+    serviceMark: 'Spotify',
   },
   {
     id: '2',
@@ -206,7 +214,7 @@ const recentActivityFilled = [
     amountPercent: 33,
     amountColor: C.orange,
     iconBg: '#FAEEDA',
-    icon: 'notifications' as const,
+    icon: 'notifications',
     iconColor: '#854F0B',
   },
   {
@@ -215,9 +223,7 @@ const recentActivityFilled = [
     amount: '+$7.50',
     amountPercent: 25,
     amountColor: C.green,
-    iconBg: '#E1F5EE',
-    icon: 'checkmark' as const,
-    iconColor: C.green,
+    serviceMark: 'Xbox',
   },
 ];
 
@@ -280,7 +286,7 @@ export default function HomeScreen() {
   }, [isEmpty]);
 
   const billPreview = {
-    emoji: '📺',
+    serviceName: 'Netflix',
     name: 'Netflix',
     detail: 'billing Mar 18',
     whenLabel: 'Today',
@@ -475,8 +481,8 @@ export default function HomeScreen() {
             </ScrollView>
             {!isEmpty ? (
               <View style={styles.billPreview}>
-                <View style={[styles.bpIco, { backgroundColor: '#E1F5EE' }]}>
-                  <Text style={styles.bpEmoji}>{billPreview.emoji}</Text>
+                <View style={styles.bpIco}>
+                  <ServiceIcon serviceName={billPreview.serviceName} size={26} />
                 </View>
                 <Text style={styles.bpName} numberOfLines={1}>
                   {billPreview.name} · {billPreview.detail}
@@ -550,8 +556,8 @@ export default function HomeScreen() {
                   key={item.id}
                   style={[styles.subRow, i === upcomingSplits.length - 1 && styles.rowLast]}
                 >
-                  <View style={[styles.subIco, { backgroundColor: item.iconBg }]}>
-                    <Text style={styles.subEmoji}>{item.iconEmoji}</Text>
+                  <View style={styles.subIco}>
+                    <ServiceIcon serviceName={item.serviceName} size={36} />
                   </View>
                   <View style={styles.subMid}>
                     <Text style={styles.subName}>{item.name}</Text>
@@ -594,9 +600,15 @@ export default function HomeScreen() {
                   key={item.id}
                   style={[styles.actRow, i === recentActivity.length - 1 && styles.rowLast]}
                 >
-                  <View style={[styles.actIco, { backgroundColor: item.iconBg }]}>
-                    <Ionicons name={item.icon} size={14} color={item.iconColor} />
-                  </View>
+                  {item.serviceMark ? (
+                    <View style={styles.actIco}>
+                      <ServiceIcon serviceName={item.serviceMark} size={30} />
+                    </View>
+                  ) : item.icon ? (
+                    <View style={[styles.actIco, { backgroundColor: item.iconBg ?? '#F0EEE9' }]}>
+                      <Ionicons name={item.icon} size={14} color={item.iconColor ?? C.muted} />
+                    </View>
+                  ) : null}
                   <Text style={styles.actTxt}>{item.title}</Text>
                   <Text style={[styles.actAmt, { color: item.amountColor }]}>
                     {formatDollarWithOptionalPercent(
@@ -873,11 +885,9 @@ const styles = StyleSheet.create({
   bpIco: {
     width: 26,
     height: 26,
-    borderRadius: 7,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  bpEmoji: { fontSize: 14 },
   bpName: { flex: 1, fontSize: 14, fontWeight: '500', color: C.text },
   bpNameEmpty: { flex: 1, fontSize: 14, fontWeight: '500', color: C.muted },
   bpWhen: { fontSize: 13, color: C.red, fontWeight: '500' },
@@ -939,11 +949,9 @@ const styles = StyleSheet.create({
   subIco: {
     width: 36,
     height: 36,
-    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  subEmoji: { fontSize: 18 },
   subMid: { flex: 1 },
   subName: { fontSize: 15, fontWeight: '500', color: C.text },
   subMeta: { fontSize: 13, color: C.muted, marginTop: 1 },

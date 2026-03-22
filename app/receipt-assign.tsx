@@ -16,6 +16,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { router, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { ServiceIcon } from './components/ServiceIcon';
 import {
   getReceiptAssignSession,
   setReceiptAssignSession,
@@ -388,9 +389,7 @@ export default function ReceiptAssignScreen() {
             <Text style={styles.backLbl}>Back</Text>
           </Pressable>
           <View style={styles.receiptMeta}>
-            <View style={styles.thumb}>
-              <Ionicons name="receipt-outline" size={22} color="rgba(255,255,255,0.7)" />
-            </View>
+            <ServiceIcon serviceName={merchant || 'Receipt'} size={44} />
             <View style={{ flex: 1 }}>
               <Text style={styles.receiptName} numberOfLines={1}>
                 {merchant || 'Receipt'}
@@ -649,14 +648,6 @@ const styles = StyleSheet.create({
   backRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 14 },
   backLbl: { fontSize: 17, color: 'rgba(255,255,255,0.72)' },
   receiptMeta: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  thumb: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   receiptName: { fontSize: 21, fontWeight: '600', color: '#fff', letterSpacing: -0.3 },
   receiptDate: { fontSize: 15, color: 'rgba(255,255,255,0.55)', marginTop: 2 },
   aiBadge: {
