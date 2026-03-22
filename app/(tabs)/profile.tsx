@@ -22,6 +22,7 @@ import ProfileNotificationSettingsCard from '../components/ProfileNotificationSe
 import ProfileSplitPreferencesCard from '../components/ProfileSplitPreferencesCard';
 import ProfilePrivacyCard from '../components/ProfilePrivacyCard';
 import ProfileSecurityCard from '../components/ProfileSecurityCard';
+import ProfileActiveSessionsCard from '../components/ProfileActiveSessionsCard';
 import { ENABLE_PROFILE_SECURITY } from '../../constants/features';
 import { isFirebaseConfigured } from '../../lib/firebase';
 import {
@@ -284,6 +285,14 @@ export default function ProfileScreen() {
           </View>
         ) : null}
 
+        <View style={styles.activeSessionsSection}>
+          <Text style={styles.sectionHeading}>ACTIVE SESSIONS</Text>
+          <ProfileActiveSessionsCard
+            user={user}
+            persist={isFirebaseConfigured() && !!user}
+          />
+        </View>
+
         <View style={styles.bodyPad} />
       </ScrollView>
     </View>
@@ -449,6 +458,10 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   securitySection: {
+    paddingHorizontal: 20,
+    marginBottom: 8,
+  },
+  activeSessionsSection: {
     paddingHorizontal: 20,
     marginBottom: 8,
   },

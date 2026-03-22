@@ -5,6 +5,7 @@ import { Stack } from 'expo-router';
 import { StripeProvider } from '@stripe/stripe-react-native';
 import { FirebaseRecaptchaVerifierModal } from 'expo-firebase-recaptcha';
 import SplashScreen from './components/SplashScreen';
+import AuthSessionSync from './components/AuthSessionSync';
 import BiometricAppLock from './components/BiometricAppLock';
 import { SecurityPrefsProvider } from './contexts/SecurityPrefsContext';
 import { FirebaseRecaptchaProvider } from './contexts/FirebaseRecaptchaContext';
@@ -36,6 +37,7 @@ export default function RootLayout() {
   const stackAndSplash = (
     <GestureHandlerRootView style={styles.root}>
       <View style={styles.root}>
+        <AuthSessionSync />
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen
             name="(tabs)"
