@@ -18,8 +18,14 @@ import {
   subscribeHomeFinancialPosition,
   type HomeFinancialPosition,
 } from '../../lib/homeFinancialPositionFirestore';
+import {
+  formatMemberTenureMonths,
+  subscribeHomeSavings,
+  type HomeSavingsSnapshot,
+} from '../../lib/homeSavingsFirestore';
 import { HomeDonutChart, HOME_DONUT_SIZE } from '../components/HomeDonutChart';
 import { HomeHeroDonutLegend } from '../components/HomeHeroDonutLegend';
+import { HomeSavingsPill } from '../components/HomeSavingsPill';
 import { ServiceIcon } from '../components/ServiceIcon';
 
 /** Toggle to `'empty'` to preview the new-user home (zeros + setup CTAs). */
@@ -178,6 +184,10 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const [user, setUser] = useState<User | null>(null);
   const [position, setPosition] = useState<HomeFinancialPosition>(initialHomeFinancialPosition);
+  const [savings, setSavings] = useState<HomeSavingsSnapshot>(() => ({
+    lifetimeSaved: HOME_PREVIEW === 'empty' ? 0 : 318.4,
+    joinedAt: null,
+  }));
   const isEmpty = HOME_PREVIEW === 'empty';
 
   const notifCount = isEmpty ? 0 : 3;
@@ -207,6 +217,25 @@ export default function HomeScreen() {
     setPosition((prev) => ({ ...prev, loading: true }));
     return subscribeHomeFinancialPosition(uid, setPosition);
   }, [user?.uid]);
+
+  useEffect(() => {
+    const uid = user?.uid;
+    if (!uid) {
+      if (isEmpty) {
+        setSavings({ lifetimeSaved: 0, joinedAt: null });
+      } else {
+        setSavings({ lifetimeSaved: 318.4, joinedAt: null });
+      }
+      return;
+    }
+    return subscribeHomeSavings(uid, user, setSavings);
+  }, [user?.uid, user, isEmpty]);
+
+  const savingsMonthsLabel = useMemo(() => {
+    if (isEmpty) return '—';
+    if (!user?.uid && HOME_PREVIEW === 'filled') return '6 months';
+    return formatMemberTenureMonths(savings.joinedAt);
+  }, [isEmpty, user?.uid, savings.joinedAt]);
 
   const calendarDays = useMemo(() => {
     const now = new Date();
@@ -324,6 +353,10 @@ export default function HomeScreen() {
               overdueSub={heroLegendCopy.overdueSub}
             />
           </View>
+          <HomeSavingsPill
+            savedDollars={isEmpty ? 0 : savings.lifetimeSaved}
+            monthsLabel={savingsMonthsLabel}
+          />
           {isEmpty ? (
             <View style={styles.heroBadgeRow}>
               <View style={styles.heroBadge}>
