@@ -190,22 +190,41 @@ export default function AddSubscriptionReviewScreen() {
     });
   }, [router, serviceName, iconColor, planName, totalCents, billingCycle, billingDay, autoCharge]);
 
+  /** Preview the success screen when Firestore is not available (no document written). */
+  const navigateToSplitCreated = useCallback(() => {
+    const invited = members.filter((m) => m.role === 'member');
+    const inviteAvatars = invited.slice(0, 6).map((m) => ({
+      initials: m.initials,
+      avatarBg: m.avatarBg,
+      avatarColor: m.avatarColor,
+    }));
+    router.replace({
+      pathname: '/split-created',
+      params: {
+        planName: planName || serviceName || 'Subscription',
+        totalCents: String(totalCents),
+        billingCycle,
+        inviteCount: String(invited.length),
+        inviteAvatarsJson: encodeURIComponent(JSON.stringify(inviteAvatars)),
+      },
+    });
+  }, [members, planName, serviceName, totalCents, billingCycle, router]);
+
   const onCreate = useCallback(async () => {
-    if (!isFirebaseConfigured()) {
-      Alert.alert(
-        'Firebase not configured',
-        'Add your Expo Firebase env vars to save subscriptions to Firestore.',
-      );
+    if (totalCents <= 0 || members.length === 0) {
+      Alert.alert('Incomplete split', 'Go back and finish plan cost and members.');
       return;
     }
+
+    if (!isFirebaseConfigured()) {
+      navigateToSplitCreated();
+      return;
+    }
+
     const auth = getFirebaseAuth();
     const uid = auth?.currentUser?.uid;
     if (!uid) {
       Alert.alert('Sign in required', 'Sign in to create a subscription split.');
-      return;
-    }
-    if (totalCents <= 0 || members.length === 0) {
-      Alert.alert('Incomplete split', 'Go back and finish plan cost and members.');
       return;
     }
 
@@ -226,7 +245,7 @@ export default function AddSubscriptionReviewScreen() {
       };
       const id = await createSubscriptionFromWizard(input);
       await runSubscriptionWizardSideEffects(id, input);
-      router.replace('/(tabs)/subscriptions');
+      navigateToSplitCreated();
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       Alert.alert('Could not create split', msg);
@@ -245,6 +264,7 @@ export default function AddSubscriptionReviewScreen() {
     autoCharge,
     splitMethod,
     router,
+    navigateToSplitCreated,
   ]);
 
   return (

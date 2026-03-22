@@ -58,6 +58,14 @@ export default function RootLayout() {
             }}
           />
           <Stack.Screen name="receipt-assign" options={{ headerShown: false }} />
+          <Stack.Screen
+            name="split-created"
+            options={{
+              headerShown: false,
+              gestureEnabled: false,
+              animation: 'fade',
+            }}
+          />
         </Stack>
         {showSplash && (
           <Animated.View style={[styles.splashOverlay, { opacity }]}>
