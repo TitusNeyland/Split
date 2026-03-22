@@ -16,6 +16,7 @@
     "expo": "~55.0.7",
     "expo-camera": "~55.0.10",
     "expo-constants": "~55.0.9",
+    "expo-device": "~55.0.10",
     "expo-file-system": "~55.0.11",
     "expo-firebase-recaptcha": "^2.3.1",
     "expo-font": "~55.0.4",
