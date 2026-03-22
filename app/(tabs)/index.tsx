@@ -1,15 +1,18 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   Pressable,
+  Share,
+  Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { spacing } from '../../constants/theme';
 import { getFriendAvatarColors } from '../../lib/friendAvatar';
@@ -26,6 +29,11 @@ import {
 import { HomeDonutChart, HOME_DONUT_SIZE } from '../components/HomeDonutChart';
 import { HomeHeroDonutLegend } from '../components/HomeHeroDonutLegend';
 import { HomeSavingsPill } from '../components/HomeSavingsPill';
+import { HomeQuickActionsRow } from '../components/HomeQuickActionsRow';
+import {
+  HomeReminderPickerModal,
+  type ReminderPickCandidate,
+} from '../components/HomeReminderPickerModal';
 import { ServiceIcon } from '../components/ServiceIcon';
 
 /** Toggle to `'empty'` to preview the new-user home (zeros + setup CTAs). */
@@ -54,14 +62,6 @@ function initialHomeFinancialPosition(): HomeFinancialPosition {
   }
   return { youOwe: 12, owedToYou: 47.5, overdue: 5.33, loading: false };
 }
-
-const quickActions = [
-  { id: 'scan', label: 'Scan receipt', icon: 'phone-portrait-outline' as const, bg: '#EEEDFE', color: C.purple },
-  { id: 'add', label: 'Add sub', icon: 'time-outline' as const, bg: '#E1F5EE', color: '#0F6E56' },
-  { id: 'invite', label: 'Invite friend', icon: 'people-outline' as const, bg: '#FAEEDA', color: '#854F0B' },
-  { id: 'remind', label: 'Send reminder', icon: 'notifications-outline' as const, bg: '#FAECE7', color: '#993C1D' },
-  { id: 'paid', label: 'Mark paid', icon: 'checkmark-circle-outline' as const, bg: '#EAF3DE', color: '#3B6D11' },
-];
 
 type FriendRow = {
   id: string;
@@ -181,8 +181,10 @@ const recentActivityFilled: HomeRecentActivityItem[] = [
 ];
 
 export default function HomeScreen() {
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const [user, setUser] = useState<User | null>(null);
+  const [reminderPickerOpen, setReminderPickerOpen] = useState(false);
   const [position, setPosition] = useState<HomeFinancialPosition>(initialHomeFinancialPosition);
   const [savings, setSavings] = useState<HomeSavingsSnapshot>(() => ({
     lifetimeSaved: HOME_PREVIEW === 'empty' ? 0 : 318.4,
@@ -300,6 +302,68 @@ export default function HomeScreen() {
       overdueSub: position.overdue > 0 ? 'Sam · 3 days overdue' : 'All caught up',
     };
   }, [isEmpty, position.youOwe, position.owedToYou, position.overdue]);
+
+  const reminderCandidates = useMemo((): ReminderPickCandidate[] => {
+    if (isEmpty) return [];
+    return [
+      { id: 'sam', name: 'Sam M.', detail: 'Netflix · 3 days overdue', overdue: true },
+      { id: 'alex', name: 'Alex L.', detail: 'Spotify · pending', overdue: false },
+    ];
+  }, [isEmpty]);
+
+  const onInviteFriend = useCallback(async () => {
+    try {
+      await Share.share({
+        message:
+          'Split bills and subscriptions with me on Split — download the app to connect and share costs.',
+      });
+    } catch {
+      /* dismissed */
+    }
+  }, []);
+
+  const homeQuickActions = useMemo(
+    () => [
+      {
+        id: 'scan',
+        label: 'Scan receipt',
+        icon: 'phone-portrait-outline' as const,
+        circleBg: '#EEEDFE',
+        iconColor: C.purple,
+        onPress: () => router.push('/scan'),
+      },
+      {
+        id: 'add',
+        label: 'Add sub',
+        icon: 'time-outline' as const,
+        circleBg: '#E1F5EE',
+        iconColor: '#0F6E56',
+        onPress: () => router.push('/add-subscription'),
+      },
+      {
+        id: 'invite',
+        label: 'Invite friend',
+        icon: 'people-outline' as const,
+        circleBg: '#FAEEDA',
+        iconColor: '#854F0B',
+        onPress: onInviteFriend,
+      },
+      {
+        id: 'remind',
+        label: 'Send reminder',
+        icon: 'notifications-outline' as const,
+        circleBg: '#FFE8E2',
+        iconColor: '#E24B4A',
+        onPress: () => setReminderPickerOpen(true),
+      },
+    ],
+    [router, onInviteFriend]
+  );
+
+  const onReminderPick = useCallback((c: ReminderPickCandidate) => {
+    setReminderPickerOpen(false);
+    Alert.alert('Reminder sent', `We'll remind ${c.name}.`);
+  }, []);
 
   return (
     <View style={styles.root}>
@@ -425,25 +489,18 @@ export default function HomeScreen() {
           </Pressable>
         </View>
 
-        <View style={styles.body}>
-          <View style={styles.sh}>
-            <Text style={styles.shTitle}>Quick actions</Text>
-          </View>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.qaScroll}
-          >
-            {quickActions.map((q) => (
-              <Pressable key={q.id} style={styles.qaBtn}>
-                <View style={[styles.qaIcon, { backgroundColor: q.bg }]}>
-                  <Ionicons name={q.icon} size={20} color={q.color} />
-                </View>
-                <Text style={styles.qaLabel}>{q.label}</Text>
-              </Pressable>
-            ))}
-          </ScrollView>
+        <View style={styles.quickActionsBelowFloat}>
+          <HomeQuickActionsRow actions={homeQuickActions} />
+        </View>
 
+        <HomeReminderPickerModal
+          visible={reminderPickerOpen}
+          onClose={() => setReminderPickerOpen(false)}
+          candidates={reminderCandidates}
+          onSelect={onReminderPick}
+        />
+
+        <View style={styles.body}>
           <View style={styles.sh}>
             <Text style={styles.shTitle}>This week</Text>
             <Text style={styles.shAction}>Full calendar</Text>
@@ -775,34 +832,9 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: C.purple,
   },
-  qaScroll: {
-    flexDirection: 'row',
-    gap: 9,
-    paddingBottom: 2,
-  },
-  qaBtn: {
-    alignItems: 'center',
-    gap: 7,
-    backgroundColor: '#fff',
-    borderWidth: 0.5,
-    borderColor: C.border,
-    borderRadius: 16,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    minWidth: 72,
-  },
-  qaIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  qaLabel: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: C.text,
-    textAlign: 'center',
+  quickActionsBelowFloat: {
+    marginTop: 12,
+    marginBottom: 4,
   },
   calStrip: {
     backgroundColor: '#fff',
