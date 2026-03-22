@@ -58,10 +58,10 @@ export type WizardMember = {
   invitePending?: boolean;
 };
 
-const JORDAN: WizardMember = {
+const TITUS: WizardMember = {
   memberId: 'owner-self',
-  displayName: 'Jordan (you)',
-  initials: 'JD',
+  displayName: 'Titus (you)',
+  initials: 'TN',
   avatarBg: '#EEEDFE',
   avatarColor: '#534AB7',
   isOwner: true,
@@ -169,7 +169,7 @@ export default function AddSubscriptionMembersScreen() {
   const payerDisplay = typeof params.payerDisplay === 'string' ? params.payerDisplay : 'Me (owner)';
   const autoCharge = params.autoCharge === '1';
 
-  const [members, setMembers] = useState<WizardMember[]>(() => [JORDAN]);
+  const [members, setMembers] = useState<WizardMember[]>(() => [TITUS]);
   const [mode, setMode] = useState<SplitMethod>('equal');
   const [customPercentStr, setCustomPercentStr] = useState<string[]>(() => ['100']);
   const [fixedDollarStr, setFixedDollarStr] = useState<string[]>(() => [
