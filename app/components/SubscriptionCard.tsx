@@ -125,7 +125,7 @@ export function SubscriptionCard({
     >
       {priceChange ? (
         <View style={styles.priceBanner}>
-          <Ionicons name="warning-outline" size={14} color={C.brown} />
+          <Ionicons name="warning-outline" size={16} color={C.brown} />
           <Text style={styles.priceBannerTxt}>{priceChange.message}</Text>
           <Pressable
             onPress={priceChange.onDismiss}
@@ -150,13 +150,13 @@ export function SubscriptionCard({
               <View style={styles.badgeRow}>
                 {isOwner ? (
                   <View style={styles.ownerBadge}>
-                    <Ionicons name="person-outline" size={10} color={C.purple} />
+                    <Ionicons name="person-outline" size={11} color={C.purple} />
                     <Text style={styles.ownerBadgeTxt}>You pay</Text>
                   </View>
                 ) : null}
                 {autoCharge === 'on' ? (
                   <View style={styles.autoOnBadge}>
-                    <Ionicons name="checkmark" size={10} color={C.greenDark} />
+                    <Ionicons name="checkmark" size={11} color={C.greenDark} />
                     <Text style={styles.autoOnBadgeTxt}>Auto-on</Text>
                   </View>
                 ) : null}
@@ -214,7 +214,7 @@ export function SubscriptionCard({
           accessibilityRole="button"
           accessibilityLabel={editSplitButtonLabel}
         >
-          <Ionicons name="create-outline" size={16} color={C.purple} />
+          <Ionicons name="create-outline" size={18} color={C.purple} />
           <Text style={styles.editSplitTxt}>{editSplitButtonLabel}</Text>
         </Pressable>
       ) : null}
@@ -246,12 +246,12 @@ const styles = StyleSheet.create({
   },
   priceBannerTxt: {
     flex: 1,
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: '500',
     color: '#633806',
   },
   priceBannerDismiss: {
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: '500',
     color: C.brown,
     textDecorationLine: 'underline',
@@ -274,19 +274,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   iconEmoji: {
-    fontSize: 17,
+    fontSize: 20,
   },
   info: {
     flex: 1,
     minWidth: 0,
   },
   name: {
-    fontSize: 14,
+    fontSize: 17,
     fontWeight: '600',
     letterSpacing: -0.2,
   },
   cycle: {
-    fontSize: 11,
+    fontSize: 14,
     color: C.muted,
     marginTop: 3,
   },
@@ -307,7 +307,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
   },
   ownerBadgeTxt: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '500',
     color: C.purple,
   },
@@ -321,7 +321,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
   },
   autoOnBadgeTxt: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '500',
     color: C.greenDark,
   },
@@ -332,18 +332,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
   },
   autoOffBadgeTxt: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '500',
     color: C.muted,
   },
   total: {
-    fontSize: 17,
+    fontSize: 20,
     fontWeight: '600',
     textAlign: 'right',
     letterSpacing: -0.3,
   },
   perPerson: {
-    fontSize: 11,
+    fontSize: 14,
     color: C.muted,
     textAlign: 'right',
     marginTop: 2,
@@ -363,9 +363,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
   },
   pip: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: -6,
@@ -373,7 +373,7 @@ const styles = StyleSheet.create({
     borderColor: '#fff',
   },
   pipTxt: {
-    fontSize: 9,
+    fontSize: 11,
     fontWeight: '600',
   },
   statusPill: {
@@ -390,7 +390,7 @@ const styles = StyleSheet.create({
     borderRadius: 2.5,
   },
   statusTxt: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '500',
   },
   dueBadge: {
@@ -400,7 +400,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   dueBadgeTxt: {
-    fontSize: 10,
+    fontSize: 12,
     color: C.muted,
     fontWeight: '500',
   },
@@ -423,11 +423,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   progLbl: {
-    fontSize: 10,
+    fontSize: 12,
     color: C.muted,
   },
   progAmt: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '600',
   },
   editSplitBtn: {
@@ -441,7 +441,7 @@ const styles = StyleSheet.create({
     borderTopColor: C.divider,
   },
   editSplitTxt: {
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '500',
     color: C.purple,
   },

@@ -332,8 +332,8 @@ export function SubscriptionsDemoPanel({ filter }: { filter: FilterId }) {
     return (
       <View style={styles.panel}>
         <View style={styles.sh}>
-          <Text style={styles.shTitle}>Active splits</Text>
-          <Text style={styles.shAction}>Sort</Text>
+          <Text style={[styles.shTitle, styles.activeSplitsShTitle]}>Active splits</Text>
+          <Text style={[styles.shAction, styles.activeSplitsShAction]}>Sort</Text>
         </View>
         <NetflixCard />
         <SpotifyCard />
@@ -443,6 +443,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: C.purple,
     fontWeight: '500',
+  },
+  activeSplitsShTitle: {
+    fontSize: 16,
+    letterSpacing: 0.55,
+  },
+  activeSplitsShAction: {
+    fontSize: 19,
   },
   subCard: {
     backgroundColor: '#fff',
@@ -653,7 +660,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   seTitle: {
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: '600',
     color: C.muted,
     textTransform: 'uppercase',
@@ -675,7 +682,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   seOptTxt: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '500',
     color: C.muted,
   },
@@ -701,12 +708,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   splitAvTxt: {
-    fontSize: 9,
+    fontSize: 11,
     fontWeight: '600',
   },
   splitName: {
     flex: 1,
-    fontSize: 13,
+    fontSize: 15,
     color: C.text,
   },
   splitInputFake: {
@@ -718,14 +725,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   splitInputFakeTxt: {
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '500',
     color: C.text,
   },
   splitAmount: {
-    width: 52,
+    width: 56,
     textAlign: 'right',
-    fontSize: 13,
+    fontSize: 15,
     fontWeight: '600',
     color: C.text,
   },
@@ -741,7 +748,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#E1F5EE',
   },
   pctOkTxt: {
-    fontSize: 11,
+    fontSize: 13,
     color: C.greenDark,
     fontWeight: '500',
   },
@@ -758,7 +765,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   cancelEditorTxt: {
-    fontSize: 13,
+    fontSize: 15,
     fontWeight: '500',
     color: '#5F5E5A',
   },
@@ -770,7 +777,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   saveEditorTxt: {
-    fontSize: 13,
+    fontSize: 15,
     fontWeight: '600',
     color: '#fff',
   },

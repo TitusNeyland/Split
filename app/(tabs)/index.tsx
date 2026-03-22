@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useMergedSplitPreferences } from '../../lib/useMergedSplitPreferences';
 import {
   View,
@@ -6,7 +6,6 @@ import {
   StyleSheet,
   ScrollView,
   Pressable,
-  useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -40,7 +39,7 @@ function dateKey(d: Date) {
 
 function Sparkline({
   width,
-  height = 72,
+  height = 64,
   data,
 }: {
   width: number;
@@ -51,10 +50,13 @@ function Sparkline({
   const maxY = 60;
   const padT = 6;
   const padB = 10;
+  /** Keeps stroke + end dot inside the SVG (circle r=6 + stroke). */
+  const padH = 10;
   const n = data.length;
-  if (width <= 0 || n < 2) return <View style={{ height }} />;
+  const innerW = width - 2 * padH;
+  if (width <= 0 || innerW < 8 || n < 2) return <View style={{ height }} />;
 
-  const xAt = (i: number) => (i / (n - 1)) * width;
+  const xAt = (i: number) => padH + (i / (n - 1)) * innerW;
   const yAt = (v: number) =>
     padT + (1 - (v - minY) / (maxY - minY)) * (height - padT - padB);
 
@@ -231,8 +233,7 @@ function formatDollarWithOptionalPercent(
 export default function HomeScreen() {
   const splitPrefs = useMergedSplitPreferences();
   const insets = useSafeAreaInsets();
-  const { width: windowWidth } = useWindowDimensions();
-  const chartWidth = Math.max(120, windowWidth - 40);
+  const [chartWidth, setChartWidth] = useState(0);
   const isEmpty = HOME_PREVIEW === 'empty';
 
   const owedThisMonth = isEmpty ? 0 : 47.5;
@@ -346,8 +347,16 @@ export default function HomeScreen() {
             )}
           </View>
 
-          <View style={styles.chartWrap}>
-            {!isEmpty ? <Sparkline width={chartWidth} height={72} data={SPARKLINE_DATA} /> : null}
+          <View
+            style={styles.chartWrap}
+            onLayout={(e) => {
+              const w = Math.round(e.nativeEvent.layout.width);
+              if (w > 0) setChartWidth((prev) => (prev === w ? prev : w));
+            }}
+          >
+            {!isEmpty && chartWidth > 0 ? (
+              <Sparkline width={chartWidth} height={64} data={SPARKLINE_DATA} />
+            ) : null}
           </View>
         </LinearGradient>
 
@@ -707,8 +716,10 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   chartWrap: {
-    height: 72,
+    height: 64,
     marginTop: 8,
+    width: '100%',
+    alignSelf: 'stretch',
   },
   floatCard: {
     backgroundColor: '#fff',

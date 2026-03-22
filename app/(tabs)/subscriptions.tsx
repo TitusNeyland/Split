@@ -183,10 +183,10 @@ export default function SubscriptionsScreen() {
               {filter === 'active' ? (
                 <View style={styles.panel}>
                   <View style={styles.sh}>
-                    <Text style={styles.shTitle}>Active splits</Text>
-                    <Text style={styles.shAction}>Sort</Text>
+                    <Text style={[styles.shTitle, styles.activeSplitsShTitle]}>Active splits</Text>
+                    <Text style={[styles.shAction, styles.activeSplitsShAction]}>Sort</Text>
                   </View>
-                  <Text style={styles.panelHint}>
+                  <Text style={[styles.panelHint, styles.activeSplitsHint]}>
                     {tabData.active === 0
                       ? 'No active subscriptions yet. Subscription cards will appear here.'
                       : `${tabData.active} active subscription${tabData.active === 1 ? '' : 's'} — cards will appear here.`}
@@ -407,6 +407,17 @@ const styles = StyleSheet.create({
     fontSize: 17,
     color: C.muted,
     lineHeight: 24,
+  },
+  activeSplitsShTitle: {
+    fontSize: 16,
+    letterSpacing: 0.55,
+  },
+  activeSplitsShAction: {
+    fontSize: 19,
+  },
+  activeSplitsHint: {
+    fontSize: 20,
+    lineHeight: 28,
   },
   empty: {
     alignItems: 'center',
