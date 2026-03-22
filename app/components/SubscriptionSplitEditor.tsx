@@ -14,6 +14,15 @@ import {
   type FirestoreMemberShare,
   type FirestoreSplitMethod,
 } from '../../lib/subscriptionSplitFirestore';
+import {
+  allocateCents,
+  equalCentsSplit,
+  equalIntegerPercents,
+  fmtCents,
+  parseDollarToCents,
+  parsePercent,
+  percentTotalIsExactly100,
+} from '../../lib/addSubscriptionSplitMath';
 const C = {
   purple: '#534AB7',
   text: '#1a1a18',
@@ -45,63 +54,6 @@ export type SubscriptionSplitEditorProps = {
   /** If true, skip Firestore (e.g. design demo). */
   skipFirestore?: boolean;
 };
-
-function equalIntegerPercents(n: number): number[] {
-  const base = Math.floor(100 / n);
-  const rem = 100 - n * base;
-  const arr = Array(n).fill(base);
-  for (let i = n - rem; i < n; i++) arr[i]++;
-  return arr;
-}
-
-function equalCentsSplit(totalCents: number, n: number): number[] {
-  const base = Math.floor(totalCents / n);
-  const rem = totalCents - n * base;
-  const arr = Array(n).fill(base);
-  for (let i = n - rem; i < n; i++) arr[i]++;
-  return arr;
-}
-
-function allocateCents(totalCents: number, weights: number[]): number[] {
-  const wsum = weights.reduce((a, b) => a + b, 0);
-  if (wsum <= 0) return weights.map(() => 0);
-  const exact = weights.map((w) => (totalCents * w) / wsum);
-  const floor = exact.map((x) => Math.floor(x));
-  let rem = totalCents - floor.reduce((a, b) => a + b, 0);
-  const order = exact
-    .map((x, i) => ({ i, r: x - floor[i]! }))
-    .sort((a, b) => b.r - a.r);
-  const out = [...floor];
-  for (let k = 0; k < rem; k++) {
-    out[order[k % order.length]!.i] += 1;
-  }
-  return out;
-}
-
-function parsePercent(raw: string): number {
-  const s = raw.replace(/%/g, '').trim();
-  if (s === '') return NaN;
-  const n = parseFloat(s);
-  return Number.isFinite(n) ? n : NaN;
-}
-
-function parseDollarToCents(raw: string): number {
-  const s = raw.replace(/[$\s]/g, '').trim();
-  if (s === '') return NaN;
-  const n = parseFloat(s);
-  if (!Number.isFinite(n)) return NaN;
-  return Math.round(n * 100);
-}
-
-function fmtCents(cents: number): string {
-  return `$${(cents / 100).toFixed(2)}`;
-}
-
-function percentTotalIsExactly100(values: number[]): boolean {
-  if (values.some((v) => !Number.isFinite(v))) return false;
-  const sum = values.reduce((a, b) => a + b, 0);
-  return Math.abs(sum - 100) < 1e-6;
-}
 
 function methodToFirestore(m: SplitEditorMode): FirestoreSplitMethod {
   if (m === 'equal') return 'equal';
@@ -446,7 +398,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   seTitle: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '600',
     color: C.muted,
     textTransform: 'uppercase',
@@ -475,7 +427,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   seOptTxt: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '500',
     color: C.muted,
   },
@@ -494,42 +446,42 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0,
   },
   splitAv: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
   splitAvTxt: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '600',
   },
   splitName: {
     flex: 1,
-    fontSize: 17,
+    fontSize: 18,
     color: C.text,
     minWidth: 0,
   },
   inputShell: {
-    width: 80,
+    width: 84,
     backgroundColor: '#F0EEE9',
     borderRadius: 6,
     paddingVertical: 8,
     paddingHorizontal: 6,
     justifyContent: 'center',
-    minHeight: 40,
+    minHeight: 42,
   },
   inputShellLocked: {
     opacity: 0.95,
   },
   inputLockedTxt: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '500',
     color: C.text,
     textAlign: 'center',
   },
   inputEditable: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '500',
     color: C.text,
     textAlign: 'center',
@@ -537,9 +489,9 @@ const styles = StyleSheet.create({
     margin: 0,
   },
   splitAmount: {
-    width: 72,
+    width: 76,
     textAlign: 'right',
-    fontSize: 17,
+    fontSize: 18,
     fontWeight: '600',
     color: C.text,
   },
@@ -559,7 +511,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FCEBEB',
   },
   pctBarTxt: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '600',
   },
   pctOkTxt: {
@@ -582,7 +534,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   cancelEditorTxt: {
-    fontSize: 17,
+    fontSize: 18,
     fontWeight: '500',
     color: '#5F5E5A',
   },
@@ -599,7 +551,7 @@ const styles = StyleSheet.create({
     opacity: 0.42,
   },
   saveEditorTxt: {
-    fontSize: 17,
+    fontSize: 18,
     fontWeight: '600',
     color: '#fff',
     textAlign: 'center',
