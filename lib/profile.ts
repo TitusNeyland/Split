@@ -29,6 +29,14 @@ export type UserProfileDoc = {
   splitPreferences?: Partial<SplitPreferences> | null;
   /** Visibility and export-related privacy toggles; enforce in Firestore rules. */
   privacySettings?: Partial<PrivacySettings> | null;
+  /**
+   * Per subscription id: when this user last dismissed the price-change banner
+   * (Firestore Timestamp). Compared against `subscriptions.priceChangedAt`.
+   */
+  lastSeenPriceChangeBySubscription?: Record<
+    string,
+    { toMillis?: () => number; toDate?: () => Date }
+  > | null;
   createdAt?: { toDate?: () => Date } | null;
 };
 
