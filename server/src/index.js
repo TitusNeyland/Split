@@ -5,6 +5,8 @@ import multer from 'multer';
 import OpenAI from 'openai';
 import { postProcessLineItems } from './postProcess.js';
 import { createStripeRouter } from './stripeRoutes.js';
+import { createSessionRouter } from './sessionRoutes.js';
+import { createSupportRouter } from './supportRoutes.js';
 
 const PORT = Number(process.env.PORT) || 8787;
 const app = express();
@@ -67,6 +69,8 @@ app.get('/health', (_req, res) => {
 });
 
 app.use('/api/stripe', createStripeRouter());
+app.use('/api/sessions', createSessionRouter());
+app.use('/api/support', createSupportRouter());
 
 app.post('/api/receipt/parse', upload.single('image'), async (req, res) => {
   try {
