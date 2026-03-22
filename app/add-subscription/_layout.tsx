@@ -5,6 +5,7 @@ export default function AddSubscriptionLayout() {
     <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
       <Stack.Screen name="index" />
       <Stack.Screen name="details" />
+      <Stack.Screen name="members" />
     </Stack>
   );
 }
