@@ -6,6 +6,7 @@ export default function AddSubscriptionLayout() {
       <Stack.Screen name="index" />
       <Stack.Screen name="details" />
       <Stack.Screen name="members" />
+      <Stack.Screen name="review" />
     </Stack>
   );
 }
