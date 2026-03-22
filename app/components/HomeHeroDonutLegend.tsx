@@ -1,0 +1,119 @@
+import React from 'react';
+import { View, Text, StyleSheet } from 'react-native';
+
+const DOT_RED = '#E24B4A';
+const DOT_GREEN = '#1D9E75';
+const DOT_AMBER = '#EF9F27';
+
+const AMT_RED = '#ff8080';
+const AMT_GREEN = '#86efac';
+const AMT_AMBER = '#fcd34d';
+
+export type HomeHeroDonutLegendProps = {
+  youOwe: number;
+  owedToYou: number;
+  overdue: number;
+  youOweSub: string;
+  owedSub: string;
+  overdueSub: string;
+};
+
+function fmt(n: number): string {
+  return `$${n.toFixed(2)}`;
+}
+
+export function HomeHeroDonutLegend({
+  youOwe,
+  owedToYou,
+  overdue,
+  youOweSub,
+  owedSub,
+  overdueSub,
+}: HomeHeroDonutLegendProps) {
+  return (
+    <View style={styles.legendCol}>
+      <View style={styles.legItem}>
+        <View style={styles.legDotWrap}>
+          <View style={[styles.legDot, { backgroundColor: DOT_RED }]} />
+        </View>
+        <View style={styles.legContent}>
+          <Text style={styles.legLabel}>You owe</Text>
+          <Text style={[styles.legAmt, { color: AMT_RED }]}>{fmt(youOwe)}</Text>
+          <Text style={styles.legSub} numberOfLines={2}>
+            {youOweSub}
+          </Text>
+        </View>
+      </View>
+      <View style={styles.legItem}>
+        <View style={styles.legDotWrap}>
+          <View style={[styles.legDot, { backgroundColor: DOT_GREEN }]} />
+        </View>
+        <View style={styles.legContent}>
+          <Text style={styles.legLabel}>Owed to you</Text>
+          <Text style={[styles.legAmt, { color: AMT_GREEN }]}>{fmt(owedToYou)}</Text>
+          <Text style={styles.legSub} numberOfLines={2}>
+            {owedSub}
+          </Text>
+        </View>
+      </View>
+      <View style={styles.legItem}>
+        <View style={styles.legDotWrap}>
+          <View style={[styles.legDot, { backgroundColor: DOT_AMBER }]} />
+        </View>
+        <View style={styles.legContent}>
+          <Text style={styles.legLabel}>Pending</Text>
+          <Text style={[styles.legAmt, { color: AMT_AMBER }]}>{fmt(overdue)}</Text>
+          <Text style={styles.legSub} numberOfLines={2}>
+            {overdueSub}
+          </Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  legendCol: {
+    flex: 1,
+    gap: 10,
+    minWidth: 0,
+    justifyContent: 'center',
+    marginLeft: 8,
+  },
+  legItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 7,
+  },
+  legDotWrap: {
+    justifyContent: 'center',
+    marginTop: 3,
+  },
+  legDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  legContent: {
+    flex: 1,
+    minWidth: 0,
+  },
+  legLabel: {
+    fontSize: 12,
+    color: '#ffffff',
+    lineHeight: 15,
+  },
+  legAmt: {
+    fontSize: 18,
+    fontWeight: '700',
+    letterSpacing: -0.4,
+    lineHeight: 22,
+    marginTop: 2,
+  },
+  legSub: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.35)',
+    lineHeight: 16,
+    marginTop: 2,
+  },
+});

@@ -19,6 +19,7 @@ import {
   type HomeFinancialPosition,
 } from '../../lib/homeFinancialPositionFirestore';
 import { HomeDonutChart, HOME_DONUT_SIZE } from '../components/HomeDonutChart';
+import { HomeHeroDonutLegend } from '../components/HomeHeroDonutLegend';
 import { ServiceIcon } from '../components/ServiceIcon';
 
 /** Toggle to `'empty'` to preview the new-user home (zeros + setup CTAs). */
@@ -256,6 +257,21 @@ export default function HomeScreen() {
   const friendBalances = isEmpty ? [] : friendBalancesFilled;
   const recentActivity = isEmpty ? [] : recentActivityFilled;
 
+  const heroLegendCopy = useMemo(() => {
+    if (isEmpty) {
+      return {
+        youOweSub: 'Add a subscription to track',
+        owedSub: 'Invite friends to split',
+        overdueSub: 'No overdue balances',
+      };
+    }
+    return {
+      youOweSub: position.youOwe > 0 ? 'Netflix · due in 2 days' : 'Nothing due right now',
+      owedSub: position.owedToYou > 0 ? 'Spotify, Xbox, iCloud' : 'No incoming payments yet',
+      overdueSub: position.overdue > 0 ? 'Sam · 3 days overdue' : 'All caught up',
+    };
+  }, [isEmpty, position.youOwe, position.owedToYou, position.overdue]);
+
   return (
     <View style={styles.root}>
       <StatusBar style="light" />
@@ -290,28 +306,31 @@ export default function HomeScreen() {
             </Pressable>
           </View>
 
-          <View style={styles.heroMainRow}>
-            <HomeDonutChart
+          <View style={styles.chartLegendRow}>
+            <View style={styles.heroDonutWrap}>
+              <HomeDonutChart
+                youOwe={isEmpty ? 0 : position.youOwe}
+                owedToYou={isEmpty ? 0 : position.owedToYou}
+                overdue={isEmpty ? 0 : position.overdue}
+                loading={!isEmpty && Boolean(user?.uid) && position.loading}
+              />
+            </View>
+            <HomeHeroDonutLegend
               youOwe={isEmpty ? 0 : position.youOwe}
               owedToYou={isEmpty ? 0 : position.owedToYou}
               overdue={isEmpty ? 0 : position.overdue}
-              loading={!isEmpty && Boolean(user?.uid) && position.loading}
+              youOweSub={heroLegendCopy.youOweSub}
+              owedSub={heroLegendCopy.owedSub}
+              overdueSub={heroLegendCopy.overdueSub}
             />
-            <View style={styles.heroSide}>
-              {!isEmpty ? (
-                <View style={styles.heroBadge}>
-                  <Ionicons name="checkmark" size={14} color="#4ade80" />
-                  <Text style={styles.heroBadgeTxt}>
-                    $12 more{'\n'}than last month
-                  </Text>
-                </View>
-              ) : (
-                <View style={styles.heroBadge}>
-                  <Text style={styles.heroBadgeTxt}>Add friends & subs{'\n'}to see balances</Text>
-                </View>
-              )}
-            </View>
           </View>
+          {isEmpty ? (
+            <View style={styles.heroBadgeRow}>
+              <View style={styles.heroBadge}>
+                <Text style={styles.heroBadgeTxt}>Add friends & subs{'\n'}to see balances</Text>
+              </View>
+            </View>
+          ) : null}
         </LinearGradient>
 
         {/* Float card */}
@@ -599,7 +618,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 16,
+    marginBottom: 20,
     gap: 8,
   },
   greeting: {
@@ -628,17 +647,21 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#fff',
   },
-  heroMainRow: {
+  chartLegendRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 4,
-    gap: 12,
+    gap: 16,
+    marginTop: 14,
   },
-  heroSide: {
-    flex: 1,
-    alignItems: 'flex-end',
-    justifyContent: 'center',
-    minHeight: HOME_DONUT_SIZE,
+  heroDonutWrap: {
+    width: HOME_DONUT_SIZE,
+    flexShrink: 0,
+    marginLeft: 8,
+  },
+  heroBadgeRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginTop: 10,
   },
   heroBadge: {
     flexDirection: 'row',
