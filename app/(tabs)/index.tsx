@@ -385,14 +385,23 @@ export default function HomeScreen() {
             </View>
           </Pressable>
           <Pressable style={[styles.fcRow, styles.fcRowLast]}>
-            <View style={[styles.fcIcon, { backgroundColor: '#EEEDFE' }]}>
-              <Ionicons name="phone-portrait-outline" size={18} color={C.purple} />
+            <View style={[styles.fcIcon, { backgroundColor: '#FAEEDA' }]}>
+              <Ionicons name="time-outline" size={18} color="#854F0B" />
             </View>
             <View style={styles.fcMid}>
-              <Text style={styles.fcTitle}>Scan a receipt</Text>
-              <Text style={styles.fcSub}>Split your last dinner</Text>
+              <Text style={styles.fcTitle}>
+                {isEmpty ? 'Overdue' : 'Sam overdue'}
+              </Text>
+              <Text style={styles.fcSub}>
+                {isEmpty ? 'No late balances yet' : 'Netflix · 3 days late'}
+              </Text>
             </View>
-            <Ionicons name="chevron-forward" size={18} color={C.muted} />
+            <View style={styles.fcRight}>
+              <Text style={[styles.fcAmt, { color: C.orange }]}>
+                {isEmpty ? '$0.00' : '$5.33'}
+              </Text>
+              <Text style={styles.fcDetail}>{isEmpty ? 'all clear' : 'send reminder'}</Text>
+            </View>
           </Pressable>
         </View>
 
