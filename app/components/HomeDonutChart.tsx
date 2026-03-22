@@ -8,12 +8,12 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
-/** Outer box; ring geometry scales with this. */
-export const HOME_DONUT_SIZE = 156;
+/** Outer box; hero chart + legend row uses this width (flexShrink:0 on wrap). */
+export const HOME_DONUT_SIZE = 180;
 const SIZE = HOME_DONUT_SIZE;
 const CX = SIZE / 2;
 const CY = SIZE / 2;
-const OUTER_R = 67;
+const OUTER_R = 77;
 /** Inner hole vs outer ring (larger = more padding between center text and the arc). */
 const CUTOUT_RATIO = 0.82;
 const INNER_R = OUTER_R * CUTOUT_RATIO;
@@ -22,10 +22,10 @@ const STROKE_W = OUTER_R - INNER_R;
 const SPACING_PX = 3;
 const GAP_RAD = SPACING_PX / R_MID;
 
-const RED = '#FF2A4A';
-/** Deep jade — saturated but darker than a neon mint. */
-const GREEN = '#00A868';
-const AMBER = '#FFBF14';
+/** Match hero legend segment dots. */
+const RED = '#E24B4A';
+const GREEN = '#1D9E75';
+const AMBER = '#EF9F27';
 
 function arcPath(cx: number, cy: number, r: number, a0: number, a1: number): string {
   const x0 = cx + r * Math.cos(a0);
@@ -102,7 +102,7 @@ export function HomeDonutChart({
 
   const net = owedToYou - youOwe;
   const netColor =
-    net > 0.005 ? '#3EFFC4' : net < -0.005 ? '#FF5A6E' : '#ffffff';
+    net > 0.005 ? '#86efac' : net < -0.005 ? '#ff8080' : '#ffffff';
 
   return (
     <View style={styles.wrap} accessibilityRole="image" accessibilityLabel={`Net balance ${formatNet(net)} this month`}>
@@ -123,7 +123,7 @@ export function HomeDonutChart({
       </Animated.View>
       <View style={styles.center} pointerEvents="none">
         {loading ? (
-          <ActivityIndicator color="rgba(255,255,255,0.7)" size="small" />
+          <ActivityIndicator color="rgba(255,255,255,0.7)" size="large" />
         ) : (
           <>
             <Text style={styles.dcLabel}>net balance</Text>
@@ -150,21 +150,21 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
   },
   dcLabel: {
-    fontSize: 10,
+    fontSize: 11,
     color: 'rgba(255,255,255,0.45)',
-    marginBottom: 1,
+    marginBottom: 2,
   },
   dcAmount: {
-    fontSize: 23,
+    fontSize: 26,
     fontWeight: '700',
-    letterSpacing: -0.8,
-    lineHeight: 28,
+    letterSpacing: -0.9,
+    lineHeight: 30,
   },
   dcSub: {
-    fontSize: 10,
+    fontSize: 11,
     color: 'rgba(255,255,255,0.35)',
     marginTop: 2,
   },
