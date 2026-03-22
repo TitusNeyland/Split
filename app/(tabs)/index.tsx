@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -10,9 +10,15 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
-import Svg, { Circle, Defs, LinearGradient as SvgLinearGradient, Path, Stop } from 'react-native-svg';
+import { onAuthStateChanged, type User } from 'firebase/auth';
 import { spacing } from '../../constants/theme';
 import { getFriendAvatarColors } from '../../lib/friendAvatar';
+import { getFirebaseAuth } from '../../lib/firebase';
+import {
+  subscribeHomeFinancialPosition,
+  type HomeFinancialPosition,
+} from '../../lib/homeFinancialPositionFirestore';
+import { HomeDonutChart, HOME_DONUT_SIZE } from '../components/HomeDonutChart';
 import { ServiceIcon } from '../components/ServiceIcon';
 
 /** Toggle to `'empty'` to preview the new-user home (zeros + setup CTAs). */
@@ -31,66 +37,15 @@ const C = {
   rowDivider: '#F5F3EE',
 };
 
-const SPARKLINE_DATA = [18, 22, 19, 28, 24, 20, 26, 30, 25, 22, 28, 32, 26, 30, 35, 47];
-
 function dateKey(d: Date) {
   return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
 }
 
-function Sparkline({
-  width,
-  height = 64,
-  data,
-}: {
-  width: number;
-  height?: number;
-  data: number[];
-}) {
-  const minY = 10;
-  const maxY = 60;
-  const padT = 6;
-  const padB = 10;
-  /** Keeps stroke + end dot inside the SVG (circle r=6 + stroke). */
-  const padH = 10;
-  const n = data.length;
-  const innerW = width - 2 * padH;
-  if (width <= 0 || innerW < 8 || n < 2) return <View style={{ height }} />;
-
-  const xAt = (i: number) => padH + (i / (n - 1)) * innerW;
-  const yAt = (v: number) =>
-    padT + (1 - (v - minY) / (maxY - minY)) * (height - padT - padB);
-
-  let lineD = '';
-  data.forEach((v, i) => {
-    const x = xAt(i);
-    const y = yAt(v);
-    lineD += i === 0 ? `M ${x} ${y}` : ` L ${x} ${y}`;
-  });
-  const yBottom = height;
-  const fillD = `${lineD} L ${xAt(n - 1)} ${yBottom} L ${xAt(0)} ${yBottom} Z`;
-  const lx = xAt(n - 1);
-  const ly = yAt(data[n - 1]!);
-
-  return (
-    <Svg width={width} height={height}>
-      <Defs>
-        <SvgLinearGradient id="sparkFill" x1="0" y1="0" x2="0" y2="1">
-          <Stop offset="0" stopColor="#ffffff" stopOpacity={0.14} />
-          <Stop offset="1" stopColor="#ffffff" stopOpacity={0.02} />
-        </SvgLinearGradient>
-      </Defs>
-      <Path d={fillD} fill="url(#sparkFill)" />
-      <Path d={lineD} fill="none" stroke="#ffffff" strokeWidth={2} />
-      <Circle
-        cx={lx}
-        cy={ly}
-        r={6}
-        fill="#ffffff"
-        stroke="rgba(255,255,255,0.35)"
-        strokeWidth={3}
-      />
-    </Svg>
-  );
+function initialHomeFinancialPosition(): HomeFinancialPosition {
+  if (HOME_PREVIEW === 'empty') {
+    return { youOwe: 0, owedToYou: 0, overdue: 0, loading: false };
+  }
+  return { youOwe: 12, owedToYou: 47.5, overdue: 5.33, loading: false };
 }
 
 const quickActions = [
@@ -220,14 +175,37 @@ const recentActivityFilled: HomeRecentActivityItem[] = [
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
-  const [chartWidth, setChartWidth] = useState(0);
+  const [user, setUser] = useState<User | null>(null);
+  const [position, setPosition] = useState<HomeFinancialPosition>(initialHomeFinancialPosition);
   const isEmpty = HOME_PREVIEW === 'empty';
 
-  const owedThisMonth = isEmpty ? 0 : 47.5;
   const notifCount = isEmpty ? 0 : 3;
   const setupStep = isEmpty ? 0 : 2;
   const setupTotal = 7;
   const setupPct = isEmpty ? 0 : (setupStep / setupTotal) * 100;
+
+  useEffect(() => {
+    const auth = getFirebaseAuth();
+    if (!auth) {
+      setUser(null);
+      return;
+    }
+    return onAuthStateChanged(auth, setUser);
+  }, []);
+
+  useEffect(() => {
+    const uid = user?.uid;
+    if (!uid) {
+      if (HOME_PREVIEW === 'filled') {
+        setPosition({ youOwe: 12, owedToYou: 47.5, overdue: 5.33, loading: false });
+      } else {
+        setPosition({ youOwe: 0, owedToYou: 0, overdue: 0, loading: false });
+      }
+      return;
+    }
+    setPosition((prev) => ({ ...prev, loading: true }));
+    return subscribeHomeFinancialPosition(uid, setPosition);
+  }, [user?.uid]);
 
   const calendarDays = useMemo(() => {
     const now = new Date();
@@ -312,37 +290,27 @@ export default function HomeScreen() {
             </Pressable>
           </View>
 
-          <View style={styles.heroHeader}>
-            <View style={styles.heroAmountCol}>
-              <Text style={styles.heroLabel}>You&apos;re owed this month</Text>
-              <Text style={styles.heroAmount}>
-                {isEmpty ? '$0.00' : `$${owedThisMonth.toFixed(2)}`}
-              </Text>
+          <View style={styles.heroMainRow}>
+            <HomeDonutChart
+              youOwe={isEmpty ? 0 : position.youOwe}
+              owedToYou={isEmpty ? 0 : position.owedToYou}
+              overdue={isEmpty ? 0 : position.overdue}
+              loading={!isEmpty && Boolean(user?.uid) && position.loading}
+            />
+            <View style={styles.heroSide}>
+              {!isEmpty ? (
+                <View style={styles.heroBadge}>
+                  <Ionicons name="checkmark" size={14} color="#4ade80" />
+                  <Text style={styles.heroBadgeTxt}>
+                    $12 more{'\n'}than last month
+                  </Text>
+                </View>
+              ) : (
+                <View style={styles.heroBadge}>
+                  <Text style={styles.heroBadgeTxt}>Add friends & subs{'\n'}to see balances</Text>
+                </View>
+              )}
             </View>
-            {!isEmpty ? (
-              <View style={styles.heroBadge}>
-                <Ionicons name="checkmark" size={14} color="#4ade80" />
-                <Text style={styles.heroBadgeTxt}>
-                  $12 more{'\n'}than last month
-                </Text>
-              </View>
-            ) : (
-              <View style={styles.heroBadge}>
-                <Text style={styles.heroBadgeTxt}>Add friends & subs{'\n'}to see balances</Text>
-              </View>
-            )}
-          </View>
-
-          <View
-            style={styles.chartWrap}
-            onLayout={(e) => {
-              const w = Math.round(e.nativeEvent.layout.width);
-              if (w > 0) setChartWidth((prev) => (prev === w ? prev : w));
-            }}
-          >
-            {!isEmpty && chartWidth > 0 ? (
-              <Sparkline width={chartWidth} height={64} data={SPARKLINE_DATA} />
-            ) : null}
           </View>
         </LinearGradient>
 
@@ -660,26 +628,17 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#fff',
   },
-  heroHeader: {
+  heroMainRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    marginBottom: 4,
+    alignItems: 'center',
+    marginTop: 4,
+    gap: 12,
   },
-  heroAmountCol: {
-    flexShrink: 1,
-  },
-  heroLabel: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.6)',
-    marginBottom: 5,
-  },
-  heroAmount: {
-    fontSize: 44,
-    fontWeight: '500',
-    color: '#fff',
-    letterSpacing: -1,
-    lineHeight: 48,
+  heroSide: {
+    flex: 1,
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    minHeight: HOME_DONUT_SIZE,
   },
   heroBadge: {
     flexDirection: 'row',
@@ -697,12 +656,6 @@ const styles = StyleSheet.create({
     lineHeight: 17,
     textAlign: 'right',
     flexShrink: 1,
-  },
-  chartWrap: {
-    height: 64,
-    marginTop: 8,
-    width: '100%',
-    alignSelf: 'stretch',
   },
   floatCard: {
     backgroundColor: '#fff',
