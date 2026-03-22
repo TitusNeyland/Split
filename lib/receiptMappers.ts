@@ -5,7 +5,7 @@ import type {
   ReceiptAssignSession,
 } from './receiptTypes';
 
-export const ASSIGNEE_CYCLE = ['Jordan', 'Alex', 'Sam'] as const;
+export const ASSIGNEE_CYCLE = ['Titus', 'Alex', 'Sam'] as const;
 
 function newLineId() {
   return `L${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;

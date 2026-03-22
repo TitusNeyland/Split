@@ -21,6 +21,8 @@ import ProfilePaymentMethodsCard from '../components/ProfilePaymentMethodsCard';
 import ProfileNotificationSettingsCard from '../components/ProfileNotificationSettingsCard';
 import ProfileSplitPreferencesCard from '../components/ProfileSplitPreferencesCard';
 import ProfilePrivacyCard from '../components/ProfilePrivacyCard';
+import ProfileSecurityCard from '../components/ProfileSecurityCard';
+import { ENABLE_PROFILE_SECURITY } from '../../constants/features';
 import { isFirebaseConfigured } from '../../lib/firebase';
 import {
   formatMemberSince,
@@ -39,8 +41,8 @@ const HERO_GRADIENT = {
 };
 
 const DEMO = {
-  displayName: 'Jordan Davis',
-  email: 'jordan@email.com',
+  displayName: 'Titus Neyland',
+  email: 'titus@email.com',
   memberLabel: 'Member since March 2026',
 };
 
@@ -275,6 +277,13 @@ export default function ProfileScreen() {
           />
         </View>
 
+        {ENABLE_PROFILE_SECURITY ? (
+          <View style={styles.securitySection}>
+            <Text style={styles.sectionHeading}>SECURITY</Text>
+            <ProfileSecurityCard user={user} />
+          </View>
+        ) : null}
+
         <View style={styles.bodyPad} />
       </ScrollView>
     </View>
@@ -436,6 +445,10 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   privacySection: {
+    paddingHorizontal: 20,
+    marginBottom: 8,
+  },
+  securitySection: {
     paddingHorizontal: 20,
     marginBottom: 8,
   },

@@ -5,7 +5,7 @@ const STORAGE_KEY = '@split/recent_receipts_v1';
 const MAX_ITEMS = 40;
 
 /** Current user for "your share" (replace with auth). */
-export const RECEIPT_CURRENT_USER = 'Jordan';
+export const RECEIPT_CURRENT_USER = 'Titus';
 
 export function newReceiptId() {
   return `rcpt_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 9)}`;

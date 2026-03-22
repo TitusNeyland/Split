@@ -311,7 +311,7 @@ export default function HomeScreen() {
               <Ionicons name="person-outline" size={22} color="rgba(255,255,255,0.65)" />
             </Pressable>
             <Text style={styles.greeting} numberOfLines={1}>
-              Good morning, Jordan
+              Good morning, Titus
             </Text>
             <Pressable hitSlop={8} accessibilityRole="button" accessibilityLabel="Notifications">
               <View>

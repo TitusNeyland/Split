@@ -1,15 +1,23 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, StyleSheet, Animated } from 'react-native';
+import { View, StyleSheet, Animated, Platform } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Stack } from 'expo-router';
 import { StripeProvider } from '@stripe/stripe-react-native';
+import { FirebaseRecaptchaVerifierModal } from 'expo-firebase-recaptcha';
 import SplashScreen from './components/SplashScreen';
+import BiometricAppLock from './components/BiometricAppLock';
+import { SecurityPrefsProvider } from './contexts/SecurityPrefsContext';
+import { FirebaseRecaptchaProvider } from './contexts/FirebaseRecaptchaContext';
+import { getFirebaseWebOptions, isFirebaseConfigured } from '../lib/firebase';
+import { ENABLE_PROFILE_SECURITY } from '../constants/features';
 
 const stripePublishableKey = process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY?.trim() ?? '';
 
 export default function RootLayout() {
+  const recaptchaRef = useRef<React.ElementRef<typeof FirebaseRecaptchaVerifierModal>>(null);
   const [showSplash, setShowSplash] = useState(true);
   const opacity = useRef(new Animated.Value(1)).current;
+  const firebaseOpts = ENABLE_PROFILE_SECURITY ? getFirebaseWebOptions() : null;
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -25,7 +33,7 @@ export default function RootLayout() {
     return () => clearTimeout(timer);
   }, [opacity]);
 
-  const tree = (
+  const stackAndSplash = (
     <GestureHandlerRootView style={styles.root}>
       <View style={styles.root}>
         <Stack screenOptions={{ headerShown: false }}>
@@ -58,6 +66,24 @@ export default function RootLayout() {
     </GestureHandlerRootView>
   );
 
+  const withSecurity = ENABLE_PROFILE_SECURITY ? (
+    <SecurityPrefsProvider>
+      {isFirebaseConfigured() && firebaseOpts && Platform.OS !== 'web' ? (
+        <FirebaseRecaptchaVerifierModal
+          ref={recaptchaRef}
+          firebaseConfig={firebaseOpts}
+          attemptInvisibleVerification
+          title="Verify phone"
+        />
+      ) : null}
+      <FirebaseRecaptchaProvider verifierRef={recaptchaRef}>
+        <BiometricAppLock>{stackAndSplash}</BiometricAppLock>
+      </FirebaseRecaptchaProvider>
+    </SecurityPrefsProvider>
+  ) : (
+    stackAndSplash
+  );
+
   if (stripePublishableKey) {
     return (
       <StripeProvider
@@ -65,12 +91,12 @@ export default function RootLayout() {
         merchantIdentifier="merchant.com.split"
         urlScheme="split"
       >
-        {tree}
+        {withSecurity}
       </StripeProvider>
     );
   }
 
-  return tree;
+  return withSecurity;
 }
 
 const styles = StyleSheet.create({

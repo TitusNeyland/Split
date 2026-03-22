@@ -48,6 +48,13 @@
           "merchantIdentifier": "merchant.com.split",
           "enableGooglePay": false
         }
+      ],
+      "expo-secure-store",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Allow Split to use Face ID to unlock the app."
+        }
       ]
     ],
     "extra": {

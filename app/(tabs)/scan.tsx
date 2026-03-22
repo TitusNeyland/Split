@@ -96,7 +96,7 @@ const FAKE_PREVIEW_RECEIPTS: StoredReceiptRecord[] = (() => {
     splitStatus: 'confirmed',
     readOnly: true,
     lines: [
-      previewLine('fp_og_1', 'Chicken Alfredo', 14.99, 'Jordan'),
+      previewLine('fp_og_1', 'Chicken Alfredo', 14.99, 'Titus'),
       previewLine('fp_og_2', 'Fettuccine Alfredo', 12.99, 'Alex'),
       previewLine('fp_og_3', 'Caesar Salad', 8.99, 'Sam'),
       previewLine('fp_og_4', 'Breadsticks', 4.99, 'Split'),
@@ -112,7 +112,7 @@ const FAKE_PREVIEW_RECEIPTS: StoredReceiptRecord[] = (() => {
     splitStatus: 'pending',
     readOnly: false,
     lines: [
-      previewLine('fp_ch_1', 'Burrito bowl', 12.4, 'Jordan'),
+      previewLine('fp_ch_1', 'Burrito bowl', 12.4, 'Titus'),
       previewLine('fp_ch_2', 'Burrito + drink', 12.4, 'Alex'),
     ],
   };
@@ -126,7 +126,7 @@ const FAKE_PREVIEW_RECEIPTS: StoredReceiptRecord[] = (() => {
     readOnly: true,
     lines: [
       previewLine('fp_tj_1', 'Groceries (split)', 45, 'Split'),
-      previewLine('fp_tj_2', 'Your items', 21.58, 'Jordan'),
+      previewLine('fp_tj_2', 'Your items', 21.58, 'Titus'),
       previewLine('fp_tj_3', 'Tax', 19.76, 'Split', 'tax'),
     ],
   };
