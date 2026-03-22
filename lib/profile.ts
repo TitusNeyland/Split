@@ -38,6 +38,12 @@ export type UserProfileDoc = {
     { toMillis?: () => number; toDate?: () => Date }
   > | null;
   createdAt?: { toDate?: () => Date } | null;
+  /**
+   * Precomputed lifetime savings from splitting (USD). For each subscription where the user is
+   * not the owner: sum of (full plan cost − their share) × paid billing cycles. Update via Cloud
+   * Function / backend when payments are applied.
+   */
+  lifetime_saved?: number | null;
 };
 
 export function initialsFromName(name: string | null | undefined): string {
