@@ -7,6 +7,7 @@ import {
   Pressable,
   useWindowDimensions,
 } from 'react-native';
+import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
@@ -44,6 +45,7 @@ function formatBadgeCount(n: number): string {
 }
 
 export default function SubscriptionsScreen() {
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const [user, setUser] = useState<User | null>(null);
@@ -97,6 +99,7 @@ export default function SubscriptionsScreen() {
               style={styles.addBtn}
               accessibilityRole="button"
               accessibilityLabel="Add subscription"
+              onPress={() => router.push('/add-subscription')}
             >
               <Text style={styles.addBtnTxt}>+ Add</Text>
             </Pressable>
