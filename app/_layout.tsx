@@ -9,6 +9,7 @@ import AuthSessionSync from './components/AuthSessionSync';
 import BiometricAppLock from './components/BiometricAppLock';
 import { SecurityPrefsProvider } from './contexts/SecurityPrefsContext';
 import { FirebaseRecaptchaProvider } from './contexts/FirebaseRecaptchaContext';
+import { LocalProfileAvatarProvider } from './contexts/LocalProfileAvatarContext';
 import { getFirebaseWebOptions, isFirebaseConfigured } from '../lib/firebase';
 import { ENABLE_PROFILE_SECURITY } from '../constants/features';
 
@@ -36,6 +37,8 @@ export default function RootLayout() {
 
   const stackAndSplash = (
     <GestureHandlerRootView style={styles.root}>
+      {/* LOCAL_PROFILE_AVATAR_OFFLINE — remove LocalProfileAvatarProvider when Firebase-only avatars (see lib/localProfileAvatarStorage.ts). */}
+      <LocalProfileAvatarProvider>
       <View style={styles.root}>
         <AuthSessionSync />
         <Stack screenOptions={{ headerShown: false }}>
@@ -73,6 +76,7 @@ export default function RootLayout() {
           </Animated.View>
         )}
       </View>
+      </LocalProfileAvatarProvider>
     </GestureHandlerRootView>
   );
 

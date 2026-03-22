@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { ServiceIcon } from './ServiceIcon';
 
@@ -23,6 +23,8 @@ export type SubscriptionCardMember = {
   initials: string;
   backgroundColor: string;
   color: string;
+  /** Profile image URL (e.g. current user). */
+  avatarUrl?: string | null;
 };
 
 export type SubscriptionCardProps = {
@@ -74,11 +76,20 @@ function MemberPip({
   initials,
   backgroundColor,
   color,
+  avatarUrl,
 }: {
   initials: string;
   backgroundColor: string;
   color: string;
+  avatarUrl?: string | null;
 }) {
+  if (avatarUrl) {
+    return (
+      <View style={[styles.pip, styles.pipPhoto]}>
+        <Image source={{ uri: avatarUrl }} style={styles.pipImg} accessibilityLabel="Member photo" />
+      </View>
+    );
+  }
   return (
     <View style={[styles.pip, { backgroundColor }]}>
       <Text style={[styles.pipTxt, { color }]}>{initials}</Text>
@@ -187,6 +198,7 @@ export function SubscriptionCard({
                 initials={m.initials}
                 backgroundColor={m.backgroundColor}
                 color={m.color}
+                avatarUrl={m.avatarUrl}
               />
             ))}
           </View>
@@ -365,6 +377,15 @@ const styles = StyleSheet.create({
     marginRight: -6,
     borderWidth: 2,
     borderColor: '#fff',
+  },
+  pipPhoto: {
+    backgroundColor: '#E8E6E1',
+    overflow: 'hidden',
+  },
+  pipImg: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
   },
   pipTxt: {
     fontSize: 11,

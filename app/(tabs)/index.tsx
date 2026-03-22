@@ -7,6 +7,7 @@ import {
   Pressable,
   Share,
   Alert,
+  Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -16,7 +17,10 @@ import { useRouter } from 'expo-router';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { spacing } from '../../constants/theme';
 import { getFriendAvatarColors } from '../../lib/friendAvatar';
-import { getFirebaseAuth } from '../../lib/firebase';
+import { getFirebaseAuth, isFirebaseConfigured } from '../../lib/firebase';
+import { initialsFromName } from '../../lib/profile';
+import { useProfileAvatarUrl } from '../hooks/useProfileAvatarUrl';
+import { UserAvatarCircle } from '../components/UserAvatarCircle';
 import {
   subscribeHomeFinancialPosition,
   type HomeFinancialPosition,
@@ -153,6 +157,8 @@ type HomeRecentActivityItem = {
   /** Received / paid → green; reminder / pending tone → amber. */
   amountColor: string;
   serviceMark?: string;
+  /** Current user avatar for “You …” rows. */
+  viewerAvatarUrl?: string | null;
 };
 
 const recentActivityFilled: HomeRecentActivityItem[] = [
@@ -187,6 +193,8 @@ const recentActivityFilled: HomeRecentActivityItem[] = [
 export default function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { avatarUrl: homeAvatarUrl, displayName: homeDisplayName, profileLoading: homeProfileLoading } =
+    useProfileAvatarUrl();
   const [user, setUser] = useState<User | null>(null);
   const [reminderPickerOpen, setReminderPickerOpen] = useState(false);
   const [position, setPosition] = useState<HomeFinancialPosition>(initialHomeFinancialPosition);
@@ -257,7 +265,35 @@ export default function HomeScreen() {
 
   const upcomingSplits = isEmpty ? [] : upcomingSplitsFilled;
   const friendBalances = isEmpty ? [] : friendBalancesFilled;
-  const recentActivity = isEmpty ? [] : recentActivityFilled.slice(0, 3);
+  const recentActivity = useMemo((): HomeRecentActivityItem[] => {
+    if (isEmpty) return [];
+    const base = recentActivityFilled.slice(0, 3);
+    if (!isFirebaseConfigured() || !homeAvatarUrl) return base;
+    const youRow: HomeRecentActivityItem = {
+      id: 'you-netflix',
+      kind: 'payment',
+      title: 'You paid Netflix',
+      timestamp: 'Just now',
+      amount: '$12.00',
+      amountColor: C.red,
+      viewerAvatarUrl: homeAvatarUrl,
+    };
+    return [youRow, ...base.slice(0, 2)];
+  }, [isEmpty, homeAvatarUrl]);
+
+  const greetingName = useMemo(() => {
+    if (isEmpty) return 'there';
+    if (isFirebaseConfigured() && homeDisplayName) {
+      const first = homeDisplayName.split(/\s+/)[0];
+      return first && first.length > 0 ? first : 'there';
+    }
+    return 'Titus';
+  }, [isEmpty, homeDisplayName]);
+
+  const homeHeaderInitials = useMemo(() => {
+    const n = homeDisplayName ?? user?.displayName ?? 'Me';
+    return initialsFromName(n);
+  }, [homeDisplayName, user?.displayName]);
 
   const heroLegendCopy = useMemo(() => {
     if (isEmpty) {
@@ -352,11 +388,27 @@ export default function HomeScreen() {
           style={[styles.hero, { paddingTop: Math.max(insets.top, 12) + 8 }]}
         >
           <View style={styles.sbar}>
-            <Pressable hitSlop={8} accessibilityRole="button" accessibilityLabel="Profile">
-              <Ionicons name="person-outline" size={22} color="rgba(255,255,255,0.65)" />
+            <Pressable
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Profile"
+              onPress={() => router.push('/profile')}
+            >
+              {isFirebaseConfigured() && user ? (
+                <UserAvatarCircle
+                  size={28}
+                  initials={homeHeaderInitials}
+                  imageUrl={homeAvatarUrl}
+                  loading={homeProfileLoading}
+                  borderWidth={2}
+                  borderColor="rgba(255,255,255,0.35)"
+                />
+              ) : (
+                <Ionicons name="person-outline" size={22} color="rgba(255,255,255,0.65)" />
+              )}
             </Pressable>
             <Text style={styles.greeting} numberOfLines={1}>
-              Good morning, Titus
+              {`Good morning, ${greetingName}`}
             </Text>
             <Pressable hitSlop={8} accessibilityRole="button" accessibilityLabel="Notifications">
               <View>
@@ -650,7 +702,15 @@ export default function HomeScreen() {
                   key={item.id}
                   style={[styles.actRow, i === recentActivity.length - 1 && styles.rowLast]}
                 >
-                  {item.kind === 'payment' && item.serviceMark ? (
+                  {item.viewerAvatarUrl ? (
+                    <View style={styles.actAvatarWrap}>
+                      <Image
+                        source={{ uri: item.viewerAvatarUrl }}
+                        style={styles.actAvatarImg}
+                        accessibilityLabel="You"
+                      />
+                    </View>
+                  ) : item.kind === 'payment' && item.serviceMark ? (
                     <View style={styles.actIcoWrap}>
                       <ServiceIcon serviceName={item.serviceMark} size={26} />
                     </View>
@@ -1051,6 +1111,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
+  },
+  actAvatarWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    overflow: 'hidden',
+    flexShrink: 0,
+  },
+  actAvatarImg: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
   },
   actReminderCircle: {
     backgroundColor: '#FAEEDA',

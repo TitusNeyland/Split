@@ -1,13 +1,12 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   Pressable,
-  Image,
-  ActivityIndicator,
   Alert,
+  Animated,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -15,6 +14,9 @@ import { StatusBar } from 'expo-status-bar';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { ProfilePhotoActionSheet } from '../components/ProfilePhotoActionSheet';
+import { ProfileAvatarCropModal } from '../components/ProfileAvatarCropModal';
+import { UserAvatarCircle } from '../components/UserAvatarCircle';
 import ProfileStatsCard from '../components/ProfileStatsCard';
 import ProfileFriendsBalancesCard from '../components/ProfileFriendsBalancesCard';
 import ProfilePaymentMethodsCard from '../components/ProfilePaymentMethodsCard';
@@ -31,8 +33,11 @@ import {
   initialsFromName,
   subscribeAuthAndProfile,
   uploadProfileAvatar,
+  removeProfileAvatar,
   type UserProfileDoc,
 } from '../../lib/profile';
+// LOCAL_PROFILE_AVATAR_OFFLINE — `persistLocalAvatar` / `clearLocalAvatar` / `localAvatarHydrated` go away with local-only avatar code (see lib/localProfileAvatarStorage.ts).
+import { useProfileAvatarUrl } from '../hooks/useProfileAvatarUrl';
 import type { User } from 'firebase/auth';
 
 const HERO_GRADIENT = {
@@ -50,6 +55,11 @@ const DEMO = {
 
 const AVATAR_SIZE = 72;
 const AVATAR_BORDER = 2;
+
+const CAMERA_DENIED_MSG =
+  'Camera access is needed to take a photo. Enable it in Settings > Split > Camera.';
+const PHOTOS_DENIED_MSG =
+  'Photo library access is needed. Enable it in Settings > Split > Photos.';
 
 function memberDateFrom(user: User | null, profile: UserProfileDoc | null): Date | null {
   const ca = profile?.createdAt;
@@ -69,10 +79,21 @@ function memberDateFrom(user: User | null, profile: UserProfileDoc | null): Date
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
+  const {
+    avatarUrl,
+    persistLocalAvatar,
+    clearLocalAvatar,
+    localAvatarHydrated,
+  } = useProfileAvatarUrl();
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfileDoc | null>(null);
   const [profileLoading, setProfileLoading] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [photoSheetOpen, setPhotoSheetOpen] = useState(false);
+  const [cropUri, setCropUri] = useState<string | null>(null);
+  const [cropVisible, setCropVisible] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+  const toastOpacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (!isFirebaseConfigured()) return;
@@ -95,8 +116,6 @@ export default function ProfileScreen() {
     return profile?.email ?? user?.email ?? '';
   }, [profile?.email, user?.email]);
 
-  const avatarUrl = isFirebaseConfigured() ? profile?.avatarUrl ?? null : null;
-
   const memberLabel = useMemo(() => {
     if (!isFirebaseConfigured()) return DEMO.memberLabel;
     if (profileLoading && user) return '…';
@@ -106,40 +125,117 @@ export default function ProfileScreen() {
 
   const initials = useMemo(() => initialsFromName(displayName), [displayName]);
 
-  const pickAvatar = useCallback(async () => {
-    if (!isFirebaseConfigured()) {
-      Alert.alert(
-        'Firebase not set up',
-        'Add your web app keys as EXPO_PUBLIC_FIREBASE_* in .env (see .env.example), then restart Expo.'
-      );
+  const showToast = useCallback(
+    (message: string) => {
+      setToast(message);
+      toastOpacity.setValue(0);
+      Animated.timing(toastOpacity, {
+        toValue: 1,
+        duration: 220,
+        useNativeDriver: true,
+      }).start();
+    },
+    [toastOpacity]
+  );
+
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => {
+      Animated.timing(toastOpacity, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }).start(() => setToast(null));
+    }, 2500);
+    return () => clearTimeout(t);
+  }, [toast, toastOpacity]);
+
+  const openPhotoOptions = useCallback(() => {
+    setPhotoSheetOpen(true);
+  }, []);
+
+  const launchTakePhoto = useCallback(async () => {
+    const cam = await ImagePicker.requestCameraPermissionsAsync();
+    if (!cam.granted) {
+      Alert.alert('Camera', CAMERA_DENIED_MSG);
       return;
     }
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ['images'],
+      quality: 1,
+    });
+    if (result.canceled || !result.assets[0]?.uri) return;
+    setCropUri(result.assets[0].uri);
+    setCropVisible(true);
+  }, []);
 
+  const launchPhotoLibrary = useCallback(async () => {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
-      Alert.alert('Photos', 'Allow photo library access to set your profile picture.');
+      Alert.alert('Photos', PHOTOS_DENIED_MSG);
       return;
     }
-
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.85,
+      allowsEditing: false,
+      quality: 1,
     });
-
     if (result.canceled || !result.assets[0]?.uri) return;
-
-    setUploadingAvatar(true);
-    try {
-      await uploadProfileAvatar(result.assets[0].uri);
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Upload failed.';
-      Alert.alert('Could not update photo', msg);
-    } finally {
-      setUploadingAvatar(false);
-    }
+    setCropUri(result.assets[0].uri);
+    setCropVisible(true);
   }, []);
+
+  const confirmRemovePhoto = useCallback(() => {
+    Alert.alert(
+      'Remove profile photo?',
+      'Your initials will be shown instead.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: () => {
+            void (async () => {
+              try {
+                // LOCAL_PROFILE_AVATAR_OFFLINE — keep only `removeProfileAvatar()` after dropping local storage.
+                if (isFirebaseConfigured()) {
+                  await removeProfileAvatar();
+                } else {
+                  await clearLocalAvatar();
+                }
+                showToast('Profile photo removed');
+              } catch (e) {
+                const msg = e instanceof Error ? e.message : 'Could not remove photo.';
+                Alert.alert('Remove photo', msg);
+              }
+            })();
+          },
+        },
+      ]
+    );
+  }, [clearLocalAvatar, showToast]);
+
+  const onCroppedAvatar = useCallback(
+    async (processedUri: string) => {
+      setUploadingAvatar(true);
+      try {
+        // LOCAL_PROFILE_AVATAR_OFFLINE — keep only `uploadProfileAvatar` path when Firebase is required.
+        if (isFirebaseConfigured()) {
+          await uploadProfileAvatar(processedUri);
+          showToast('Profile photo updated');
+        } else {
+          await persistLocalAvatar(processedUri);
+          showToast('Profile photo saved on this device');
+        }
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : 'Could not save photo.';
+        Alert.alert('Could not update photo', msg);
+      } finally {
+        setUploadingAvatar(false);
+      }
+    },
+    [persistLocalAvatar, showToast]
+  );
 
   const openEdit = useCallback(() => {
     router.push('/profile/edit');
@@ -149,6 +245,11 @@ export default function ProfileScreen() {
     router.push('/profile/upgrade');
   }, []);
 
+  // LOCAL_PROFILE_AVATAR_OFFLINE — use only `Boolean(user && profileLoading)` after removing local avatar hydration.
+  const avatarLoading = isFirebaseConfigured()
+    ? Boolean(user && profileLoading)
+    : !localAvatarHydrated;
+
   return (
     <View style={styles.root}>
       <StatusBar style="light" />
@@ -156,6 +257,7 @@ export default function ProfileScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         bounces
+        style={uploadingAvatar ? styles.scrollDimmed : undefined}
       >
         <View style={styles.heroBlock}>
         <LinearGradient
@@ -166,11 +268,16 @@ export default function ProfileScreen() {
             <Text style={styles.pageTitle}>Profile</Text>
             <Pressable
               onPress={openEdit}
-              style={({ pressed }) => [styles.editPill, pressed && styles.editPillPressed]}
+              disabled={uploadingAvatar}
+              style={({ pressed }) => [
+                styles.editPill,
+                pressed && styles.editPillPressed,
+                uploadingAvatar && styles.editPillDisabled,
+              ]}
               accessibilityRole="button"
               accessibilityLabel="Edit profile"
             >
-              <Text style={styles.editPillText}>Edit</Text>
+              <Text style={[styles.editPillText, uploadingAvatar && styles.editPillTextDisabled]}>Edit</Text>
             </Pressable>
           </View>
 
@@ -179,54 +286,54 @@ export default function ProfileScreen() {
               <View
                 style={[
                   styles.avatarRing,
-                  { width: AVATAR_SIZE + AVATAR_BORDER * 2, height: AVATAR_SIZE + AVATAR_BORDER * 2, borderRadius: (AVATAR_SIZE + AVATAR_BORDER * 2) / 2 },
+                  {
+                    width: AVATAR_SIZE + AVATAR_BORDER * 2,
+                    height: AVATAR_SIZE + AVATAR_BORDER * 2,
+                    borderRadius: (AVATAR_SIZE + AVATAR_BORDER * 2) / 2,
+                  },
                 ]}
               >
-                {avatarUrl ? (
-                  <Image
-                    source={{ uri: avatarUrl }}
-                    style={{ width: AVATAR_SIZE, height: AVATAR_SIZE, borderRadius: AVATAR_SIZE / 2 }}
-                    accessibilityLabel="Profile photo"
-                  />
-                ) : (
-                  <LinearGradient
-                    colors={['#8B5CF6', '#5B21B6', '#4C1D95']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.avatarGradient}
-                  >
-                    <Text style={styles.avatarInitials}>{initials}</Text>
-                  </LinearGradient>
-                )}
+                <UserAvatarCircle
+                  size={AVATAR_SIZE}
+                  initials={initials}
+                  imageUrl={avatarUrl}
+                  loading={avatarLoading}
+                  showSpinner={uploadingAvatar}
+                  onPress={openPhotoOptions}
+                  accessibilityLabel="Profile photo — change"
+                />
               </View>
 
               <Pressable
                 style={styles.pencilBtn}
-                onPress={pickAvatar}
+                onPress={openPhotoOptions}
                 disabled={uploadingAvatar}
                 accessibilityRole="button"
                 accessibilityLabel="Change profile photo"
               >
-                {uploadingAvatar ? (
-                  <ActivityIndicator size="small" color="#5B21B6" />
-                ) : (
-                  <Ionicons name="pencil" size={14} color="#5B21B6" />
-                )}
+                <Ionicons name="pencil" size={14} color="#5B21B6" />
               </Pressable>
             </View>
 
             <Text style={styles.name}>{displayName}</Text>
             {email ? <Text style={styles.email}>{email}</Text> : null}
 
-            <Pressable
-              onPress={openUpgrade}
-              style={({ pressed }) => [styles.planPill, pressed && styles.planPillPressed]}
-              accessibilityRole="button"
-              accessibilityLabel="Upgrade plan"
-            >
-              <Ionicons name="star" size={14} color="#fff" style={styles.planStar} />
-              <Text style={styles.planPillText}>Free plan · Upgrade</Text>
-            </Pressable>
+            {uploadingAvatar ? (
+              // LOCAL_PROFILE_AVATAR_OFFLINE — use only “Uploading photo…” after removing local path.
+              <Text style={styles.uploadingLabel}>
+                {isFirebaseConfigured() ? 'Uploading photo…' : 'Saving photo…'}
+              </Text>
+            ) : (
+              <Pressable
+                onPress={openUpgrade}
+                style={({ pressed }) => [styles.planPill, pressed && styles.planPillPressed]}
+                accessibilityRole="button"
+                accessibilityLabel="Upgrade plan"
+              >
+                <Ionicons name="star" size={14} color="#fff" style={styles.planStar} />
+                <Text style={styles.planPillText}>Free plan · Upgrade</Text>
+              </Pressable>
+            )}
 
             <Text style={styles.memberSince}>{memberLabel}</Text>
           </View>
@@ -239,7 +346,7 @@ export default function ProfileScreen() {
 
         <View style={styles.friendsSection}>
           <Text style={styles.sectionHeading}>FRIENDS & GROUPS</Text>
-          <ProfileFriendsBalancesCard userInitials={initials} />
+          <ProfileFriendsBalancesCard userInitials={initials} userAvatarUrl={avatarUrl} />
         </View>
 
         <View style={styles.paymentSection}>
@@ -298,6 +405,34 @@ export default function ProfileScreen() {
 
         <View style={styles.bodyPad} />
       </ScrollView>
+
+      <ProfilePhotoActionSheet
+        visible={photoSheetOpen}
+        onClose={() => setPhotoSheetOpen(false)}
+        hasPhoto={Boolean(avatarUrl)}
+        onTakePhoto={launchTakePhoto}
+        onChooseLibrary={launchPhotoLibrary}
+        onRemovePhoto={confirmRemovePhoto}
+      />
+
+      <ProfileAvatarCropModal
+        visible={cropVisible}
+        imageUri={cropUri}
+        onClose={() => {
+          setCropVisible(false);
+          setCropUri(null);
+        }}
+        onConfirm={onCroppedAvatar}
+      />
+
+      {toast ? (
+        <Animated.View style={[styles.toast, { opacity: toastOpacity }]} pointerEvents="none">
+          {toast.toLowerCase().includes('updated') ? (
+            <Ionicons name="checkmark" size={16} color="#fff" />
+          ) : null}
+          <Text style={styles.toastTxt}>{toast}</Text>
+        </Animated.View>
+      ) : null}
     </View>
   );
 }
@@ -352,6 +487,15 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: 'rgba(255,255,255,0.95)',
   },
+  editPillDisabled: {
+    opacity: 0.4,
+  },
+  editPillTextDisabled: {
+    opacity: 0.95,
+  },
+  scrollDimmed: {
+    opacity: 0.65,
+  },
   heroCol: {
     alignItems: 'center',
     paddingHorizontal: 24,
@@ -371,18 +515,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: 'rgba(0,0,0,0.15)',
   },
-  avatarGradient: {
-    width: AVATAR_SIZE,
-    height: AVATAR_SIZE,
-    borderRadius: AVATAR_SIZE / 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarInitials: {
-    fontSize: 26,
-    fontWeight: '700',
-    color: '#fff',
-    letterSpacing: 0.5,
+  uploadingLabel: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.45)',
+    marginBottom: 12,
   },
   pencilBtn: {
     position: 'absolute',
@@ -478,5 +614,26 @@ const styles = StyleSheet.create({
   bodyPad: {
     minHeight: 24,
     backgroundColor: '#F2F0EB',
+  },
+  toast: {
+    position: 'absolute',
+    bottom: 88,
+    left: 24,
+    right: 24,
+    alignSelf: 'center',
+    maxWidth: 360,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#1D9E75',
+    borderRadius: 20,
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+  },
+  toastTxt: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#fff',
   },
 });
