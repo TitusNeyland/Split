@@ -8,44 +8,69 @@ import {
 import { getFirebaseFirestore } from './firebase';
 
 /**
- * Badge counts for the Subscriptions filter row. Listeners stay active so switching
- * tabs does not show a loading state.
+ * Live data for Subscriptions filter tabs. All listeners start when the screen mounts so
+ * switching tabs never triggers new loads or loading UI.
  *
- * Firestore shape (add composite indexes if the console prompts):
- * - `payments`: `status` == "overdue" AND `owner` == uid — `owner` is the subscription
- *   bill payer (current user). Rename the field here if your schema uses another name.
- * - `subscriptions`: `members` array-contains uid AND `status` == "paused"
+ * Firestore (add composite indexes if prompted):
+ * - `payments`: `status` == "overdue" AND `owner` == uid (subscription bill owner = current user).
+ *   Adjust `PAYMENT_OWNER_FIELD` if your schema differs.
+ * - `subscriptions`: `members` array-contains uid AND `status` (active | paused | archived/cancelled)
  */
 export type SubscriptionTabBadgeCounts = {
   overdue: number;
   paused: number;
 };
 
+export type SubscriptionsTabPrefetchState = SubscriptionTabBadgeCounts & {
+  /** Member subscriptions with status "active". */
+  active: number;
+  /** Member subscriptions with status "archived" (cancelled). */
+  archived: number;
+};
+
 const PAYMENT_OWNER_FIELD = 'owner' as const;
 
-function empty(): SubscriptionTabBadgeCounts {
-  return { overdue: 0, paused: 0 };
+function emptyState(): SubscriptionsTabPrefetchState {
+  return { overdue: 0, paused: 0, active: 0, archived: 0 };
 }
 
-export function subscribeSubscriptionTabBadgeCounts(
+export function subscribeSubscriptionsTabPrefetch(
   uid: string,
-  onUpdate: (counts: SubscriptionTabBadgeCounts) => void
+  onUpdate: (state: SubscriptionsTabPrefetchState) => void
 ): () => void {
   const db = getFirebaseFirestore();
   if (!db) {
-    onUpdate(empty());
+    onUpdate(emptyState());
     return () => {};
   }
 
-  const counts: SubscriptionTabBadgeCounts = { overdue: 0, paused: 0 };
+  const state = emptyState();
   let alive = true;
 
   const emit = () => {
     if (!alive) return;
-    onUpdate({ ...counts });
+    onUpdate({ ...state });
   };
 
   const unsubs: Unsubscribe[] = [];
+
+  unsubs.push(
+    onSnapshot(
+      query(
+        collection(db, 'subscriptions'),
+        where('members', 'array-contains', uid),
+        where('status', '==', 'active')
+      ),
+      (snap) => {
+        state.active = snap.size;
+        emit();
+      },
+      () => {
+        state.active = 0;
+        emit();
+      }
+    )
+  );
 
   unsubs.push(
     onSnapshot(
@@ -55,11 +80,11 @@ export function subscribeSubscriptionTabBadgeCounts(
         where(PAYMENT_OWNER_FIELD, '==', uid)
       ),
       (snap) => {
-        counts.overdue = snap.size;
+        state.overdue = snap.size;
         emit();
       },
       () => {
-        counts.overdue = 0;
+        state.overdue = 0;
         emit();
       }
     )
@@ -73,11 +98,29 @@ export function subscribeSubscriptionTabBadgeCounts(
         where('status', '==', 'paused')
       ),
       (snap) => {
-        counts.paused = snap.size;
+        state.paused = snap.size;
         emit();
       },
       () => {
-        counts.paused = 0;
+        state.paused = 0;
+        emit();
+      }
+    )
+  );
+
+  unsubs.push(
+    onSnapshot(
+      query(
+        collection(db, 'subscriptions'),
+        where('members', 'array-contains', uid),
+        where('status', 'in', ['archived', 'cancelled'])
+      ),
+      (snap) => {
+        state.archived = snap.size;
+        emit();
+      },
+      () => {
+        state.archived = 0;
         emit();
       }
     )

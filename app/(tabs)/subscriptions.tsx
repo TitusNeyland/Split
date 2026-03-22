@@ -14,9 +14,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { getFirebaseAuth } from '../../lib/firebase';
 import {
-  subscribeSubscriptionTabBadgeCounts,
-  type SubscriptionTabBadgeCounts,
+  subscribeSubscriptionsTabPrefetch,
+  type SubscriptionsTabPrefetchState,
 } from '../../lib/subscriptionTabBadgesFirestore';
+import { DEMO_TAB_BADGES, SUBSCRIPTIONS_DEMO_MODE } from '../../lib/subscriptionsScreenDemo';
+import { SubscriptionsDemoFloatCard, SubscriptionsDemoPanel } from '../components/SubscriptionsDemoPanels';
 import { spacing } from '../../constants/theme';
 
 const C = {
@@ -46,7 +48,12 @@ export default function SubscriptionsScreen() {
   const { width } = useWindowDimensions();
   const [user, setUser] = useState<User | null>(null);
   const [filter, setFilter] = useState<FilterId>('active');
-  const [badges, setBadges] = useState<SubscriptionTabBadgeCounts>({ overdue: 0, paused: 0 });
+  const [tabData, setTabData] = useState<SubscriptionsTabPrefetchState>({
+    overdue: 0,
+    paused: 0,
+    active: 0,
+    archived: 0,
+  });
 
   useEffect(() => {
     const auth = getFirebaseAuth();
@@ -58,12 +65,15 @@ export default function SubscriptionsScreen() {
   }, []);
 
   useEffect(() => {
-    const uid = user?.uid;
-    if (!uid) {
-      setBadges({ overdue: 0, paused: 0 });
+    if (SUBSCRIPTIONS_DEMO_MODE) {
       return;
     }
-    return subscribeSubscriptionTabBadgeCounts(uid, setBadges);
+    const uid = user?.uid;
+    if (!uid) {
+      setTabData({ overdue: 0, paused: 0, active: 0, archived: 0 });
+      return;
+    }
+    return subscribeSubscriptionsTabPrefetch(uid, setTabData);
   }, [user?.uid]);
 
   return (
@@ -107,16 +117,24 @@ export default function SubscriptionsScreen() {
             </View>
           </View>
 
-          <View style={styles.seg}>
+          <View style={styles.seg} accessibilityRole="tablist" accessibilityLabel="Subscription filters">
             {FILTERS.map((f) => {
               const selected = filter === f.id;
               const badgeCount =
-                f.badge === 'overdue' ? badges.overdue : f.badge === 'paused' ? badges.paused : 0;
+                f.badge === 'overdue'
+                  ? SUBSCRIPTIONS_DEMO_MODE
+                    ? DEMO_TAB_BADGES.overdue
+                    : tabData.overdue
+                  : f.badge === 'paused'
+                    ? SUBSCRIPTIONS_DEMO_MODE
+                      ? DEMO_TAB_BADGES.paused
+                      : tabData.paused
+                    : 0;
               return (
                 <Pressable
                   key={f.id}
                   onPress={() => setFilter(f.id)}
-                  style={[styles.segBtn, selected && styles.segBtnOn]}
+                  style={styles.segBtn}
                   accessibilityRole="tab"
                   accessibilityState={{ selected }}
                   accessibilityLabel={
@@ -125,20 +143,29 @@ export default function SubscriptionsScreen() {
                       : f.label
                   }
                 >
-                  <View style={styles.segBtnInner}>
-                    <Text style={[styles.segBtnTxt, selected && styles.segBtnTxtOn]} numberOfLines={1}>
-                      {f.label}
-                    </Text>
-                    {f.badge && badgeCount > 0 ? (
-                      <View
+                  <View style={[styles.segPill, selected && styles.segPillOn]}>
+                    <View style={styles.segBtnInner}>
+                      <Text
                         style={[
-                          styles.countPill,
-                          f.badge === 'overdue' ? styles.countPillOverdue : styles.countPillPaused,
+                          styles.segBtnTxt,
+                          selected && styles.segBtnTxtOn,
+                          f.id === 'archived' && styles.segBtnTxtArchived,
                         ]}
+                        numberOfLines={1}
                       >
-                        <Text style={styles.countPillTxt}>{formatBadgeCount(badgeCount)}</Text>
-                      </View>
-                    ) : null}
+                        {f.label}
+                      </Text>
+                      {f.badge && badgeCount > 0 ? (
+                        <View
+                          style={[
+                            styles.countPill,
+                            f.badge === 'overdue' ? styles.countPillOverdue : styles.countPillPaused,
+                          ]}
+                        >
+                          <Text style={styles.countPillTxt}>{formatBadgeCount(badgeCount)}</Text>
+                        </View>
+                      ) : null}
+                    </View>
                   </View>
                 </Pressable>
               );
@@ -146,46 +173,78 @@ export default function SubscriptionsScreen() {
           </View>
         </LinearGradient>
 
+        {SUBSCRIPTIONS_DEMO_MODE ? <SubscriptionsDemoFloatCard /> : null}
+
         <View style={[styles.body, { minHeight: Math.max(320, width * 0.9) }]}>
-          {filter === 'active' ? (
-            <View style={styles.panel}>
-              <View style={styles.sh}>
-                <Text style={styles.shTitle}>Active splits</Text>
-                <Text style={styles.shAction}>Sort</Text>
-              </View>
-              <Text style={styles.panelHint}>Subscription cards will appear here.</Text>
-            </View>
-          ) : null}
-
-          {filter === 'overdue' ? (
-            <View style={styles.panel}>
-              <View style={styles.sh}>
-                <Text style={styles.shTitle}>Needs attention</Text>
-              </View>
-              <Text style={styles.panelHint}>Overdue splits will appear here.</Text>
-            </View>
-          ) : null}
-
-          {filter === 'paused' ? (
-            <View style={styles.panel}>
-              <View style={styles.sh}>
-                <Text style={styles.shTitle}>Paused</Text>
-              </View>
-              <Text style={styles.panelHint}>Paused subscriptions will appear here.</Text>
-            </View>
-          ) : null}
-
-          {filter === 'archived' ? (
-            <View style={styles.panel}>
-              <View style={styles.empty}>
-                <View style={styles.emptyIcon}>
-                  <Ionicons name="archive-outline" size={30} color={C.muted} />
+          {SUBSCRIPTIONS_DEMO_MODE ? (
+            <SubscriptionsDemoPanel filter={filter} />
+          ) : (
+            <>
+              {filter === 'active' ? (
+                <View style={styles.panel}>
+                  <View style={styles.sh}>
+                    <Text style={styles.shTitle}>Active splits</Text>
+                    <Text style={styles.shAction}>Sort</Text>
+                  </View>
+                  <Text style={styles.panelHint}>
+                    {tabData.active === 0
+                      ? 'No active subscriptions yet. Subscription cards will appear here.'
+                      : `${tabData.active} active subscription${tabData.active === 1 ? '' : 's'} — cards will appear here.`}
+                  </Text>
                 </View>
-                <Text style={styles.emptyTitle}>No archived subscriptions</Text>
-                <Text style={styles.emptySub}>Cancelled subscriptions{'\n'}will appear here</Text>
-              </View>
-            </View>
-          ) : null}
+              ) : null}
+
+              {filter === 'overdue' ? (
+                <View style={styles.panel}>
+                  <View style={styles.sh}>
+                    <Text style={styles.shTitle}>Needs attention</Text>
+                  </View>
+                  <Text style={styles.panelHint}>
+                    {tabData.overdue === 0
+                      ? 'Nothing overdue. Subscriptions with a member payment past due will show here.'
+                      : `${tabData.overdue} overdue payment${tabData.overdue === 1 ? '' : 's'} — details will appear here.`}
+                  </Text>
+                </View>
+              ) : null}
+
+              {filter === 'paused' ? (
+                <View style={styles.panel}>
+                  <View style={styles.sh}>
+                    <Text style={styles.shTitle}>Paused</Text>
+                  </View>
+                  <Text style={styles.panelHint}>
+                    {tabData.paused === 0
+                      ? 'No paused subscriptions. Paused splits will appear here.'
+                      : `${tabData.paused} paused subscription${tabData.paused === 1 ? '' : 's'} — cards will appear here.`}
+                  </Text>
+                </View>
+              ) : null}
+
+              {filter === 'archived' ? (
+                <View style={styles.panel}>
+                  {tabData.archived === 0 ? (
+                    <View style={styles.empty}>
+                      <View style={styles.emptyIcon}>
+                        <Ionicons name="archive-outline" size={30} color={C.muted} />
+                      </View>
+                      <Text style={styles.emptyTitle}>No archived subscriptions</Text>
+                      <Text style={styles.emptySub}>Cancelled subscriptions{'\n'}will appear here</Text>
+                    </View>
+                  ) : (
+                    <>
+                      <View style={styles.sh}>
+                        <Text style={styles.shTitle}>Archived</Text>
+                      </View>
+                      <Text style={styles.panelHint}>
+                        {tabData.archived} archived subscription{tabData.archived === 1 ? '' : 's'} — list will
+                        appear here.
+                      </Text>
+                    </>
+                  )}
+                </View>
+              ) : null}
+            </>
+          )}
         </View>
       </ScrollView>
     </View>
@@ -255,41 +314,54 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     backgroundColor: 'rgba(0,0,0,0.2)',
     borderRadius: 14,
-    padding: 4,
-    gap: 0,
+    paddingVertical: 5,
+    paddingHorizontal: 6,
+    gap: 6,
+    alignItems: 'center',
   },
   segBtn: {
     flex: 1,
-    borderRadius: 11,
-    paddingVertical: 11,
-    paddingHorizontal: 4,
     alignItems: 'center',
     justifyContent: 'center',
     minWidth: 0,
+    paddingVertical: 6,
   },
-  segBtnOn: {
+  /** Wraps label; only the selected tab gets the white pill (not full column width). */
+  segPill: {
+    borderRadius: 11,
+    paddingVertical: 7,
+    paddingHorizontal: 14,
+    maxWidth: '100%',
+  },
+  segPillOn: {
     backgroundColor: '#fff',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
   },
   segBtnInner: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 5,
+    gap: 7,
     maxWidth: '100%',
   },
   segBtnTxt: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '500',
     color: 'rgba(255,255,255,0.5)',
   },
   segBtnTxtOn: {
     color: C.purple,
   },
+  segBtnTxtArchived: {
+    fontSize: 11.5,
+    letterSpacing: -0.15,
+  },
   countPill: {
-    minWidth: 22,
-    height: 22,
-    paddingHorizontal: 6,
-    borderRadius: 11,
+    minWidth: 19,
+    height: 19,
+    paddingHorizontal: 5,
+    borderRadius: 999,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -300,7 +372,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#8A8984',
   },
   countPillTxt: {
-    fontSize: 11,
+    fontSize: 9,
     fontWeight: '700',
     color: '#fff',
   },
