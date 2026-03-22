@@ -1,9 +1,15 @@
 import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SubscriptionCard } from './SubscriptionCard';
 import { SubscriptionSplitEditor } from './SubscriptionSplitEditor';
 import { SUBSCRIPTIONS_DEMO_MODE } from '../../lib/subscriptionsScreenDemo';
+import { useSubscriptionPriceBanner } from '../../lib/useSubscriptionPriceBanner';
+import { useFirebaseUid } from '../../lib/useFirebaseUid';
+import {
+  perPersonAmountLabelEqualSplit,
+  type SubscriptionPriceBannerFields,
+} from '../../lib/subscriptionPriceChangeBanner';
 
 const C = {
   purple: '#534AB7',
@@ -112,18 +118,49 @@ const ICLOUD_SPLIT_MEMBERS = [
   { memberId: '4', displayName: 'Taylor R.', initials: 'TR', avatarBg: '#E6F1FB', avatarColor: '#185FA5' },
 ] as const;
 
+/** Stable “changed at” for demo banner logic (auto-dismiss uses billing day 18). */
+const DEMO_NETFLIX_PRICE_CHANGED_AT_MS = 1_712_707_200_000;
+
+const NETFLIX_TOTAL_CENTS = 2299;
+const NETFLIX_MEMBER_COUNT = 3;
+
+function demoNetflixPriceBannerFields(): SubscriptionPriceBannerFields {
+  return {
+    priceChangedAt: { toMillis: () => DEMO_NETFLIX_PRICE_CHANGED_AT_MS },
+    priceChangeFromCents: 1999,
+    priceChangeToCents: NETFLIX_TOTAL_CENTS,
+    billingDayOfMonth: 18,
+  };
+}
+
 function NetflixCard() {
   const [editorOpen, setEditorOpen] = useState(false);
-  const [priceBannerVisible, setPriceBannerVisible] = useState(true);
+  const uid = useFirebaseUid();
   const nextCycleStart = useNextBillingCycleStart();
+  const netflixPriceSub = useMemo(() => demoNetflixPriceBannerFields(), []);
+
+  const { visible: priceBannerVisible, message: priceBannerMessage, dismiss: dismissPriceBanner } =
+    useSubscriptionPriceBanner({
+      subscriptionId: 'demo-netflix-premium',
+      uid,
+      subscription: netflixPriceSub,
+      userLastSeenPriceChangeMs: null,
+      skipFirestore: SUBSCRIPTIONS_DEMO_MODE,
+    });
+
+  const onDismissPriceBanner = () => {
+    void dismissPriceBanner().catch((e) =>
+      Alert.alert('Could not save', e instanceof Error ? e.message : String(e))
+    );
+  };
 
   return (
     <SubscriptionCard
       priceChange={
         priceBannerVisible
           ? {
-              message: 'Price changed $19.99 → $22.99 · effective next cycle',
-              onDismiss: () => setPriceBannerVisible(false),
+              message: priceBannerMessage,
+              onDismiss: onDismissPriceBanner,
             }
           : undefined
       }
@@ -133,7 +170,7 @@ function NetflixCard() {
       isOwner
       autoCharge="on"
       totalAmount="$22.99"
-      perPersonAmount="$7.66/person"
+      perPersonAmount={perPersonAmountLabelEqualSplit(NETFLIX_TOTAL_CENTS, NETFLIX_MEMBER_COUNT)}
       members={[
         { id: '1', initials: 'JD', backgroundColor: '#EEEDFE', color: C.purple },
         { id: '2', initials: 'AL', backgroundColor: '#E1F5EE', color: C.greenDark },
@@ -157,7 +194,7 @@ function NetflixCard() {
         editorOpen ? (
           <SubscriptionSplitEditor
             subscriptionId="demo-netflix-premium"
-            totalCents={2299}
+            totalCents={NETFLIX_TOTAL_CENTS}
             members={[...NETFLIX_SPLIT_MEMBERS]}
             nextCycleEffectiveFrom={nextCycleStart}
             skipFirestore={SUBSCRIPTIONS_DEMO_MODE}

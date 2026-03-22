@@ -12,6 +12,9 @@ const C = {
   brown: '#854F0B',
   cream: '#FAEEDA',
   divider: '#F0EEE9',
+  amberBanner: '#FDE68A',
+  amberBannerText: '#78350F',
+  amberOk: '#B45309',
 };
 
 export type SubscriptionCardMember = {
@@ -22,10 +25,10 @@ export type SubscriptionCardMember = {
 };
 
 export type SubscriptionCardProps = {
-  /** `priceChanged` on subscription doc — amber banner + optional dismiss. */
+  /** When set, shows amber price-change banner; OK calls `onDismiss` (may be async). */
   priceChange?: {
     message: string;
-    onDismiss?: () => void;
+    onDismiss: () => void | Promise<void>;
   };
   icon: { emoji: string; backgroundColor: string };
   name: string;
@@ -125,10 +128,10 @@ export function SubscriptionCard({
     >
       {priceChange ? (
         <View style={styles.priceBanner}>
-          <Ionicons name="warning-outline" size={16} color={C.brown} />
+          <Ionicons name="alert-circle" size={18} color={C.amberOk} />
           <Text style={styles.priceBannerTxt}>{priceChange.message}</Text>
           <Pressable
-            onPress={priceChange.onDismiss}
+            onPress={() => void priceChange.onDismiss()}
             hitSlop={6}
             accessibilityRole="button"
             accessibilityLabel="Dismiss price change notice"
@@ -237,24 +240,23 @@ const styles = StyleSheet.create({
     borderColor: '#FAC775',
   },
   priceBanner: {
-    backgroundColor: C.cream,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
+    backgroundColor: C.amberBanner,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 7,
+    gap: 8,
   },
   priceBannerTxt: {
     flex: 1,
     fontSize: 13,
     fontWeight: '500',
-    color: '#633806',
+    color: C.amberBannerText,
   },
   priceBannerDismiss: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: C.brown,
-    textDecorationLine: 'underline',
+    fontSize: 14,
+    fontWeight: '600',
+    color: C.amberOk,
   },
   main: {
     paddingVertical: 13,
