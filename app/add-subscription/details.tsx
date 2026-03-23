@@ -14,7 +14,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
+import { BillingDayPickerSheet } from '../components/BillingDayPickerSheet';
 import { getServiceIconBackgroundColor } from '../components/ServiceIcon';
+import {
+  formatBillingDayFieldLabel,
+  parseBillingDayParam,
+  showShortMonthBillingWarning,
+} from '../../lib/billingDayFormat';
 
 const C = {
   purple: '#534AB7',
@@ -105,9 +111,20 @@ export default function AddSubscriptionDetailsScreen() {
   const [billingCycle, setBillingCycle] = useState<BillingCycle>(() =>
     billingCycleParam === 'yearly' ? 'yearly' : 'monthly',
   );
-  const [billingDay, setBillingDay] = useState(() =>
-    typeof billingDayParam === 'string' ? billingDayParam : '',
+  const prefillBilling = useMemo(
+    () =>
+      typeof billingDayParam === 'string' && billingDayParam.trim() !== ''
+        ? parseBillingDayParam(billingDayParam)
+        : null,
+    [billingDayParam],
   );
+  const [billingDayNumber, setBillingDayNumber] = useState<number | null>(
+    () => prefillBilling?.day ?? null,
+  );
+  const [billingMonthIndex, setBillingMonthIndex] = useState(() =>
+    prefillBilling != null ? prefillBilling.monthIndex : new Date().getMonth(),
+  );
+  const [billingPickerOpen, setBillingPickerOpen] = useState(false);
   const [payerDisplay] = useState('Me (owner)');
   const [autoCharge, setAutoCharge] = useState(() => autoChargeParam !== '0');
   const [costFocused, setCostFocused] = useState(false);
@@ -138,7 +155,17 @@ export default function AddSubscriptionDetailsScreen() {
   }, [amountText]);
 
   const totalCents = useMemo(() => parseMoneyToCents(amountText), [amountText]);
-  const billingDayOk = billingDay.trim().length > 0;
+  const billingDayOk = billingDayNumber !== null && billingDayNumber >= 1 && billingDayNumber <= 31;
+
+  const billingDayLabel = useMemo(() => {
+    if (billingDayNumber === null) return '';
+    return formatBillingDayFieldLabel(billingCycle, billingDayNumber, billingMonthIndex);
+  }, [billingCycle, billingDayNumber, billingMonthIndex]);
+
+  const onBillingDatePicked = useCallback((date: Date) => {
+    setBillingDayNumber(date.getDate());
+    setBillingMonthIndex(date.getMonth());
+  }, []);
 
   const headerTitle = baseServiceName ? `${baseServiceName} details` : 'Subscription details';
 
@@ -157,7 +184,7 @@ export default function AddSubscriptionDetailsScreen() {
         planName: planName.trim() || baseServiceName,
         totalCents: String(totalCents),
         billingCycle,
-        billingDay: billingDay.trim(),
+        billingDay: billingDayLabel,
         payerDisplay,
         autoCharge: autoCharge ? '1' : '0',
       },
@@ -170,7 +197,7 @@ export default function AddSubscriptionDetailsScreen() {
     iconTint,
     planName,
     billingCycle,
-    billingDay,
+    billingDayLabel,
     payerDisplay,
     autoCharge,
   ]);
@@ -283,14 +310,33 @@ export default function AddSubscriptionDetailsScreen() {
         <View style={styles.row2}>
           <View style={[styles.fieldWrap, styles.row2Item]}>
             <Text style={styles.fieldLabel}>Billing day</Text>
-            <TextInput
-              value={billingDay}
-              onChangeText={setBillingDay}
-              placeholder="e.g. 18th"
-              placeholderTextColor={C.muted}
-              style={styles.fieldInput}
-              accessibilityLabel="Billing day of month"
-            />
+            <Pressable
+              onPress={() => setBillingPickerOpen(true)}
+              style={({ pressed }) => [
+                styles.fieldInput,
+                styles.billingDayPressable,
+                pressed && styles.billingDayPressablePressed,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Choose billing day"
+              accessibilityHint="Opens a calendar to pick the billing date"
+            >
+              <Text
+                style={[
+                  styles.billingDayPressableTxt,
+                  !billingDayOk && styles.billingDayPlaceholder,
+                ]}
+                numberOfLines={2}
+              >
+                {billingDayOk ? billingDayLabel : 'Select billing day'}
+              </Text>
+              <Ionicons name="calendar-outline" size={22} color={C.muted} />
+            </Pressable>
+            {billingDayOk && showShortMonthBillingWarning(billingDayNumber!) ? (
+              <Text style={styles.billingDayWarn}>
+                Some months have fewer days. Billing will occur on the last day of shorter months.
+              </Text>
+            ) : null}
           </View>
           <View style={[styles.fieldWrap, styles.row2Item]}>
             <Text style={styles.fieldLabel}>Who pays?</Text>
@@ -324,6 +370,15 @@ export default function AddSubscriptionDetailsScreen() {
           </Text>
         ) : null}
       </ScrollView>
+
+      <BillingDayPickerSheet
+        visible={billingPickerOpen}
+        onClose={() => setBillingPickerOpen(false)}
+        onConfirm={onBillingDatePicked}
+        billingCycle={billingCycle}
+        initialDay={billingDayNumber ?? new Date().getDate()}
+        initialMonthIndex={billingMonthIndex}
+      />
 
       <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 14) }]}>
         <Pressable
@@ -427,6 +482,32 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     fontSize: 18,
     color: C.text,
+  },
+  billingDayPressable: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  billingDayPressablePressed: {
+    opacity: 0.88,
+  },
+  billingDayPressableTxt: {
+    flex: 1,
+    fontSize: 17,
+    fontWeight: '500',
+    color: C.text,
+    lineHeight: 22,
+  },
+  billingDayPlaceholder: {
+    color: C.muted,
+    fontWeight: '400',
+  },
+  billingDayWarn: {
+    fontSize: 13,
+    color: C.warnText,
+    marginTop: 8,
+    lineHeight: 18,
   },
   costRow: {
     flexDirection: 'row',

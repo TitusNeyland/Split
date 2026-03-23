@@ -21,6 +21,7 @@ import {
   type WizardMemberRow,
   type WizardSplitMethod,
 } from '../../lib/createSubscriptionWizardFirestore';
+import { billingWhenForSentence } from '../../lib/billingDayFormat';
 import { getServiceIconBackgroundColor, ServiceIcon } from '../components/ServiceIcon';
 
 const C = {
@@ -103,12 +104,6 @@ function inviteFirstNames(members: ReviewMember[]): string {
   return `${parts.slice(0, -1).join(', ')}, and ${parts[parts.length - 1]}`;
 }
 
-function billingChargePhrase(billingCycle: string, billingDay: string): string {
-  const day = billingDay.trim() || 'your billing day';
-  if (billingCycle === 'yearly') return `${day} each year`;
-  return `${day} of each month`;
-}
-
 export default function AddSubscriptionReviewScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -160,7 +155,7 @@ export default function AddSubscriptionReviewScreen() {
 
   const inviteLine = useMemo(() => {
     const names = inviteFirstNames(members);
-    const when = billingChargePhrase(billingCycle, billingDay);
+    const when = billingWhenForSentence(billingCycle, billingDay);
     if (!names) {
       return autoCharge
         ? `Members you add will be invited to this split. With auto-charge on, they'll be charged on ${when}.`
@@ -319,9 +314,7 @@ export default function AddSubscriptionReviewScreen() {
           <View style={styles.reviewRow}>
             <Text style={styles.rvLbl}>Billing date</Text>
             <Text style={styles.rvVal}>
-              {billingDay.trim()
-                ? billingChargePhrase(billingCycle, billingDay)
-                : '—'}
+              {billingDay.trim() ? billingDay : '—'}
             </Text>
           </View>
           <View style={styles.reviewRow}>
