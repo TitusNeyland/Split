@@ -28,7 +28,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
-import { ServiceIcon } from '../components/ServiceIcon';
 import Svg, { Defs, Line, Pattern, Rect } from 'react-native-svg';
 import Animated, {
   Easing,
@@ -653,7 +652,6 @@ function RecentReceiptRow({
         <Text style={styles.recentMon}>{mon}</Text>
         <Text style={styles.recentDay}>{dayNum}</Text>
       </View>
-      <ServiceIcon serviceName={row.merchantName} size={36} />
       <View style={styles.recentMid}>
         <Text style={styles.recentMerchant} numberOfLines={1}>
           {row.merchantName}
