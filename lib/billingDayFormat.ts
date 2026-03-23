@@ -89,6 +89,61 @@ export function showShortMonthBillingWarning(day: number): boolean {
   return day >= 29;
 }
 
+/** Next calendar date for the first charge from today (local), or null if the label cannot be parsed. */
+export function getNextFirstChargeDate(
+  cycle: 'monthly' | 'yearly',
+  billingDayLabel: string,
+): Date | null {
+  const parsed = parseBillingDayParam(billingDayLabel);
+  if (!parsed) return null;
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+  if (cycle === 'monthly') {
+    let y = startOfToday.getFullYear();
+    let m = startOfToday.getMonth();
+    let d = clampDayToMonth(y, m, parsed.day);
+    let candidate = new Date(y, m, d);
+    if (candidate.getTime() < startOfToday.getTime()) {
+      m += 1;
+      if (m > 11) {
+        m = 0;
+        y += 1;
+      }
+      d = clampDayToMonth(y, m, parsed.day);
+      candidate = new Date(y, m, d);
+    }
+    return candidate;
+  }
+
+  let y = startOfToday.getFullYear();
+  const mi = parsed.monthIndex;
+  let d = clampDayToMonth(y, mi, parsed.day);
+  let candidate = new Date(y, mi, d);
+  if (candidate.getTime() < startOfToday.getTime()) {
+    y += 1;
+    d = clampDayToMonth(y, mi, parsed.day);
+    candidate = new Date(y, mi, d);
+  }
+  return candidate;
+}
+
+export function formatFirstChargeDateLong(date: Date): string {
+  return date.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
+/** e.g. "Mar 25" for compact copy. */
+export function formatFirstChargeDateShort(date: Date): string {
+  return date.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
 /**
  * Phrasing for auto-charge / invite copy (e.g. after “on …”).
  * Monthly labels in the UI are short (`Every 18th`); this expands slightly for sentences.
