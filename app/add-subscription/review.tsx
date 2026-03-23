@@ -7,6 +7,7 @@ import {
   Pressable,
   ActivityIndicator,
   Alert,
+  Modal,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -21,7 +22,12 @@ import {
   type WizardMemberRow,
   type WizardSplitMethod,
 } from '../../lib/createSubscriptionWizardFirestore';
-import { billingWhenForSentence } from '../../lib/billingDayFormat';
+import {
+  billingWhenForSentence,
+  formatFirstChargeDateLong,
+  formatFirstChargeDateShort,
+  getNextFirstChargeDate,
+} from '../../lib/billingDayFormat';
 import { getServiceIconBackgroundColor, ServiceIcon } from '../components/ServiceIcon';
 
 const C = {
@@ -34,6 +40,11 @@ const C = {
   greenDark: '#0F6E56',
   cardBorder: 'rgba(0,0,0,0.06)',
   divider: '#F5F3EE',
+  shareBlue: '#2563EB',
+  modalSummaryBg: '#F0EEEA',
+  warnBg: '#FAEDDD',
+  warnText: '#6B4423',
+  modalBtnGray: '#E8E6E2',
 };
 
 type ReviewMember = WizardMemberRow;
@@ -73,6 +84,21 @@ function splitMethodLabel(method: string): string {
       return 'Owner less';
     default:
       return method || '—';
+  }
+}
+
+function splitMethodSubtitle(method: string): string {
+  switch (method) {
+    case 'equal':
+      return 'equal split';
+    case 'custom_percent':
+      return 'custom % split';
+    case 'fixed_amount':
+      return 'fixed $ split';
+    case 'owner_less':
+      return 'owner-less split';
+    default:
+      return 'split';
   }
 }
 
@@ -147,6 +173,7 @@ export default function AddSubscriptionReviewScreen() {
     : 'equal';
 
   const [saving, setSaving] = useState(false);
+  const [confirmModalVisible, setConfirmModalVisible] = useState(false);
 
   const cycleLine = useMemo(() => {
     const c = fmtCents(totalCents);
@@ -165,6 +192,46 @@ export default function AddSubscriptionReviewScreen() {
       ? `Invites will be sent to ${names}. They'll be charged automatically on ${when}.`
       : `Invites will be sent to ${names}. You'll need to request payment manually each cycle.`;
   }, [members, billingCycle, billingDay, autoCharge]);
+
+  const displayServiceName = planName || serviceName || 'Subscription';
+  const nonOwnerInviteCount = useMemo(
+    () => members.filter((m) => m.role !== 'owner').length,
+    [members],
+  );
+
+  const firstChargeDate = useMemo(
+    () => getNextFirstChargeDate(billingCycle, billingDay),
+    [billingCycle, billingDay],
+  );
+
+  const firstChargeDateLabel = useMemo(() => {
+    if (!firstChargeDate) return '—';
+    return formatFirstChargeDateLong(firstChargeDate);
+  }, [firstChargeDate]);
+
+  const confirmWarningCopy = useMemo(() => {
+    const n = nonOwnerInviteCount;
+    const people = n === 1 ? 'member' : 'members';
+    const whenShort = firstChargeDate
+      ? formatFirstChargeDateShort(firstChargeDate)
+      : billingWhenForSentence(billingCycle, billingDay);
+    if (n === 0) {
+      return autoCharge
+        ? `No other members will be invited. You will be charged automatically on ${whenShort}. This cannot be undone.`
+        : `No other members will be invited. Next billing: ${whenShort}. This cannot be undone.`;
+    }
+    if (autoCharge) {
+      return `${n} ${people} will be invited and charged automatically on ${whenShort}. This cannot be undone.`;
+    }
+    return `${n} ${people} will be invited. Next billing: ${whenShort}. This cannot be undone.`;
+  }, [nonOwnerInviteCount, firstChargeDate, billingCycle, billingDay, autoCharge]);
+
+  const ownerShareLine = useMemo(() => {
+    const owner = members.find((m) => m.role === 'owner');
+    if (!owner) return '—';
+    const c = fmtCents(owner.amountCents);
+    return billingCycle === 'yearly' ? `${c} / year` : `${c} / month`;
+  }, [members, billingCycle]);
 
   const onEditDetails = useCallback(() => {
     router.replace({
@@ -201,26 +268,21 @@ export default function AddSubscriptionReviewScreen() {
     });
   }, [members, planName, serviceName, totalCents, billingCycle, router]);
 
-  const onCreate = useCallback(async () => {
-    if (totalCents <= 0 || members.length === 0) {
-      Alert.alert('Incomplete split', 'Go back and finish plan cost and members.');
-      return;
-    }
-
-    if (!isFirebaseConfigured()) {
-      navigateToSplitCreated();
-      return;
-    }
-
-    const auth = getFirebaseAuth();
-    const uid = auth?.currentUser?.uid;
-    if (!uid) {
-      Alert.alert('Sign in required', 'Sign in to create a subscription split.');
-      return;
-    }
-
+  const executeCreateSplit = useCallback(async () => {
     setSaving(true);
     try {
+      if (!isFirebaseConfigured()) {
+        navigateToSplitCreated();
+        return;
+      }
+
+      const auth = getFirebaseAuth();
+      const uid = auth?.currentUser?.uid;
+      if (!uid) {
+        Alert.alert('Sign in required', 'Sign in to create a subscription split.');
+        return;
+      }
+
       const input = {
         actorUid: uid,
         serviceName: serviceName || planName || 'Subscription',
@@ -237,9 +299,8 @@ export default function AddSubscriptionReviewScreen() {
       const id = await createSubscriptionFromWizard(input);
       await runSubscriptionWizardSideEffects(id, input);
       navigateToSplitCreated();
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      Alert.alert('Could not create split', msg);
+    } catch {
+      Alert.alert('Something went wrong · please try again');
     } finally {
       setSaving(false);
     }
@@ -254,9 +315,34 @@ export default function AddSubscriptionReviewScreen() {
     payerDisplay,
     autoCharge,
     splitMethod,
-    router,
     navigateToSplitCreated,
   ]);
+
+  const onRequestCreateSplit = useCallback(() => {
+    if (totalCents <= 0 || members.length === 0) {
+      Alert.alert('Incomplete split', 'Go back and finish plan cost and members.');
+      return;
+    }
+
+    if (isFirebaseConfigured()) {
+      const auth = getFirebaseAuth();
+      if (!auth?.currentUser?.uid) {
+        Alert.alert('Sign in required', 'Sign in to create a subscription split.');
+        return;
+      }
+    }
+
+    setConfirmModalVisible(true);
+  }, [totalCents, members.length]);
+
+  const onDismissConfirmModal = useCallback(() => {
+    if (!saving) setConfirmModalVisible(false);
+  }, [saving]);
+
+  const onConfirmSplitFromModal = useCallback(() => {
+    setConfirmModalVisible(false);
+    void executeCreateSplit();
+  }, [executeCreateSplit]);
 
   return (
     <View style={styles.root}>
@@ -373,7 +459,7 @@ export default function AddSubscriptionReviewScreen() {
 
       <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 14) }]}>
         <Pressable
-          onPress={onCreate}
+          onPress={onRequestCreateSplit}
           disabled={saving}
           style={({ pressed }) => [
             styles.primaryBtn,
@@ -384,7 +470,10 @@ export default function AddSubscriptionReviewScreen() {
           accessibilityLabel="Create split and notify members"
         >
           {saving ? (
-            <ActivityIndicator color="#fff" />
+            <View style={styles.primaryBtnLoadingRow}>
+              <ActivityIndicator color="#fff" />
+              <Text style={styles.primaryBtnTxt}>Creating…</Text>
+            </View>
           ) : (
             <Text style={styles.primaryBtnTxt}>Create split · notify members</Text>
           )}
@@ -399,6 +488,112 @@ export default function AddSubscriptionReviewScreen() {
           <Text style={styles.ghostBtnTxt}>Edit details</Text>
         </Pressable>
       </View>
+
+      <Modal
+        visible={confirmModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={onDismissConfirmModal}
+      >
+        <View style={styles.modalRoot}>
+          <Pressable
+            style={styles.modalBackdrop}
+            onPress={onDismissConfirmModal}
+            accessibilityLabel="Dismiss"
+          />
+          <View style={[styles.modalSheet, { marginBottom: Math.max(insets.bottom, 8) }]}>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              bounces={false}
+            >
+              <View style={styles.modalShieldWrap}>
+                <View style={styles.modalShieldCircle}>
+                  <Ionicons name="shield-checkmark" size={28} color={C.purple} />
+                </View>
+              </View>
+              <Text style={styles.modalTitle}>Confirm this split?</Text>
+
+              <View style={styles.modalSummaryCard}>
+                <View style={styles.modalServiceRow}>
+                  <ServiceIcon serviceName={serviceName || planName || 'Subscription'} size={44} />
+                  <View style={styles.modalServiceTxt}>
+                    <Text style={styles.modalServiceName} numberOfLines={2}>
+                      {displayServiceName}
+                    </Text>
+                    <Text style={styles.modalServiceSub} numberOfLines={2}>
+                      {cycleLine} · {splitMethodSubtitle(splitMethodRaw)}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.modalDetailRow}>
+                  <Text style={styles.modalDetailLbl}>Members</Text>
+                  <View style={styles.modalAvatarStack}>
+                    {members.slice(0, 6).map((m, i) => (
+                      <View
+                        key={m.memberId || String(i)}
+                        style={[
+                          styles.modalStackAv,
+                          { marginLeft: i > 0 ? -9 : 0, backgroundColor: m.avatarBg, zIndex: 20 - i },
+                        ]}
+                      >
+                        <Text style={[styles.modalStackAvTxt, { color: m.avatarColor }]}>
+                          {m.initials}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+
+                <View style={styles.modalDetailRow}>
+                  <Text style={styles.modalDetailLbl}>First charge</Text>
+                  <Text style={styles.modalDetailValStrong}>{firstChargeDateLabel}</Text>
+                </View>
+
+                <View style={styles.modalDetailRow}>
+                  <Text style={styles.modalDetailLbl}>Your share</Text>
+                  <Text style={styles.modalShareVal}>{ownerShareLine}</Text>
+                </View>
+              </View>
+
+              <View style={styles.modalWarn}>
+                <Ionicons name="time-outline" size={22} color={C.warnText} style={styles.modalWarnIco} />
+                <Text style={styles.modalWarnTxt}>{confirmWarningCopy}</Text>
+              </View>
+
+              <View style={styles.modalActions}>
+                <Pressable
+                  onPress={onDismissConfirmModal}
+                  disabled={saving}
+                  style={({ pressed }) => [
+                    styles.modalBtnSecondary,
+                    pressed && !saving && styles.modalBtnSecondaryPressed,
+                    saving && styles.modalBtnDisabled,
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Go back"
+                >
+                  <Text style={styles.modalBtnSecondaryTxt}>Go back</Text>
+                </Pressable>
+                <Pressable
+                  onPress={onConfirmSplitFromModal}
+                  disabled={saving}
+                  style={({ pressed }) => [
+                    styles.modalBtnPrimary,
+                    pressed && !saving && styles.modalBtnPrimaryPressed,
+                    saving && styles.modalBtnDisabled,
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Yes, create split"
+                >
+                  <Text style={styles.modalBtnPrimaryTxt}>Yes, create split</Text>
+                </Pressable>
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -637,6 +832,12 @@ const styles = StyleSheet.create({
   primaryBtnPressed: {
     opacity: 0.92,
   },
+  primaryBtnLoadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+  },
   primaryBtnTxt: {
     fontSize: 17,
     fontWeight: '600',
@@ -655,5 +856,180 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
     color: C.text,
+  },
+  modalRoot: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 22,
+  },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.52)',
+  },
+  modalSheet: {
+    backgroundColor: '#fff',
+    borderRadius: 22,
+    paddingHorizontal: 22,
+    paddingTop: 22,
+    paddingBottom: 20,
+    maxWidth: 400,
+    width: '100%',
+    alignSelf: 'center',
+    zIndex: 1,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowOffset: { width: 0, height: 12 },
+    shadowRadius: 28,
+    elevation: 12,
+  },
+  modalShieldWrap: {
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  modalShieldCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: C.purpleTint,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: C.text,
+    textAlign: 'center',
+    letterSpacing: -0.35,
+    marginBottom: 18,
+  },
+  modalSummaryCard: {
+    backgroundColor: C.modalSummaryBg,
+    borderRadius: 14,
+    padding: 14,
+    gap: 14,
+  },
+  modalServiceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  modalServiceTxt: {
+    flex: 1,
+    minWidth: 0,
+  },
+  modalServiceName: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: C.text,
+    letterSpacing: -0.2,
+  },
+  modalServiceSub: {
+    fontSize: 14,
+    color: C.muted,
+    marginTop: 4,
+    lineHeight: 19,
+  },
+  modalDetailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    paddingVertical: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(0,0,0,0.08)',
+  },
+  modalDetailLbl: {
+    fontSize: 15,
+    color: C.muted,
+    fontWeight: '500',
+  },
+  modalDetailValStrong: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: C.text,
+  },
+  modalShareVal: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: C.shareBlue,
+  },
+  modalAvatarStack: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  modalStackAv: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalStackAvTxt: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  modalWarn: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    backgroundColor: C.warnBg,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    marginTop: 16,
+  },
+  modalWarnIco: {
+    marginTop: 1,
+  },
+  modalWarnTxt: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '500',
+    color: C.warnText,
+    lineHeight: 20,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 20,
+  },
+  modalBtnSecondary: {
+    flex: 1,
+    minWidth: 0,
+    paddingVertical: 15,
+    borderRadius: 12,
+    backgroundColor: C.modalBtnGray,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalBtnSecondaryPressed: {
+    opacity: 0.88,
+  },
+  modalBtnSecondaryTxt: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: C.text,
+  },
+  modalBtnPrimary: {
+    flex: 2,
+    minWidth: 0,
+    paddingVertical: 15,
+    borderRadius: 12,
+    backgroundColor: C.purple,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalBtnPrimaryPressed: {
+    opacity: 0.92,
+  },
+  modalBtnPrimaryTxt: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  modalBtnDisabled: {
+    opacity: 0.45,
   },
 });
