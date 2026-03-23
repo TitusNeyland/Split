@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   Pressable,
   TextInput,
   Switch,
+  Platform,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -110,19 +111,44 @@ export default function AddSubscriptionDetailsScreen() {
   const [payerDisplay] = useState('Me (owner)');
   const [autoCharge, setAutoCharge] = useState(() => autoChargeParam !== '0');
   const [costFocused, setCostFocused] = useState(false);
+  const [costError, setCostError] = useState('');
+  const costInputRef = useRef<TextInput>(null);
+
+  const hasPrefill = prefillTotalCents !== null || suggestedCents !== null;
+  useEffect(() => {
+    if (!hasPrefill) {
+      const t = setTimeout(() => costInputRef.current?.focus(), 350);
+      return () => clearTimeout(t);
+    }
+  }, []);
 
   const onAmountChange = useCallback((t: string) => {
     setAmountText(normalizeAmountInput(t));
+    if (t) setCostError('');
   }, []);
+
+  const onAmountBlur = useCallback(() => {
+    setCostFocused(false);
+    if (amountText.trim() !== '') {
+      const n = parseFloat(amountText);
+      if (Number.isFinite(n) && n > 0) {
+        setAmountText(n.toFixed(2));
+      }
+    }
+  }, [amountText]);
 
   const totalCents = useMemo(() => parseMoneyToCents(amountText), [amountText]);
   const billingDayOk = billingDay.trim().length > 0;
-  const canContinue = totalCents !== null && billingDayOk;
 
   const headerTitle = baseServiceName ? `${baseServiceName} details` : 'Subscription details';
 
   const onContinue = useCallback(() => {
-    if (!canContinue || totalCents === null) return;
+    if (totalCents === null) {
+      setCostError('Please enter the total cost');
+      costInputRef.current?.focus();
+      return;
+    }
+    if (!billingDayOk) return;
     router.push({
       pathname: '/add-subscription/members',
       params: {
@@ -137,8 +163,8 @@ export default function AddSubscriptionDetailsScreen() {
       },
     });
   }, [
-    canContinue,
     totalCents,
+    billingDayOk,
     router,
     baseServiceName,
     iconTint,
@@ -213,17 +239,19 @@ export default function AddSubscriptionDetailsScreen() {
           >
             <Text style={styles.dollarPrefix}>$</Text>
             <TextInput
+              ref={costInputRef}
               value={amountText}
               onChangeText={onAmountChange}
               placeholder="0.00"
               placeholderTextColor={C.muted}
-              keyboardType="decimal-pad"
-              onFocus={() => setCostFocused(true)}
-              onBlur={() => setCostFocused(false)}
+              keyboardType={Platform.OS === 'android' ? 'numeric' : 'decimal-pad'}
+              onFocus={() => { setCostFocused(true); setCostError(''); }}
+              onBlur={onAmountBlur}
               style={styles.costInput}
               accessibilityLabel="Total cost"
             />
           </View>
+          {costError ? <Text style={styles.fieldError}>{costError}</Text> : null}
         </View>
 
         <View style={styles.fieldWrap}>
@@ -300,14 +328,14 @@ export default function AddSubscriptionDetailsScreen() {
       <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 14) }]}>
         <Pressable
           onPress={onContinue}
-          disabled={!canContinue}
+          disabled={!billingDayOk}
           style={({ pressed }) => [
             styles.primaryBtn,
-            !canContinue && styles.primaryBtnDisabled,
-            pressed && canContinue && styles.primaryBtnPressed,
+            !billingDayOk && styles.primaryBtnDisabled,
+            pressed && billingDayOk && styles.primaryBtnPressed,
           ]}
           accessibilityRole="button"
-          accessibilityState={{ disabled: !canContinue }}
+          accessibilityState={{ disabled: !billingDayOk }}
         >
           <Text style={styles.primaryBtnTxt}>Continue</Text>
         </Pressable>
@@ -507,6 +535,12 @@ const styles = StyleSheet.create({
     color: C.muted,
     marginTop: 3,
     lineHeight: 18,
+  },
+  fieldError: {
+    fontSize: 13,
+    color: C.warnText,
+    marginTop: 6,
+    paddingHorizontal: 2,
   },
   warnInline: {
     fontSize: 14,
