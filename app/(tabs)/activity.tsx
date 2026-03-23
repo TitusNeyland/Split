@@ -38,128 +38,7 @@ const C = {
   /** Partial progress + remaining (HTML partial-fill). */
   partialAmber: '#EF9F27',
   red: '#E24B4A',
-  amberIconBg: '#FAEEDA',
-  amberIcon: '#854F0B',
 };
-
-/** Replace with subscription / payment API results. */
-type OverdueOwedItem = {
-  id: string;
-  memberId: string;
-  memberFirstName: string;
-  amount: number;
-  daysOverdue: number;
-  subscriptionName: string;
-  lastReminderLabel: string;
-};
-
-type UpcomingBillItem = {
-  id: string;
-  subscriptionName: string;
-  amount: number;
-  /** Bill charge date (next cycle). */
-  dueAt: Date;
-  subLabel: string;
-};
-
-/** Clear both lists to hide the card when everything is settled. Use `[]` for overdue-only tests. */
-const MOCK_OVERDUE_ITEMS: OverdueOwedItem[] = [
-  {
-    id: 'ov-sam-netflix',
-    memberId: 'member-sam',
-    memberFirstName: 'Sam',
-    amount: 5.33,
-    daysOverdue: 3,
-    subscriptionName: 'Netflix',
-    lastReminderLabel: 'last reminder 1 day ago',
-  },
-  {
-    id: 'ov-alex-spotify',
-    memberId: 'member-alex',
-    memberFirstName: 'Alex',
-    amount: 3.4,
-    daysOverdue: 1,
-    subscriptionName: 'Spotify Family',
-    lastReminderLabel: 'last reminder 4 days ago',
-  },
-];
-
-const MOCK_UPCOMING_BILLS: UpcomingBillItem[] = [
-  {
-    id: 'up-spotify',
-    subscriptionName: 'Spotify Family',
-    amount: 16.99,
-    dueAt: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000),
-    subLabel: '5 members · auto-charge',
-  },
-  {
-    id: 'up-netflix',
-    subscriptionName: 'Netflix Premium',
-    amount: 22.99,
-    dueAt: new Date(Date.now() + 12 * 24 * 60 * 60 * 1000),
-    subLabel: '3 members · auto-charge',
-  },
-];
-
-type UrgentFloatCard =
-  | {
-      kind: 'overdue';
-      id: string;
-      memberId: string;
-      memberFirstName: string;
-      title: string;
-      subtitle: string;
-    }
-  | {
-      kind: 'upcoming';
-      id: string;
-      title: string;
-      subtitle: string;
-    };
-
-function pickUrgentFloatCard(
-  overdue: OverdueOwedItem[],
-  upcoming: UpcomingBillItem[],
-): UrgentFloatCard | null {
-  const sortedOverdue = [...overdue]
-    .filter((o) => o.daysOverdue > 0)
-    .sort((a, b) => b.daysOverdue - a.daysOverdue);
-  if (sortedOverdue.length > 0) {
-    const o = sortedOverdue[0]!;
-    const dayWord = o.daysOverdue === 1 ? 'day' : 'days';
-    return {
-      kind: 'overdue',
-      id: o.id,
-      memberId: o.memberId,
-      memberFirstName: o.memberFirstName,
-      title: `${o.memberFirstName} owes $${o.amount.toFixed(2)} — ${o.daysOverdue} ${dayWord} overdue`,
-      subtitle: `${o.subscriptionName} · ${o.lastReminderLabel}`,
-    };
-  }
-
-  const now = Date.now();
-  const future = [...upcoming]
-    .filter((b) => b.dueAt.getTime() > now)
-    .sort((a, b) => a.dueAt.getTime() - b.dueAt.getTime());
-  if (future.length > 0) {
-    const u = future[0]!;
-    const msPerDay = 24 * 60 * 60 * 1000;
-    const days = Math.max(1, Math.ceil((u.dueAt.getTime() - now) / msPerDay));
-    const dayWord = days === 1 ? 'day' : 'days';
-    return {
-      kind: 'upcoming',
-      id: u.id,
-      title: `${u.subscriptionName} · $${u.amount.toFixed(2)} due in ${days} ${dayWord}`,
-      subtitle: u.subLabel,
-    };
-  }
-
-  return null;
-}
-
-async function sendMemberNudgePush(_memberId: string, _memberFirstName: string): Promise<void> {
-  // Wire to your API → APNs/FCM for the member’s device.
-}
 
 type ActivityFilterId = 'all' | 'received' | 'pending' | 'failed' | 'audit' | 'receipts';
 
@@ -979,23 +858,6 @@ export default function ActivityScreen() {
   const pendingCount = 3;
   const pendingBreakdown = '1 overdue · 1 partial';
 
-  const overdueItems = MOCK_OVERDUE_ITEMS;
-  const upcomingBills = MOCK_UPCOMING_BILLS;
-
-  const urgentCard = useMemo(
-    () => pickUrgentFloatCard(overdueItems, upcomingBills),
-    [overdueItems, upcomingBills],
-  );
-
-  const onNudge = useCallback((card: Extract<UrgentFloatCard, { kind: 'overdue' }>) => {
-    void sendMemberNudgePush(card.memberId, card.memberFirstName);
-    Alert.alert(
-      'Nudge sent',
-      `We'll send a payment reminder to ${card.memberFirstName}.`,
-      [{ text: 'OK' }],
-    );
-  }, []);
-
   const filteredGroups = useMemo(() => {
     const groups = MOCK_ACTIVITY_GROUPS.map((g) => ({
       ...g,
@@ -1157,33 +1019,7 @@ export default function ActivityScreen() {
           </ScrollView>
         </LinearGradient>
 
-        {urgentCard ? (
-          <View style={styles.floatCard}>
-            <View style={styles.fcIcon}>
-              <Ionicons name="alert-circle-outline" size={24} color={C.amberIcon} />
-            </View>
-            <View style={styles.fcTextCol}>
-              <Text style={styles.fcTitle} numberOfLines={2}>
-                {urgentCard.title}
-              </Text>
-              <Text style={styles.fcSub} numberOfLines={2}>
-                {urgentCard.subtitle}
-              </Text>
-            </View>
-            {urgentCard.kind === 'overdue' ? (
-              <Pressable
-                style={styles.nudgeBtn}
-                onPress={() => onNudge(urgentCard)}
-                accessibilityRole="button"
-                accessibilityLabel={`Nudge ${urgentCard.memberFirstName}`}
-              >
-                <Text style={styles.nudgeBtnText}>Nudge</Text>
-              </Pressable>
-            ) : null}
-          </View>
-        ) : null}
-
-        <View style={[styles.body, urgentCard ? styles.bodyAfterFloat : null]}>
+        <View style={styles.body}>
           {filteredGroups.length === 0 ? (
             filter === 'receipts' ? (
               <View style={styles.receiptsEmpty}>
@@ -1388,70 +1224,9 @@ const styles = StyleSheet.create({
   fpillTextOff: {
     color: 'rgba(255,255,255,0.7)',
   },
-  floatCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    backgroundColor: '#fff',
-    borderRadius: 22,
-    marginHorizontal: 16,
-    marginTop: -18,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderWidth: 0.5,
-    borderColor: C.border,
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowOffset: { width: 0, height: 3 },
-    shadowRadius: 14,
-    elevation: 4,
-  },
-  fcIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: C.amberIconBg,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  fcTextCol: {
-    flex: 1,
-    minWidth: 0,
-  },
-  fcTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: C.text,
-    lineHeight: 21,
-  },
-  fcSub: {
-    fontSize: 13,
-    color: C.muted,
-    marginTop: 3,
-    lineHeight: 18,
-  },
-  nudgeBtn: {
-    backgroundColor: C.purple,
-    borderRadius: 999,
-    paddingVertical: 11,
-    paddingHorizontal: 24,
-    minWidth: 96,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  nudgeBtnText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#fff',
-    letterSpacing: 0.2,
-  },
   body: {
     paddingHorizontal: 14,
     paddingTop: 16,
-  },
-  bodyAfterFloat: {
-    paddingTop: 10,
   },
   feedSectionFirst: {
     marginTop: 4,
