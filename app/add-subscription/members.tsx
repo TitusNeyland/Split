@@ -338,6 +338,48 @@ export default function AddSubscriptionMembersScreen() {
     [mode, totalCents],
   );
 
+  const removeMemberCore = useCallback(
+    (memberId: string) => {
+      let removed = false;
+      let removedIndex = -1;
+      let newN = 0;
+      setMembers((prev) => {
+        const idx = prev.findIndex((m) => m.memberId === memberId && !m.isOwner);
+        if (idx < 0) return prev;
+        removed = true;
+        removedIndex = idx;
+        const next = prev.filter((m) => m.memberId !== memberId);
+        newN = next.length;
+        return next;
+      });
+      if (!removed) return;
+
+      if (mode === 'equal') {
+        setCustomPercentStr(equalIntegerPercents(newN).map(String));
+        setFixedDollarStr(equalCentsSplit(totalCents, newN).map((c) => (c / 100).toFixed(2)));
+      } else if (mode === 'ownerLess') {
+        setCustomPercentStr(ownerLessIntegerPercents(newN).map(String));
+        setFixedDollarStr(ownerLessCentsSplit(totalCents, newN).map((c) => (c / 100).toFixed(2)));
+      } else if (mode === 'customPercent') {
+        setCustomPercentStr((p) => {
+          const np = [...p];
+          if (removedIndex >= 0 && removedIndex < np.length) np.splice(removedIndex, 1);
+          return np.length >= 1 ? np : ['100'];
+        });
+        setFixedDollarStr(equalCentsSplit(totalCents, newN).map((c) => (c / 100).toFixed(2)));
+      } else {
+        setFixedDollarStr((p) => {
+          const np = [...p];
+          if (removedIndex >= 0 && removedIndex < np.length) np.splice(removedIndex, 1);
+          if (np.length === 0) return [(totalCents / 100).toFixed(2)];
+          return np;
+        });
+        setCustomPercentStr(equalIntegerPercents(newN).map(String));
+      }
+    },
+    [mode, totalCents],
+  );
+
   const shareAppInvite = useCallback(async () => {
     try {
       await Share.share({
@@ -364,14 +406,14 @@ export default function AddSubscriptionMembersScreen() {
     }
   }, []);
 
-  const onPickFriend = useCallback(
+  const onToggleFriendInSplit = useCallback(
     (friend: SheetFriend) => {
-      if (members.some((m) => m.memberId === friend.memberId)) {
-        setPickerOpen(false);
-        setFriendQuery('');
+      const isOnSplit = members.some((m) => m.memberId === friend.memberId);
+      if (isOnSplit) {
+        removeMemberCore(friend.memberId);
         return;
       }
-      const ok = appendMemberCore({
+      appendMemberCore({
         memberId: friend.memberId,
         displayName: friend.displayName,
         initials: friend.initials,
@@ -379,13 +421,14 @@ export default function AddSubscriptionMembersScreen() {
         avatarColor: friend.avatarColor,
         isOwner: false,
       });
-      if (ok) {
-        setPickerOpen(false);
-        setFriendQuery('');
-      }
     },
-    [members, appendMemberCore],
+    [members, appendMemberCore, removeMemberCore],
   );
+
+  const closeMemberPicker = useCallback(() => {
+    setPickerOpen(false);
+    setFriendQuery('');
+  }, []);
 
   const inviteSearchNameToSplit = useCallback(
     (name: string) => {
@@ -401,8 +444,6 @@ export default function AddSubscriptionMembersScreen() {
         invitePending: true,
       });
       if (ok) void shareNamedInvite(trim);
-      setPickerOpen(false);
-      setFriendQuery('');
     },
     [appendMemberCore, shareNamedInvite],
   );
@@ -456,6 +497,11 @@ export default function AddSubscriptionMembersScreen() {
   }, [friendQuery]);
 
   const addedMemberIds = useMemo(() => new Set(members.map((m) => m.memberId)), [members]);
+
+  const nonOwnerMemberCount = useMemo(
+    () => members.filter((m) => !m.isOwner).length,
+    [members],
+  );
 
   const inputLocked = mode === 'equal' || mode === 'ownerLess';
 
@@ -640,15 +686,18 @@ export default function AddSubscriptionMembersScreen() {
         visible={pickerOpen}
         animationType="slide"
         transparent
-        onRequestClose={() => setPickerOpen(false)}
+        onRequestClose={closeMemberPicker}
       >
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={styles.modalRoot}
         >
-          <Pressable style={styles.modalBackdrop} onPress={() => setPickerOpen(false)} />
+          <View style={styles.modalBackdrop} pointerEvents="box-none" />
           <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 16) }]}>
             <View style={styles.sheetHandle} />
+            <Text style={styles.sheetTitle} accessibilityRole="header">
+              Add members ({nonOwnerMemberCount} selected)
+            </Text>
             <TextInput
               value={friendQuery}
               onChangeText={setFriendQuery}
@@ -660,6 +709,7 @@ export default function AddSubscriptionMembersScreen() {
             <Text style={styles.sheetSectionLbl}>Your friends</Text>
             <FlatList
               data={friendsForSheet}
+              extraData={members}
               keyExtractor={(item) => item.memberId}
               style={styles.sheetList}
               keyboardShouldPersistTaps="handled"
@@ -679,15 +729,34 @@ export default function AddSubscriptionMembersScreen() {
                   <Text style={styles.sheetEmpty}>No friends yet.</Text>
                 )
               }
+              ListFooterComponent={
+                <Pressable
+                  style={styles.sheetInviteRow}
+                  onPress={() => void shareAppInvite()}
+                  accessibilityRole="button"
+                  accessibilityLabel="Invite to mySplit, share link"
+                >
+                  <View style={styles.sheetInviteIco}>
+                    <Ionicons name="share-outline" size={20} color={C.purple} />
+                  </View>
+                  <View style={styles.sheetInviteCopy}>
+                    <Text style={styles.sheetInviteTitle}>Invite to mySplit</Text>
+                    <Text style={styles.sheetInviteSub}>Share an invite link</Text>
+                  </View>
+                </Pressable>
+              }
               renderItem={({ item }) => {
                 const added = addedMemberIds.has(item.memberId);
                 return (
                   <Pressable
-                    style={styles.friendRow}
-                    onPress={() => onPickFriend(item)}
+                    style={[styles.friendRow, added && styles.friendRowSelected]}
+                    onPress={() => onToggleFriendInSplit(item)}
                     accessibilityRole="button"
+                    accessibilityState={{ selected: added }}
                     accessibilityLabel={
-                      added ? `${item.displayName}, already added` : `Add ${item.displayName}`
+                      added
+                        ? `${item.displayName}, on split — tap to remove`
+                        : `Add ${item.displayName} to split`
                     }
                   >
                     <View style={styles.sheetAvatarWrap}>
@@ -697,8 +766,8 @@ export default function AddSubscriptionMembersScreen() {
                         </Text>
                       </View>
                       {added ? (
-                        <View style={styles.sheetAddedBadge} accessibilityLabel="Added to split">
-                          <Ionicons name="checkmark" size={11} color="#fff" />
+                        <View style={styles.sheetAddedBadge} accessibilityLabel="Selected for split">
+                          <Ionicons name="checkmark" size={14} color="#fff" />
                         </View>
                       ) : null}
                     </View>
@@ -714,24 +783,17 @@ export default function AddSubscriptionMembersScreen() {
                             : `${item.mutualSubscriptionsCount} mutual subscriptions`}
                       </Text>
                     </View>
-                    <Ionicons name="chevron-forward" size={18} color={C.muted} />
                   </Pressable>
                 );
               }}
             />
             <Pressable
-              style={styles.sheetInviteRow}
-              onPress={() => void shareAppInvite()}
+              onPress={closeMemberPicker}
+              style={({ pressed }) => [styles.sheetDoneBtn, pressed && styles.sheetDoneBtnPressed]}
               accessibilityRole="button"
-              accessibilityLabel="Invite to mySplit, share link"
+              accessibilityLabel="Done adding members"
             >
-              <View style={styles.sheetInviteIco}>
-                <Ionicons name="share-outline" size={20} color={C.purple} />
-              </View>
-              <View style={styles.sheetInviteCopy}>
-                <Text style={styles.sheetInviteTitle}>Invite to mySplit</Text>
-                <Text style={styles.sheetInviteSub}>Share an invite link</Text>
-              </View>
+              <Text style={styles.sheetDoneBtnTxt}>Done</Text>
             </Pressable>
           </View>
         </KeyboardAvoidingView>
@@ -1057,7 +1119,15 @@ const styles = StyleSheet.create({
     borderRadius: 3,
     backgroundColor: '#D3D1C7',
     alignSelf: 'center',
-    marginBottom: 16,
+    marginBottom: 12,
+  },
+  sheetTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: C.text,
+    letterSpacing: -0.3,
+    marginBottom: 14,
+    textAlign: 'center',
   },
   sheetSearch: {
     backgroundColor: C.segBg,
@@ -1077,7 +1147,8 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   sheetList: {
-    maxHeight: 320,
+    flexGrow: 0,
+    maxHeight: 280,
   },
   sheetEmpty: {
     fontSize: 15,
@@ -1104,16 +1175,19 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: C.divider,
   },
+  friendRowSelected: {
+    backgroundColor: 'rgba(83, 74, 183, 0.06)',
+  },
   sheetAvatarWrap: {
     position: 'relative',
   },
   sheetAddedBadge: {
     position: 'absolute',
-    right: -4,
-    bottom: -4,
-    width: 18,
-    height: 18,
-    borderRadius: 9,
+    right: -2,
+    bottom: -2,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     backgroundColor: C.purple,
     borderWidth: 2,
     borderColor: '#fff',
@@ -1138,11 +1212,28 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    marginTop: 4,
+    marginTop: 0,
     paddingVertical: 14,
     paddingHorizontal: 4,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: C.divider,
+  },
+  sheetDoneBtn: {
+    marginTop: 12,
+    width: '100%',
+    paddingVertical: 16,
+    borderRadius: 14,
+    backgroundColor: C.purple,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sheetDoneBtnPressed: {
+    opacity: 0.92,
+  },
+  sheetDoneBtnTxt: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#fff',
   },
   sheetInviteIco: {
     width: 44,
