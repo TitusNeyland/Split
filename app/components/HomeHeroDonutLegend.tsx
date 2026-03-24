@@ -13,9 +13,6 @@ export type HomeHeroDonutLegendProps = {
   youOwe: number;
   owedToYou: number;
   overdue: number;
-  youOweSub: string;
-  owedSub: string;
-  overdueSub: string;
 };
 
 function fmt(n: number): string {
@@ -26,9 +23,6 @@ export function HomeHeroDonutLegend({
   youOwe,
   owedToYou,
   overdue,
-  youOweSub,
-  owedSub,
-  overdueSub,
 }: HomeHeroDonutLegendProps) {
   return (
     <View style={styles.legendCol}>
@@ -39,9 +33,6 @@ export function HomeHeroDonutLegend({
         <View style={styles.legContent}>
           <Text style={styles.legLabel}>You owe</Text>
           <Text style={[styles.legAmt, { color: AMT_RED }]}>{fmt(youOwe)}</Text>
-          <Text style={styles.legSub} numberOfLines={2}>
-            {youOweSub}
-          </Text>
         </View>
       </View>
       <View style={styles.legItem}>
@@ -51,9 +42,6 @@ export function HomeHeroDonutLegend({
         <View style={styles.legContent}>
           <Text style={styles.legLabel}>Owed to you</Text>
           <Text style={[styles.legAmt, { color: AMT_GREEN }]}>{fmt(owedToYou)}</Text>
-          <Text style={styles.legSub} numberOfLines={2}>
-            {owedSub}
-          </Text>
         </View>
       </View>
       <View style={styles.legItem}>
@@ -63,9 +51,6 @@ export function HomeHeroDonutLegend({
         <View style={styles.legContent}>
           <Text style={styles.legLabel}>Pending</Text>
           <Text style={[styles.legAmt, { color: AMT_AMBER }]}>{fmt(overdue)}</Text>
-          <Text style={styles.legSub} numberOfLines={2}>
-            {overdueSub}
-          </Text>
         </View>
       </View>
     </View>
@@ -108,12 +93,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: -0.4,
     lineHeight: 22,
-    marginTop: 2,
-  },
-  legSub: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.35)',
-    lineHeight: 16,
     marginTop: 2,
   },
 });
