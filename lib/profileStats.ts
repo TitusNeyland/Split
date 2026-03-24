@@ -11,7 +11,7 @@ import { getFirebaseFirestore } from './firebase';
  * Firestore shape (create composite indexes as prompted by the SDK):
  * - subscriptions: members (array-contains) + status == "active"
  * - payments: recipient == uid + status == "paid" (documents use numeric `amount` in dollars)
- * - users/{uid}/friendships: one doc per connected friend
+ * - friendships: `users` array-contains current uid (top-level collection)
  */
 export type ProfileStatsLoading = {
   activeSplits: boolean;
@@ -109,7 +109,7 @@ export function subscribeProfileStats(uid: string, onUpdate: (stats: ProfileStat
 
   unsubs.push(
     onSnapshot(
-      collection(db, 'users', uid, 'friendships'),
+      query(collection(db, 'friendships'), where('users', 'array-contains', uid)),
       (snap) => {
         data.friends = snap.size;
         data.loading.friends = false;
