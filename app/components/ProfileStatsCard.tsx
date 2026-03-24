@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+;
 import { View, Text, StyleSheet, Animated, type ViewStyle } from 'react-native';
 import { subscribeProfileStats, type ProfileStats } from '../../lib/profileStats';
 

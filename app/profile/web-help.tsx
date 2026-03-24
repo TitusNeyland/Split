@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+;
 import { View, Text, StyleSheet, Pressable, Platform, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';

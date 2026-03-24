@@ -1,4 +1,5 @@
 import React, { useCallback, useMemo } from 'react';
+;
 import { View, Text, StyleSheet, Pressable, Alert, Platform } from 'react-native';
 import { router } from 'expo-router';
 import * as Linking from 'expo-linking';

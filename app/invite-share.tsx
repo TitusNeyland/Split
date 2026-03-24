@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+;
 import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
