@@ -69,6 +69,13 @@ export default function RootLayout() {
               animation: 'fade',
             }}
           />
+          <Stack.Screen
+            name="subscription/[id]"
+            options={{
+              headerShown: false,
+              animation: 'slide_from_right',
+            }}
+          />
         </Stack>
         {showSplash && (
           <Animated.View style={[styles.splashOverlay, { opacity }]}>

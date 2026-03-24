@@ -1,8 +1,8 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, Pressable, Alert } from 'react-native';
+import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { SubscriptionCard } from './SubscriptionCard';
-import { SubscriptionSplitEditor } from './SubscriptionSplitEditor';
 import { ServiceIcon } from './ServiceIcon';
 import { SUBSCRIPTIONS_DEMO_MODE } from '../../lib/subscriptionsScreenDemo';
 import { useSubscriptionPriceBanner } from '../../lib/useSubscriptionPriceBanner';
@@ -69,55 +69,6 @@ function OwnerBadgeRow() {
   );
 }
 
-function useNextBillingCycleStart() {
-  return useMemo(() => {
-    const d = new Date();
-    d.setMonth(d.getMonth() + 1);
-    d.setDate(1);
-    d.setHours(0, 0, 0, 0);
-    return d;
-  }, []);
-}
-
-const NETFLIX_SPLIT_MEMBERS = [
-  {
-    memberId: '1',
-    displayName: 'Titus (you)',
-    initials: 'TN',
-    avatarBg: '#EEEDFE',
-    avatarColor: C.purple,
-  },
-  {
-    memberId: '2',
-    displayName: 'Alex L.',
-    initials: 'AL',
-    avatarBg: '#E1F5EE',
-    avatarColor: C.greenDark,
-  },
-  {
-    memberId: '3',
-    displayName: 'Sam M.',
-    initials: 'SM',
-    avatarBg: '#FAECE7',
-    avatarColor: '#993C1D',
-  },
-] as const;
-
-const SPOTIFY_SPLIT_MEMBERS = [
-  { memberId: '1', displayName: 'Titus (you)', initials: 'TN', avatarBg: '#EEEDFE', avatarColor: C.purple },
-  { memberId: '2', displayName: 'Alex L.', initials: 'AL', avatarBg: '#E1F5EE', avatarColor: C.greenDark },
-  { memberId: '3', displayName: 'Sam M.', initials: 'SM', avatarBg: '#FAECE7', avatarColor: '#993C1D' },
-  { memberId: '4', displayName: 'Taylor R.', initials: 'TR', avatarBg: '#E6F1FB', avatarColor: '#185FA5' },
-  { memberId: '5', displayName: 'Kim P.', initials: 'KP', avatarBg: '#EAF3DE', avatarColor: '#3B6D11' },
-] as const;
-
-const ICLOUD_SPLIT_MEMBERS = [
-  { memberId: '1', displayName: 'Titus (you)', initials: 'TN', avatarBg: '#EEEDFE', avatarColor: C.purple },
-  { memberId: '2', displayName: 'Alex L.', initials: 'AL', avatarBg: '#E1F5EE', avatarColor: C.greenDark },
-  { memberId: '3', displayName: 'Sam M.', initials: 'SM', avatarBg: '#FAECE7', avatarColor: '#993C1D' },
-  { memberId: '4', displayName: 'Taylor R.', initials: 'TR', avatarBg: '#E6F1FB', avatarColor: '#185FA5' },
-] as const;
-
 /** Stable “changed at” for demo banner logic (auto-dismiss uses billing day 18). */
 const DEMO_NETFLIX_PRICE_CHANGED_AT_MS = 1_712_707_200_000;
 
@@ -134,10 +85,10 @@ function demoNetflixPriceBannerFields(): SubscriptionPriceBannerFields {
 }
 
 function NetflixCard({ userAvatarUrl }: { userAvatarUrl: string | null }) {
-  const [editorOpen, setEditorOpen] = useState(false);
+  const router = useRouter();
   const uid = useFirebaseUid();
-  const nextCycleStart = useNextBillingCycleStart();
   const netflixPriceSub = useMemo(() => demoNetflixPriceBannerFields(), []);
+  const goDetail = () => router.push('/subscription/demo-netflix-premium');
 
   const { visible: priceBannerVisible, message: priceBannerMessage, dismiss: dismissPriceBanner } =
     useSubscriptionPriceBanner({
@@ -184,34 +135,19 @@ function NetflixCard({ userAvatarUrl }: { userAvatarUrl: string | null }) {
       }}
       dueLabel="Today"
       progress={{
-        percentCollected: 66,
-        collectedLabel: '$15.32 collected',
+        percentCollected: Math.round((100 * 1533) / 2299),
+        collectedLabel: '$15.33 collected',
         rightLabel: '$22.99',
       }}
-      onEditSplitPress={() => setEditorOpen((o) => !o)}
-      editSplitButtonLabel={editorOpen ? 'Close editor' : 'Edit split'}
-      belowEditSplit={
-        editorOpen ? (
-          <SubscriptionSplitEditor
-            subscriptionId="demo-netflix-premium"
-            totalCents={NETFLIX_TOTAL_CENTS}
-            members={NETFLIX_SPLIT_MEMBERS.map((m, i) =>
-              i === 0 ? { ...m, avatarUrl: userAvatarUrl } : m
-            )}
-            nextCycleEffectiveFrom={nextCycleStart}
-            skipFirestore={SUBSCRIPTIONS_DEMO_MODE}
-            onCancel={() => setEditorOpen(false)}
-            onSaved={() => setEditorOpen(false)}
-          />
-        ) : null
-      }
+      onCardPress={goDetail}
+      onEditSplitPress={goDetail}
     />
   );
 }
 
 function SpotifyCard({ userAvatarUrl }: { userAvatarUrl: string | null }) {
-  const [editorOpen, setEditorOpen] = useState(false);
-  const nextCycleStart = useNextBillingCycleStart();
+  const router = useRouter();
+  const goDetail = () => router.push('/subscription/demo-spotify-family');
 
   return (
     <SubscriptionCard
@@ -241,30 +177,15 @@ function SpotifyCard({ userAvatarUrl }: { userAvatarUrl: string | null }) {
         rightLabel: 'Complete',
         isComplete: true,
       }}
-      onEditSplitPress={() => setEditorOpen((o) => !o)}
-      editSplitButtonLabel={editorOpen ? 'Close editor' : 'Edit split'}
-      belowEditSplit={
-        editorOpen ? (
-          <SubscriptionSplitEditor
-            subscriptionId="demo-spotify-family"
-            totalCents={1699}
-            members={SPOTIFY_SPLIT_MEMBERS.map((m, i) =>
-              i === 0 ? { ...m, avatarUrl: userAvatarUrl } : m
-            )}
-            nextCycleEffectiveFrom={nextCycleStart}
-            skipFirestore={SUBSCRIPTIONS_DEMO_MODE}
-            onCancel={() => setEditorOpen(false)}
-            onSaved={() => setEditorOpen(false)}
-          />
-        ) : null
-      }
+      onCardPress={goDetail}
+      onEditSplitPress={goDetail}
     />
   );
 }
 
 function ICloudCard({ userAvatarUrl }: { userAvatarUrl: string | null }) {
-  const [editorOpen, setEditorOpen] = useState(false);
-  const nextCycleStart = useNextBillingCycleStart();
+  const router = useRouter();
+  const goDetail = () => router.push('/subscription/demo-icloud-2tb');
 
   return (
     <SubscriptionCard
@@ -294,34 +215,25 @@ function ICloudCard({ userAvatarUrl }: { userAvatarUrl: string | null }) {
         rightLabelColor: C.muted,
         barColor: C.muted,
       }}
-      onEditSplitPress={() => setEditorOpen((o) => !o)}
-      editSplitButtonLabel={editorOpen ? 'Close editor' : 'Edit split'}
-      belowEditSplit={
-        editorOpen ? (
-          <SubscriptionSplitEditor
-            subscriptionId="demo-icloud-2tb"
-            totalCents={999}
-            members={ICLOUD_SPLIT_MEMBERS.map((m, i) =>
-              i === 0 ? { ...m, avatarUrl: userAvatarUrl } : m
-            )}
-            nextCycleEffectiveFrom={nextCycleStart}
-            skipFirestore={SUBSCRIPTIONS_DEMO_MODE}
-            onCancel={() => setEditorOpen(false)}
-            onSaved={() => setEditorOpen(false)}
-          />
-        ) : null
-      }
+      onCardPress={goDetail}
+      onEditSplitPress={goDetail}
     />
   );
 }
 
 function HuluOverdueCard() {
+  const router = useRouter();
   return (
-    <View style={[styles.subCard, styles.subCardOverdue]}>
+    <Pressable
+      style={[styles.subCard, styles.subCardOverdue]}
+      onPress={() => router.push('/subscription/demo-hulu-overdue')}
+      accessibilityRole="button"
+      accessibilityLabel="Open Hulu subscription details"
+    >
       <View style={styles.overdueBanner}>
         <Ionicons name="alert-circle-outline" size={14} color="#A32D2D" />
         <Text style={styles.overdueBannerTxt}>3 days overdue — Sam hasn&apos;t paid $4.00</Text>
-        <Pressable style={styles.remindBtn}>
+        <Pressable style={styles.remindBtn} accessibilityRole="button" accessibilityLabel="Remind member">
           <Text style={styles.remindBtnTxt}>Remind</Text>
         </Pressable>
       </View>
@@ -358,17 +270,23 @@ function HuluOverdueCard() {
           </View>
         </View>
       </View>
-    </View>
+    </Pressable>
   );
 }
 
 function XboxPausedCard() {
+  const router = useRouter();
   return (
-    <View style={[styles.subCard, styles.subCardPaused]}>
+    <Pressable
+      style={[styles.subCard, styles.subCardPaused]}
+      onPress={() => router.push('/subscription/demo-xbox-paused')}
+      accessibilityRole="button"
+      accessibilityLabel="Open Xbox Game Pass subscription details"
+    >
       <View style={styles.pausedBanner}>
         <Ionicons name="pause" size={14} color="#5F5E5A" />
         <Text style={styles.pausedBannerTxt}>Paused · skipping billing cycles</Text>
-        <Pressable hitSlop={6}>
+        <Pressable hitSlop={6} accessibilityRole="button" accessibilityLabel="Resume subscription">
           <Text style={styles.resumeTxt}>Resume</Text>
         </Pressable>
       </View>
@@ -397,7 +315,7 @@ function XboxPausedCard() {
           </View>
         </View>
       </View>
-    </View>
+    </Pressable>
   );
 }
 
