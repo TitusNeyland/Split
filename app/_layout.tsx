@@ -90,6 +90,7 @@ export default function RootLayout() {
           />
           <Stack.Screen name="invite/[inviteId]" options={{ headerShown: false }} />
           <Stack.Screen name="friends" options={{ headerShown: false }} />
+          <Stack.Screen name="friends-contacts" options={{ headerShown: false }} />
         </Stack>
         {showSplash && (
           <Animated.View style={[styles.splashOverlay, { opacity }]}>

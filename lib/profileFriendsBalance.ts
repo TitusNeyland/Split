@@ -95,3 +95,80 @@ export function getFriendFilterDisplayName(friendId: string): string {
   if (r.kind === 'you_owe') return r.counterpartyShortName;
   return r.displayName;
 }
+
+/** Row for the Friends hub list (avatar, net line, shared subs). */
+export type FriendsHubFriendRow = {
+  id: string;
+  /** When set, Remove also deletes `friendships/{uid_pair}` in Firestore. */
+  remoteUid?: string;
+  displayName: string;
+  initials: string;
+  sharedSubsLabel: string;
+  balanceMain: string;
+  balanceSub: string;
+  /** Primary amount color for the main balance line. */
+  balanceTone: 'green' | 'red' | 'amber' | 'gray';
+};
+
+function toSharedSubsLabel(subscriptionCountLabel: string): string {
+  const m = subscriptionCountLabel.match(/^(\d+)\s+/);
+  if (m) {
+    const n = Number(m[1]);
+    return `${n} shared subscription${n === 1 ? '' : 's'}`;
+  }
+  return subscriptionCountLabel.replace(/\bsubscription\b/i, 'shared subscription');
+}
+
+/** Maps demo / design-time balances into Friends hub rows. */
+export function getFriendsHubFriendRows(): FriendsHubFriendRow[] {
+  return PROFILE_FRIEND_BALANCES.map((row): FriendsHubFriendRow => {
+    if (row.kind === 'you_owe') {
+      return {
+        id: row.id,
+        displayName: row.counterpartyShortName.replace(/\.$/, '') || row.counterpartyShortName,
+        initials: (() => {
+          const parts = row.counterpartyShortName.trim().split(/\s+/).filter(Boolean);
+          if (parts.length >= 2) {
+            return `${parts[0]![0] ?? ''}${parts[1]![0] ?? ''}`.toUpperCase();
+          }
+          return row.counterpartyShortName.slice(0, 2).toUpperCase() || '?';
+        })(),
+        sharedSubsLabel: toSharedSubsLabel(row.subscriptionCountLabel),
+        balanceMain: `you owe $${row.amount.toFixed(2)}`,
+        balanceSub: 'Tap activity for details',
+        balanceTone: 'red',
+      };
+    }
+    if (row.kind === 'they_owe_overdue') {
+      return {
+        id: row.id,
+        displayName: row.displayName,
+        initials: row.initials,
+        sharedSubsLabel: toSharedSubsLabel(row.subscriptionCountLabel),
+        balanceMain: `owes $${(row.amount ?? 0).toFixed(2)}`,
+        balanceSub: row.subLine,
+        balanceTone: 'red',
+      };
+    }
+    if (row.kind === 'they_owe_pending') {
+      return {
+        id: row.id,
+        displayName: row.displayName,
+        initials: row.initials,
+        sharedSubsLabel: toSharedSubsLabel(row.subscriptionCountLabel),
+        balanceMain: `owes $${(row.amount ?? 0).toFixed(2)}`,
+        balanceSub: row.subLine,
+        balanceTone: 'green',
+      };
+    }
+    return {
+      id: row.id,
+      displayName: row.displayName,
+      initials: row.initials,
+      sharedSubsLabel: toSharedSubsLabel(row.subscriptionCountLabel),
+      balanceMain: 'settled',
+      balanceSub: 'all clear',
+      balanceTone: 'gray',
+    };
+  });
+}

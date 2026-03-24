@@ -262,7 +262,7 @@ export default function ProfileScreen() {
         <View style={styles.heroBlock}>
         <LinearGradient
           {...HERO_GRADIENT}
-          style={[styles.hero, { paddingTop: Math.max(insets.top, 12) + 8, paddingBottom: 44 }]}
+          style={[styles.hero, { paddingTop: Math.max(insets.top, 12) + 8, paddingBottom: 48 }]}
         >
           <View style={styles.topBar}>
             <Text style={styles.pageTitle}>Profile</Text>
@@ -454,7 +454,7 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 0,
   },
   statsOverlap: {
-    marginTop: -24,
+    marginTop: -18,
     paddingHorizontal: 20,
     marginBottom: 12,
     zIndex: 1,
