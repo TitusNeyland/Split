@@ -576,7 +576,7 @@ export default function HomeScreen() {
 
           <View style={styles.sh}>
             <Text style={styles.shTitle}>Upcoming splits</Text>
-            <Text style={styles.shAction}>See all</Text>
+            <Text style={styles.shAction} onPress={() => router.push('/(tabs)/subscriptions')}>See all</Text>
           </View>
           {upcomingSplits.length > 0 ? (
             <View style={styles.listCard}>
@@ -584,6 +584,7 @@ export default function HomeScreen() {
                 <Pressable
                   key={item.id}
                   style={[styles.subRow, i === upcomingSplits.length - 1 && styles.rowLast]}
+                  onPress={() => router.push(`/subscription/${item.id}`)}
                 >
                   <View style={styles.subIco}>
                     <ServiceIcon serviceName={item.serviceName} size={38} />
