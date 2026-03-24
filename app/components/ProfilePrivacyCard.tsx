@@ -28,7 +28,10 @@ const C = {
   sheetBg: '#F2F0EB',
 };
 
-type BoolKey = 'activityVisibleToGroup' | 'showBalanceToFriends';
+type BoolKey =
+  | 'activityVisibleToGroup'
+  | 'discoverableByName'
+  | 'showBalanceToFriends';
 
 type Props = {
   user: User | null;
@@ -105,6 +108,25 @@ export default function ProfilePrivacyCard({
           <Text style={styles.sub}>Members see when you pay</Text>
         </View>
         <ProfilePurpleToggleVisual value={prefs.activityVisibleToGroup} />
+      </Pressable>
+
+      <View style={styles.hairline} />
+      <Pressable
+        style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+        onPress={() => onToggle('discoverableByName')}
+        accessibilityRole="switch"
+        accessibilityState={{ checked: prefs.discoverableByName }}
+        accessibilityLabel="Allow others to find me by name"
+        accessibilityHint="When off, you won’t appear in display name search"
+      >
+        <View style={[styles.iconBox, { backgroundColor: '#EEEDFE', borderRadius: 10 }]}>
+          <Ionicons name="search-outline" size={18} color="#534AB7" />
+        </View>
+        <View style={styles.mid}>
+          <Text style={styles.title}>Allow others to find me by name</Text>
+          <Text style={styles.sub}>Appear when people search by display name</Text>
+        </View>
+        <ProfilePurpleToggleVisual value={prefs.discoverableByName} />
       </Pressable>
 
       <View style={styles.hairline} />
