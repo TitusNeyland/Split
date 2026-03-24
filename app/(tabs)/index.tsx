@@ -536,7 +536,7 @@ export default function HomeScreen() {
 
           <View style={styles.sh}>
             <Text style={styles.shTitle}>Friend balances</Text>
-            <Text style={styles.shAction}>See all</Text>
+            <Text style={styles.shAction} onPress={() => router.push('/friends')}>See all</Text>
           </View>
           {friendBalances.length > 0 ? (
             <View style={styles.listCard}>
@@ -546,6 +546,7 @@ export default function HomeScreen() {
                 <Pressable
                   key={f.id}
                   style={[styles.friendRow, i === friendBalances.length - 1 && styles.rowLast]}
+                  onPress={() => router.push('/friends')}
                 >
                   <View style={[styles.friendAv, { backgroundColor: av.backgroundColor }]}>
                     <Text style={[styles.friendAvTxt, { color: av.color }]}>{f.initials}</Text>
