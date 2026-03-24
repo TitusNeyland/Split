@@ -61,6 +61,9 @@ const C = {
   rowDivider: '#F5F3EE',
 };
 
+/** Rounded square corners for 38×38 tiles; matches `ServiceIcon` (`size * 0.28`). */
+const SERVICE_TILE_RADIUS = Math.round(38 * 0.28);
+
 function initialHomeFinancialPosition(): HomeFinancialPosition {
   if (HOME_PREVIEW === 'empty') {
     return { youOwe: 0, owedToYou: 0, overdue: 0, loading: false };
@@ -640,7 +643,7 @@ export default function HomeScreen() {
                   style={[styles.subRow, i === upcomingSplits.length - 1 && styles.rowLast]}
                 >
                   <View style={styles.subIco}>
-                    <ServiceIcon serviceName={item.serviceName} size={36} />
+                    <ServiceIcon serviceName={item.serviceName} size={38} />
                   </View>
                   <View style={styles.subMid}>
                     <Text style={styles.subName}>{item.name}</Text>
@@ -694,11 +697,11 @@ export default function HomeScreen() {
                     </View>
                   ) : item.kind === 'payment' && item.serviceMark ? (
                     <View style={styles.actIcoWrap}>
-                      <ServiceIcon serviceName={item.serviceMark} size={26} />
+                      <ServiceIcon serviceName={item.serviceMark} size={38} />
                     </View>
                   ) : (
-                    <View style={[styles.actIcoWrap, styles.actReminderCircle]}>
-                      <Ionicons name="notifications-outline" size={24} color="#854F0B" />
+                    <View style={[styles.actIcoWrap, styles.actReminderTile]}>
+                      <Ionicons name="notifications-outline" size={30} color="#854F0B" />
                     </View>
                   )}
                   <View style={styles.actMid}>
@@ -1044,8 +1047,8 @@ const styles = StyleSheet.create({
     borderBottomColor: C.rowDivider,
   },
   subIco: {
-    width: 36,
-    height: 36,
+    width: 38,
+    height: 38,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1079,35 +1082,35 @@ const styles = StyleSheet.create({
   actRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
     paddingVertical: 12,
     paddingHorizontal: 14,
     borderBottomWidth: 0.5,
     borderBottomColor: C.rowDivider,
   },
   actIcoWrap: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    overflow: 'hidden',
+    width: 38,
+    height: 38,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
   },
   actAvatarWrap: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 38,
+    height: 38,
+    borderRadius: SERVICE_TILE_RADIUS,
     overflow: 'hidden',
     flexShrink: 0,
   },
   actAvatarImg: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 38,
+    height: 38,
+    borderRadius: SERVICE_TILE_RADIUS,
   },
-  actReminderCircle: {
+  actReminderTile: {
     backgroundColor: '#FAEEDA',
+    borderRadius: SERVICE_TILE_RADIUS,
+    overflow: 'hidden',
   },
   actMid: {
     flex: 1,
@@ -1120,9 +1123,10 @@ const styles = StyleSheet.create({
     color: C.text,
   },
   actTime: {
-    fontSize: 13,
+    fontSize: 10,
     color: C.muted,
     marginTop: 1,
+    lineHeight: 13,
   },
   actAmt: {
     fontSize: 15,
