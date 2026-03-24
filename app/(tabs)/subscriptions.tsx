@@ -7,7 +7,7 @@ import {
   Pressable,
   useWindowDimensions,
 } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
@@ -46,9 +46,6 @@ function formatBadgeCount(n: number): string {
 
 export default function SubscriptionsScreen() {
   const router = useRouter();
-  const { calendar: calendarParam } = useLocalSearchParams<{ calendar?: string | string[] }>();
-  const fromHomeCalendar =
-    calendarParam === '1' || (Array.isArray(calendarParam) && calendarParam[0] === '1');
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const [user, setUser] = useState<User | null>(null);
@@ -98,14 +95,24 @@ export default function SubscriptionsScreen() {
         >
           <View style={styles.sbar}>
             <Text style={styles.pageTitle}>Subscriptions</Text>
-            <Pressable
-              style={styles.addBtn}
-              accessibilityRole="button"
-              accessibilityLabel="Add subscription"
-              onPress={() => router.push('/add-subscription')}
-            >
-              <Text style={styles.addBtnTxt}>+ Add</Text>
-            </Pressable>
+            <View style={styles.sbarActions}>
+              <Pressable
+                style={styles.calIconBtn}
+                accessibilityRole="button"
+                accessibilityLabel="Billing calendar"
+                onPress={() => router.push('/billing-calendar')}
+              >
+                <Ionicons name="calendar-outline" size={22} color="#fff" />
+              </Pressable>
+              <Pressable
+                style={styles.addBtn}
+                accessibilityRole="button"
+                accessibilityLabel="Add subscription"
+                onPress={() => router.push('/add-subscription')}
+              >
+                <Text style={styles.addBtnTxt}>+ Add</Text>
+              </Pressable>
+            </View>
           </View>
 
           <View style={styles.heroStats}>
@@ -180,16 +187,6 @@ export default function SubscriptionsScreen() {
         </LinearGradient>
 
         {SUBSCRIPTIONS_DEMO_MODE ? <SubscriptionsDemoFloatCard /> : null}
-
-        {fromHomeCalendar ? (
-          <View style={styles.calendarFromHome}>
-            <Text style={styles.calendarFromHomeTitle}>Billing calendar</Text>
-            <Text style={styles.calendarFromHomeBody}>
-              Full month view and filters will live here. For now, use the week strip on Home for the next
-              charge; subscription cards below still reflect your active filters.
-            </Text>
-          </View>
-        ) : null}
 
         <View style={[styles.body, { minHeight: Math.max(320, width * 0.9) }]}>
           {SUBSCRIPTIONS_DEMO_MODE ? (
@@ -285,6 +282,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 16,
+  },
+  sbarActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  calIconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   pageTitle: {
     fontSize: 23,
@@ -391,28 +401,6 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: '700',
     color: '#fff',
-  },
-  calendarFromHome: {
-    marginHorizontal: 14,
-    marginTop: 12,
-    marginBottom: 4,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    borderWidth: 0.5,
-    borderColor: 'rgba(0,0,0,0.06)',
-  },
-  calendarFromHomeTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: C.text,
-    marginBottom: 6,
-  },
-  calendarFromHomeBody: {
-    fontSize: 14,
-    color: C.muted,
-    lineHeight: 20,
   },
   body: {
     paddingHorizontal: 14,

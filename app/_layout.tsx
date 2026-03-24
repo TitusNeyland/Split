@@ -81,6 +81,13 @@ export default function RootLayout() {
             }}
           />
           <Stack.Screen
+            name="billing-calendar"
+            options={{
+              headerShown: false,
+              animation: 'slide_from_right',
+            }}
+          />
+          <Stack.Screen
             name="invite-share"
             options={{
               presentation: 'transparentModal',

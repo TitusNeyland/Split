@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+;
 import { View, Text, StyleSheet, Pressable, ActivityIndicator, Modal } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { onAuthStateChanged, type User } from 'firebase/auth';

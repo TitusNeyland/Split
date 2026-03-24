@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+;
 import { View, Text, StyleSheet, Pressable, Image } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';

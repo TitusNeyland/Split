@@ -453,10 +453,10 @@ export default function HomeScreen() {
           <View style={[styles.sh, styles.weekSectionHeader]}>
             <Text style={[styles.shTitle, styles.weekSectionTitle]}>This week</Text>
             <Pressable
-              onPress={() => router.push('/subscriptions?calendar=1')}
+              onPress={() => router.push('/billing-calendar')}
               hitSlop={8}
               accessibilityRole="button"
-              accessibilityLabel="Open full billing calendar on Subscriptions"
+              accessibilityLabel="Open full billing calendar"
             >
               <Text style={[styles.shAction, styles.weekSectionAction]}>Full calendar</Text>
             </Pressable>
