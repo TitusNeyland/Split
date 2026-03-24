@@ -4,6 +4,7 @@ import {
   collection,
   doc,
   getDoc,
+  getDocs,
   onSnapshot,
   orderBy,
   query,
@@ -21,9 +22,17 @@ import { getFirebaseFirestore } from './firebase';
 export const FRIENDSHIPS_COLLECTION = 'friendships';
 export const INVITES_COLLECTION = 'invites';
 
-export type FriendshipConnectedVia = 'split_invite' | 'direct_invite' | 'contacts';
+export type FriendshipConnectedVia =
+  | 'split_invite'
+  | 'direct_invite'
+  | 'contacts'
+  | 'user_search';
 
-/** Top-level `friendships/{friendshipId}` — written only by Cloud Functions. */
+/**
+ * Top-level `friendships/{friendshipId}`.
+ * Prefer creating these via Cloud Functions + security rules; the client helper below exists for
+ * early development and must be allowed by your rules if used in production.
+ */
 export type FirestoreFriendship = {
   users: [string, string];
   connectedAt: Timestamp;
@@ -187,6 +196,50 @@ export function friendsQueryForUid(uid: string) {
     where('users', 'array-contains', uid),
     orderBy('connectedAt', 'desc')
   );
+}
+
+/**
+ * Creates an accepted friendship immediately (used after in-app user search → Connect).
+ * Requires Firestore rules that permit this write, or replace with a callable function.
+ */
+export async function createDirectFriendshipFromSearch(input: {
+  currentUid: string;
+  otherUid: string;
+}): Promise<void> {
+  const db = getFirebaseFirestore();
+  if (!db) throw new Error('Firestore is not configured.');
+  if (input.currentUid === input.otherUid) throw new Error('Invalid friend.');
+
+  const id = friendshipDocId(input.currentUid, input.otherUid);
+  const [a, b] = sortFriendUids(input.currentUid, input.otherUid);
+  await setDoc(doc(db, FRIENDSHIPS_COLLECTION, id), {
+    users: [a, b],
+    connectedAt: serverTimestamp(),
+    connectedVia: 'user_search' satisfies FriendshipConnectedVia,
+    initiatedBy: input.currentUid,
+  });
+}
+
+/** Normalized emails the current user has already invited (pending). */
+export async function fetchOutgoingPendingInviteEmails(creatorUid: string): Promise<Set<string>> {
+  const db = getFirebaseFirestore();
+  if (!db) return new Set();
+  try {
+    const q = query(
+      collection(db, INVITES_COLLECTION),
+      where('createdBy', '==', creatorUid),
+      where('status', '==', 'pending' satisfies InviteStatus)
+    );
+    const snap = await getDocs(q);
+    const out = new Set<string>();
+    for (const d of snap.docs) {
+      const em = (d.data() as FirestoreInvite).recipientEmail;
+      if (typeof em === 'string' && em.length > 0) out.add(normalizeInviteEmail(em));
+    }
+    return out;
+  } catch {
+    return new Set();
+  }
 }
 
 export function subscribeFriendships(

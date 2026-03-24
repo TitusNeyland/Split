@@ -14,13 +14,20 @@ import {
   type User,
 } from 'firebase/auth';
 import { getFirebaseAuth, getFirebaseFirestore, getFirebaseStorage } from './firebase';
+import { normalizeInviteEmail } from './friendSystemFirestore';
 import type { NotificationPreferences } from './notificationPreferences';
 import type { SplitPreferences } from './splitPreferences';
 import type { PrivacySettings } from './privacySettings';
 
 export type UserProfileDoc = {
   displayName?: string | null;
+  /** Lowercased display name for prefix search; keep in sync with `displayName`. */
+  displayNameLower?: string | null;
   email?: string | null;
+  /** Lowercased normalized email for exact-match search. */
+  emailNormalized?: string | null;
+  /** Denormalized from `privacySettings.discoverableByName` for optional indexing. */
+  discoverableByName?: boolean | null;
   avatarUrl?: string | null;
   /** Stripe Customer id — card PaymentMethods live only in Stripe. */
   stripeCustomerId?: string | null;
@@ -149,12 +156,17 @@ export async function uploadProfileAvatar(localUri: string): Promise<string> {
   await uploadBytes(storageRef, blob, { contentType });
   const url = await getDownloadURL(storageRef);
 
+  const email = user.email ?? user.providerData[0]?.email ?? null;
   await setDoc(
     doc(db, 'users', uid),
     {
       avatarUrl: url,
-      email: user.email ?? user.providerData[0]?.email ?? null,
+      email,
+      emailNormalized: email ? normalizeInviteEmail(email) : null,
       displayName: user.displayName ?? null,
+      displayNameLower: user.displayName?.trim()
+        ? user.displayName.trim().toLowerCase()
+        : null,
       updatedAt: serverTimestamp(),
     },
     { merge: true }
@@ -198,11 +210,14 @@ export async function saveUserDisplayName(displayName: string): Promise<void> {
   if (!user) throw new Error('Sign in to edit your profile.');
 
   await updateProfile(user, { displayName: displayName.trim() || null });
+  const trimmed = displayName.trim();
   await setDoc(
     doc(db, 'users', user.uid),
     {
-      displayName: displayName.trim() || null,
+      displayName: trimmed || null,
+      displayNameLower: trimmed ? trimmed.toLowerCase() : null,
       email: user.email ?? null,
+      emailNormalized: user.email ? normalizeInviteEmail(user.email) : null,
       updatedAt: serverTimestamp(),
     },
     { merge: true }
@@ -220,6 +235,9 @@ export async function savePrivacySettings(settings: PrivacySettings): Promise<vo
     doc(db, 'users', user.uid),
     {
       privacySettings: settings,
+      discoverableByName: settings.discoverableByName,
+      email: user.email ?? null,
+      emailNormalized: user.email ? normalizeInviteEmail(user.email) : null,
       updatedAt: serverTimestamp(),
     },
     { merge: true }

@@ -7,11 +7,17 @@ export type PrivacySettings = {
   activityVisibleToGroup: boolean;
   /** When true, friends may see this user’s net balance in profile / friend views. */
   showBalanceToFriends: boolean;
+  /**
+   * When true, others may find this account via display-name search (prefix match).
+   * Email search uses exact match and is unaffected.
+   */
+  discoverableByName: boolean;
 };
 
 export const DEFAULT_PRIVACY_SETTINGS: PrivacySettings = {
   activityVisibleToGroup: true,
   showBalanceToFriends: false,
+  discoverableByName: true,
 };
 
 export function mergePrivacySettings(
@@ -22,5 +28,7 @@ export function mergePrivacySettings(
       partial?.activityVisibleToGroup ?? DEFAULT_PRIVACY_SETTINGS.activityVisibleToGroup,
     showBalanceToFriends:
       partial?.showBalanceToFriends ?? DEFAULT_PRIVACY_SETTINGS.showBalanceToFriends,
+    discoverableByName:
+      partial?.discoverableByName ?? DEFAULT_PRIVACY_SETTINGS.discoverableByName,
   };
 }
