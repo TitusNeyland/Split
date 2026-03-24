@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,9 @@ import {
   Pressable,
   TextInput,
   useWindowDimensions,
+  type LayoutChangeEvent,
+  type NativeSyntheticEvent,
+  type NativeScrollEvent,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -14,6 +17,8 @@ import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { getServiceIconBackgroundColor, ServiceIcon } from '../components/ServiceIcon';
+
+const FILTER_PILL_SCROLL_PADDING = 16;
 
 const C = {
   bg: '#F2F0EB',
@@ -31,17 +36,79 @@ export type PresetService = {
   priceCents: number;
 };
 
+/** Category → service display names (must match `PRESETS[].name`). Later: migrate to Firestore. */
+export const SERVICE_CATEGORIES: Record<string, readonly string[]> = {
+  streaming: ['Netflix', 'Hulu', 'Disney+', 'HBO Max', 'Amazon Prime Video', 'Apple TV+'],
+  music: ['Spotify', 'Apple Music', 'Tidal', 'YouTube Music'],
+  gaming: ['Xbox Game Pass', 'PlayStation Plus', 'Nintendo Online'],
+  ai: ['ChatGPT Plus', 'Claude Pro', 'Copilot Pro', 'Gemini Advanced', 'Midjourney'],
+  cloud: ['iCloud', 'Google One', 'Dropbox', 'OneDrive'],
+  shopping: ['Amazon Prime', 'Instacart+', 'DoorDash DashPass'],
+  apps: ['Adobe CC', 'Microsoft 365', 'Duolingo Plus'],
+  fitness: ['Peloton', 'Strava', 'MyFitnessPal'],
+};
+
 const PRESETS: PresetService[] = [
   { id: 'netflix', name: 'Netflix', priceCents: 699 },
-  { id: 'spotify', name: 'Spotify', priceCents: 999 },
-  { id: 'icloud', name: 'iCloud', priceCents: 99 },
-  { id: 'xbox', name: 'Xbox', priceCents: 999 },
   { id: 'hulu', name: 'Hulu', priceCents: 799 },
-  { id: 'youtube', name: 'YouTube Premium', priceCents: 1399 },
   { id: 'disney', name: 'Disney+', priceCents: 799 },
-  { id: 'amazon', name: 'Amazon Prime', priceCents: 1499 },
+  { id: 'hbo', name: 'HBO Max', priceCents: 999 },
+  { id: 'amazon-prime-video', name: 'Amazon Prime Video', priceCents: 899 },
   { id: 'appletv', name: 'Apple TV+', priceCents: 999 },
+  { id: 'spotify', name: 'Spotify', priceCents: 999 },
+  { id: 'apple-music', name: 'Apple Music', priceCents: 1099 },
+  { id: 'tidal', name: 'Tidal', priceCents: 1099 },
+  { id: 'youtube-music', name: 'YouTube Music', priceCents: 1099 },
+  { id: 'xbox-gp', name: 'Xbox Game Pass', priceCents: 999 },
+  { id: 'ps-plus', name: 'PlayStation Plus', priceCents: 799 },
+  { id: 'nintendo', name: 'Nintendo Online', priceCents: 399 },
+  { id: 'chatgpt', name: 'ChatGPT Plus', priceCents: 2000 },
+  { id: 'claude', name: 'Claude Pro', priceCents: 2000 },
+  { id: 'copilot', name: 'Copilot Pro', priceCents: 2000 },
+  { id: 'gemini', name: 'Gemini Advanced', priceCents: 1999 },
+  { id: 'midjourney', name: 'Midjourney', priceCents: 1000 },
+  { id: 'icloud', name: 'iCloud', priceCents: 99 },
+  { id: 'google-one', name: 'Google One', priceCents: 199 },
+  { id: 'dropbox', name: 'Dropbox', priceCents: 999 },
+  { id: 'onedrive', name: 'OneDrive', priceCents: 699 },
+  { id: 'amazon-prime', name: 'Amazon Prime', priceCents: 1499 },
+  { id: 'instacart', name: 'Instacart+', priceCents: 999 },
+  { id: 'doordash', name: 'DoorDash DashPass', priceCents: 999 },
+  { id: 'adobe', name: 'Adobe CC', priceCents: 5499 },
+  { id: 'm365', name: 'Microsoft 365', priceCents: 699 },
+  { id: 'duolingo', name: 'Duolingo Plus', priceCents: 699 },
+  { id: 'peloton', name: 'Peloton', priceCents: 1299 },
+  { id: 'strava', name: 'Strava', priceCents: 799 },
+  { id: 'mfp', name: 'MyFitnessPal', priceCents: 999 },
 ];
+
+type CategoryFilterId = 'all' | keyof typeof SERVICE_CATEGORIES;
+
+const CATEGORY_FILTERS: { id: CategoryFilterId; label: string }[] = [
+  { id: 'all', label: 'All' },
+  { id: 'streaming', label: 'Streaming' },
+  { id: 'music', label: 'Music' },
+  { id: 'gaming', label: 'Gaming' },
+  { id: 'ai', label: 'AI' },
+  { id: 'cloud', label: 'Cloud' },
+  { id: 'shopping', label: 'Shopping' },
+  { id: 'apps', label: 'Apps' },
+  { id: 'fitness', label: 'Fitness' },
+];
+
+const PRESET_BY_NAME = new Map(PRESETS.map((p) => [p.name, p]));
+
+function presetsForCategory(categoryId: CategoryFilterId): PresetService[] {
+  if (categoryId === 'all') return PRESETS;
+  const names = SERVICE_CATEGORIES[categoryId];
+  if (!names) return [];
+  const out: PresetService[] = [];
+  for (const name of names) {
+    const p = PRESET_BY_NAME.get(name);
+    if (p) out.push(p);
+  }
+  return out;
+}
 
 function formatFromPrice(cents: number): string {
   return `from $${(cents / 100).toFixed(2)}`;
@@ -51,13 +118,21 @@ export default function AddSubscriptionStep1Screen() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const router = useRouter();
+  const [selectedCategoryId, setSelectedCategoryId] = useState<CategoryFilterId>('all');
   const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null);
   const [customName, setCustomName] = useState('');
+  const filterScrollRef = useRef<ScrollView>(null);
+  const pillLayouts = useRef<Record<string, { x: number; width: number }>>({});
+  const filterScrollWidth = useRef(0);
+  const filterScrollX = useRef(0);
+  const customInputRef = useRef<TextInput>(null);
 
   const cols = 3;
   const bodyPad = 16;
   const gap = 8;
   const presetCardWidth = (width - bodyPad * 2 - gap * (cols - 1)) / cols;
+
+  const filteredPresets = useMemo(() => presetsForCategory(selectedCategoryId), [selectedCategoryId]);
 
   const customTrimmed = customName.trim();
   const hasCustom = customTrimmed.length > 0;
@@ -106,6 +181,55 @@ export default function AddSubscriptionStep1Screen() {
     });
   }, [canContinue, selectedPreset, customTrimmed, router]);
 
+  const onPillLayout = useCallback((id: string) => (e: LayoutChangeEvent) => {
+    const { x, width: w } = e.nativeEvent.layout;
+    pillLayouts.current[id] = { x, width: w };
+  }, []);
+
+  const onFilterScrollLayout = useCallback((e: LayoutChangeEvent) => {
+    filterScrollWidth.current = e.nativeEvent.layout.width;
+  }, []);
+
+  const scrollSelectedPillIntoView = useCallback(() => {
+    const layout = pillLayouts.current[selectedCategoryId];
+    const viewW = filterScrollWidth.current;
+    if (!layout || !viewW || !filterScrollRef.current) return;
+    const pad = FILTER_PILL_SCROLL_PADDING;
+    const scrollX = filterScrollX.current;
+    const pillLeft = layout.x;
+    const pillRight = layout.x + layout.width;
+    let nextX = scrollX;
+    if (pillLeft < scrollX + pad) {
+      nextX = pillLeft - pad;
+    } else if (pillRight > scrollX + viewW - pad) {
+      nextX = pillRight - viewW + pad;
+    } else {
+      return;
+    }
+    filterScrollRef.current.scrollTo({ x: Math.max(0, nextX), animated: true });
+  }, [selectedCategoryId]);
+
+  useEffect(() => {
+    const id = requestAnimationFrame(() => {
+      requestAnimationFrame(() => scrollSelectedPillIntoView());
+    });
+    return () => cancelAnimationFrame(id);
+  }, [selectedCategoryId, scrollSelectedPillIntoView]);
+
+  const onFilterScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    filterScrollX.current = e.nativeEvent.contentOffset.x;
+  }, []);
+
+  const setCategory = useCallback(
+    (id: CategoryFilterId) => {
+      setSelectedCategoryId(id);
+      const nextPresets = presetsForCategory(id);
+      const ids = new Set(nextPresets.map((p) => p.id));
+      setSelectedPresetId((cur) => (cur && ids.has(cur) ? cur : null));
+    },
+    [],
+  );
+
   return (
     <View style={styles.root}>
       <StatusBar style="light" />
@@ -144,9 +268,39 @@ export default function AddSubscriptionStep1Screen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.sectionLbl}>Popular services</Text>
+        <Text style={styles.sectionLbl}>Browse Services</Text>
+        <ScrollView
+          ref={filterScrollRef}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.filterScroll}
+          contentContainerStyle={styles.filterScrollContent}
+          onLayout={onFilterScrollLayout}
+          onScroll={onFilterScroll}
+          scrollEventThrottle={32}
+        >
+          {CATEGORY_FILTERS.map((c) => {
+            const selected = selectedCategoryId === c.id;
+            return (
+              <Pressable
+                key={c.id}
+                onLayout={onPillLayout(c.id)}
+                onPress={() => setCategory(c.id)}
+                style={[styles.filterPill, selected && styles.filterPillSelected]}
+                accessibilityRole="button"
+                accessibilityState={{ selected }}
+                accessibilityLabel={`Filter by ${c.label}`}
+              >
+                <Text style={[styles.filterPillTxt, selected && styles.filterPillTxtSelected]}>
+                  {c.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+
         <View style={styles.presetGrid}>
-          {PRESETS.map((p) => {
+          {filteredPresets.map((p) => {
             const selected = selectedPresetId === p.id;
             return (
               <Pressable
@@ -172,8 +326,9 @@ export default function AddSubscriptionStep1Screen() {
           })}
         </View>
 
-        <Text style={[styles.sectionLbl, styles.sectionLblSpaced]}>Or add custom</Text>
+        <Text style={[styles.sectionLbl, styles.sectionLblSpaced]}>Add custom</Text>
         <TextInput
+          ref={customInputRef}
           value={customName}
           onChangeText={onCustomChange}
           placeholder="e.g. Disney+, Duolingo, Gym…"
@@ -269,6 +424,41 @@ const styles = StyleSheet.create({
   },
   sectionLblSpaced: {
     marginTop: 14,
+  },
+  filterScroll: {
+    marginTop: 10,
+    marginBottom: 12,
+    marginHorizontal: -16,
+  },
+  filterScrollContent: {
+    paddingHorizontal: 16,
+    gap: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 2,
+  },
+  filterPill: {
+    height: 32,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    backgroundColor: '#fff',
+    borderWidth: 0.5,
+    borderColor: C.muted,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  filterPillSelected: {
+    backgroundColor: C.purple,
+    borderWidth: 0,
+    borderColor: 'transparent',
+  },
+  filterPillTxt: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: C.muted,
+  },
+  filterPillTxtSelected: {
+    color: '#fff',
   },
   presetGrid: {
     flexDirection: 'row',
