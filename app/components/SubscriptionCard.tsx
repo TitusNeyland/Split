@@ -5,6 +5,7 @@ import { ServiceIcon } from './ServiceIcon';
 
 const C = {
   purple: '#534AB7',
+  editLink: '#6F6699',
   text: '#1a1a18',
   muted: '#888780',
   border: 'rgba(0,0,0,0.06)',
@@ -66,6 +67,8 @@ export type SubscriptionCardProps = {
     barColor?: string;
   };
   onEditSplitPress?: () => void;
+  /** Opens subscription detail when the main card (not the edit row) is pressed. */
+  onCardPress?: () => void;
   editSplitButtonLabel?: string;
   /** Inline split editor or other content below the edit row. */
   belowEditSplit?: React.ReactNode;
@@ -123,6 +126,7 @@ export function SubscriptionCard({
   dueLabel,
   progress,
   onEditSplitPress,
+  onCardPress,
   editSplitButtonLabel = 'Edit split',
   belowEditSplit,
   hideEditSplit = false,
@@ -134,13 +138,8 @@ export function SubscriptionCard({
 
   const showDue = Boolean(dueLabel && dueLabel.length > 0);
 
-  return (
-    <View
-      style={[
-        styles.card,
-        priceChange ? styles.cardPriceChanged : null,
-      ]}
-    >
+  const mainBlock = (
+    <>
       {priceChange ? (
         <View style={styles.priceBanner}>
           <Ionicons name="alert-circle" size={18} color={C.amberOk} />
@@ -223,15 +222,37 @@ export function SubscriptionCard({
           </View>
         </View>
       </View>
+    </>
+  );
+
+  return (
+    <View
+      style={[
+        styles.card,
+        priceChange ? styles.cardPriceChanged : null,
+      ]}
+    >
+      {onCardPress ? (
+        <Pressable
+          onPress={onCardPress}
+          accessibilityRole="button"
+          accessibilityLabel={`Open ${name} details`}
+        >
+          <View>{mainBlock}</View>
+        </Pressable>
+      ) : (
+        mainBlock
+      )}
 
       {!hideEditSplit ? (
         <Pressable
           style={styles.editSplitBtn}
           onPress={onEditSplitPress}
+          hitSlop={{ top: 10, bottom: 10, left: 14, right: 14 }}
           accessibilityRole="button"
           accessibilityLabel={editSplitButtonLabel}
         >
-          <Ionicons name="create-outline" size={18} color={C.purple} />
+          <Ionicons name="create-outline" size={14} color={C.editLink} />
           <Text style={styles.editSplitTxt}>{editSplitButtonLabel}</Text>
         </Pressable>
       ) : null}
@@ -448,16 +469,17 @@ const styles = StyleSheet.create({
   editSplitBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 5,
-    paddingVertical: 10,
+    justifyContent: 'flex-end',
+    gap: 4,
+    paddingVertical: 6,
     paddingHorizontal: 14,
-    borderTopWidth: 0.5,
-    borderTopColor: C.divider,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(0,0,0,0.06)',
   },
   editSplitTxt: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '500',
-    color: C.purple,
+    color: C.editLink,
+    letterSpacing: 0.1,
   },
 });

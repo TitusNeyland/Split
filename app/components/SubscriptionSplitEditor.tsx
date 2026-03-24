@@ -209,7 +209,7 @@ export function SubscriptionSplitEditor({
   const saveDisabled =
     saving || (mode === 'customPercent' && !customValid);
 
-  const onSave = async () => {
+  const performSave = async () => {
     if (saveDisabled) return;
     setSaving(true);
     try {
@@ -236,6 +236,18 @@ export function SubscriptionSplitEditor({
     } finally {
       setSaving(false);
     }
+  };
+
+  const requestSave = () => {
+    if (saveDisabled) return;
+    Alert.alert(
+      'Save split?',
+      'Are you sure you want to save this split? It will take effect on the next billing cycle.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Save', onPress: () => void performSave() },
+      ]
+    );
   };
 
   const inputDisplayEqualPercent = (i: number) => `${equalPercents[i]}%`;
@@ -374,7 +386,7 @@ export function SubscriptionSplitEditor({
             styles.saveEditorBtn,
             (saveDisabled || saving) && styles.saveEditorBtnDisabled,
           ]}
-          onPress={onSave}
+          onPress={requestSave}
           disabled={saveDisabled || saving}
           accessibilityRole="button"
           accessibilityLabel="Save split for next billing cycle"
