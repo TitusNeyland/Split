@@ -5,7 +5,6 @@ import {
   StyleSheet,
   ScrollView,
   Pressable,
-  Share,
   Alert,
   Image,
 } from 'react-native';
@@ -306,16 +305,9 @@ export default function HomeScreen() {
     ];
   }, [isEmpty]);
 
-  const onInviteFriend = useCallback(async () => {
-    try {
-      await Share.share({
-        message:
-          'Split bills and subscriptions with me on Split — download the app to connect and share costs.',
-      });
-    } catch {
-      /* dismissed */
-    }
-  }, []);
+  const onInviteFriend = useCallback(() => {
+    router.push('/invite-share');
+  }, [router]);
 
   const homeQuickActions = useMemo(
     () => [

@@ -1,0 +1,180 @@
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { onAuthStateChanged, type User } from 'firebase/auth';
+import { InviteShareSheetPanel } from './components/InviteShareSheetPanel';
+import { getFirebaseAuth, isFirebaseConfigured } from '../lib/firebase';
+import { createPendingInvite } from '../lib/friendSystemFirestore';
+import { buildInviteShareMessage, buildInviteUrl } from '../lib/inviteLinks';
+
+export default function InviteShareScreen() {
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const params = useLocalSearchParams<{ splitId?: string; suggestedName?: string }>();
+  const splitId = typeof params.splitId === 'string' && params.splitId.length > 0 ? params.splitId : undefined;
+  const suggestedName =
+    typeof params.suggestedName === 'string' && params.suggestedName.trim().length > 0
+      ? params.suggestedName.trim()
+      : null;
+
+  const [authReady, setAuthReady] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [inviteId, setInviteId] = useState<string | null>(null);
+  const [fatalError, setFatalError] = useState<string | null>(null);
+  const [createError, setCreateError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isFirebaseConfigured()) {
+      setAuthReady(true);
+      setFatalError('Firebase is not configured.');
+      return;
+    }
+    const auth = getFirebaseAuth();
+    if (!auth) {
+      setAuthReady(true);
+      setFatalError('Auth is not available.');
+      return;
+    }
+    const unsub = onAuthStateChanged(auth, (u) => {
+      setUser(u);
+      setAuthReady(true);
+    });
+    return () => unsub();
+  }, []);
+
+  useEffect(() => {
+    if (!authReady || !user?.uid || fatalError || createError) return;
+    let cancelled = false;
+    (async () => {
+      setCreating(true);
+      setCreateError(null);
+      try {
+        const id = await createPendingInvite({
+          creatorUid: user.uid,
+          splitId,
+          connectedVia: splitId ? 'split_invite' : 'direct_invite',
+        });
+        if (!cancelled) setInviteId(id);
+      } catch (e) {
+        if (!cancelled) {
+          setCreateError(e instanceof Error ? e.message : 'Could not create invite.');
+        }
+      } finally {
+        if (!cancelled) setCreating(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [authReady, user?.uid, splitId, fatalError, createError]);
+
+  const onClose = () => {
+    router.back();
+  };
+
+  const inviteUrl = inviteId ? buildInviteUrl(inviteId) : '';
+  const shareMessage = inviteId ? buildInviteShareMessage(inviteId) : '';
+
+  const showSignIn = authReady && !user && isFirebaseConfigured() && !fatalError;
+
+  return (
+    <View style={styles.root}>
+      <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Dismiss" />
+      <View style={{ paddingBottom: Math.max(insets.bottom, 12) }}>
+        {!authReady || creating ? (
+          <View style={styles.loadingSheet}>
+            <ActivityIndicator color="#534AB7" />
+            <Text style={styles.loadingTxt}>{!authReady ? 'Loading…' : 'Creating your invite…'}</Text>
+          </View>
+        ) : fatalError ? (
+          <View style={styles.loadingSheet}>
+            <Text style={styles.errorTxt}>{fatalError}</Text>
+            <Pressable onPress={onClose} style={styles.retryBtn}>
+              <Text style={styles.retryBtnTxt}>Close</Text>
+            </Pressable>
+          </View>
+        ) : showSignIn ? (
+          <View style={styles.loadingSheet}>
+            <Text style={styles.errorTxt}>Sign in to create an invite link.</Text>
+            <Pressable onPress={() => router.replace('/profile')} style={styles.retryBtn}>
+              <Text style={styles.retryBtnTxt}>Go to Profile</Text>
+            </Pressable>
+            <Pressable onPress={onClose} style={styles.textBtn}>
+              <Text style={styles.textBtnTxt}>Cancel</Text>
+            </Pressable>
+          </View>
+        ) : createError ? (
+          <View style={styles.loadingSheet}>
+            <Text style={styles.errorTxt}>{createError}</Text>
+            <Pressable
+              onPress={() => {
+                setCreateError(null);
+                setInviteId(null);
+              }}
+              style={styles.retryBtn}
+            >
+              <Text style={styles.retryBtnTxt}>Retry</Text>
+            </Pressable>
+            <Pressable onPress={onClose} style={styles.textBtn}>
+              <Text style={styles.textBtnTxt}>Close</Text>
+            </Pressable>
+          </View>
+        ) : inviteId ? (
+          <InviteShareSheetPanel
+            inviteUrl={inviteUrl}
+            shareMessage={shareMessage}
+            subtitle={suggestedName ? `For ${suggestedName}` : null}
+            onClose={onClose}
+          />
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.4)',
+  },
+  loadingSheet: {
+    backgroundColor: '#F2F0EB',
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
+    padding: 28,
+    alignItems: 'center',
+    gap: 12,
+  },
+  loadingTxt: {
+    fontSize: 14,
+    color: '#888780',
+  },
+  errorTxt: {
+    fontSize: 14,
+    color: '#1a1a18',
+    textAlign: 'center',
+  },
+  retryBtn: {
+    marginTop: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    backgroundColor: '#534AB7',
+    borderRadius: 12,
+  },
+  retryBtnTxt: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 15,
+  },
+  textBtn: {
+    paddingVertical: 8,
+  },
+  textBtnTxt: {
+    fontSize: 14,
+    color: '#888780',
+    fontWeight: '500',
+  },
+});

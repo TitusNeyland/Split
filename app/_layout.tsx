@@ -6,6 +6,8 @@ import { StripeProvider } from '@stripe/stripe-react-native';
 import { FirebaseRecaptchaVerifierModal } from 'expo-firebase-recaptcha';
 import SplashScreen from './components/SplashScreen';
 import AuthSessionSync from './components/AuthSessionSync';
+import InviteDeepLinkBootstrap from './components/InviteDeepLinkBootstrap';
+import PendingInviteAfterAuth from './components/PendingInviteAfterAuth';
 import BiometricAppLock from './components/BiometricAppLock';
 import { SecurityPrefsProvider } from './contexts/SecurityPrefsContext';
 import { FirebaseRecaptchaProvider } from './contexts/FirebaseRecaptchaContext';
@@ -41,6 +43,8 @@ export default function RootLayout() {
       <LocalProfileAvatarProvider>
       <View style={styles.root}>
         <AuthSessionSync />
+        <InviteDeepLinkBootstrap />
+        <PendingInviteAfterAuth />
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen
             name="(tabs)"
@@ -76,6 +80,16 @@ export default function RootLayout() {
               animation: 'slide_from_right',
             }}
           />
+          <Stack.Screen
+            name="invite-share"
+            options={{
+              presentation: 'transparentModal',
+              animation: 'fade',
+              headerShown: false,
+            }}
+          />
+          <Stack.Screen name="invite/[inviteId]" options={{ headerShown: false }} />
+          <Stack.Screen name="friends" options={{ headerShown: false }} />
         </Stack>
         {showSplash && (
           <Animated.View style={[styles.splashOverlay, { opacity }]}>
