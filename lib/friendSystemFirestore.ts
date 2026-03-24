@@ -2,6 +2,7 @@ import * as Crypto from 'expo-crypto';
 import {
   Timestamp,
   collection,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -240,6 +241,65 @@ export async function fetchOutgoingPendingInviteEmails(creatorUid: string): Prom
   } catch {
     return new Set();
   }
+}
+
+export type OutgoingPendingInviteSummary = {
+  inviteId: string;
+  recipientLabel: string;
+  createdAt: Timestamp | null;
+  expiresAt: Timestamp | null;
+};
+
+export async function fetchOutgoingPendingInvites(
+  creatorUid: string
+): Promise<OutgoingPendingInviteSummary[]> {
+  const db = getFirebaseFirestore();
+  if (!db) return [];
+  try {
+    const q = query(
+      collection(db, INVITES_COLLECTION),
+      where('createdBy', '==', creatorUid),
+      where('status', '==', 'pending' satisfies InviteStatus)
+    );
+    const snap = await getDocs(q);
+    const rows: OutgoingPendingInviteSummary[] = [];
+    for (const d of snap.docs) {
+      const data = d.data() as FirestoreInvite;
+      const label =
+        typeof data.recipientEmail === 'string' && data.recipientEmail.length > 0
+          ? data.recipientEmail
+          : 'Invite link';
+      rows.push({
+        inviteId: d.id,
+        recipientLabel: label,
+        createdAt: data.createdAt instanceof Timestamp ? data.createdAt : null,
+        expiresAt: data.expiresAt instanceof Timestamp ? data.expiresAt : null,
+      });
+    }
+    rows.sort((a, b) => {
+      const am = a.createdAt?.toMillis() ?? 0;
+      const bm = b.createdAt?.toMillis() ?? 0;
+      return bm - am;
+    });
+    return rows;
+  } catch {
+    return [];
+  }
+}
+
+export async function expirePendingInvite(inviteId: string): Promise<void> {
+  const db = getFirebaseFirestore();
+  if (!db) throw new Error('Firestore is not configured.');
+  await updateDoc(doc(db, INVITES_COLLECTION, inviteId), {
+    status: 'expired' satisfies InviteStatus,
+  });
+}
+
+export async function deleteFriendshipBetween(currentUid: string, otherUid: string): Promise<void> {
+  const db = getFirebaseFirestore();
+  if (!db) throw new Error('Firestore is not configured.');
+  const id = friendshipDocId(currentUid, otherUid);
+  await deleteDoc(doc(db, FRIENDSHIPS_COLLECTION, id));
 }
 
 export function subscribeFriendships(

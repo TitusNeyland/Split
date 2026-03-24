@@ -70,6 +70,12 @@
         {
           "faceIDPermission": "Allow Split to use Face ID to unlock the app."
         }
+      ],
+      [
+        "expo-contacts",
+        {
+          "contactsPermission": "Allow Split to find which of your contacts are on mySplit."
+        }
       ]
     ],
     "extra": {

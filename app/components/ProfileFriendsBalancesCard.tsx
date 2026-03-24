@@ -206,36 +206,42 @@ export default function ProfileFriendsBalancesCard({ userInitials, userAvatarUrl
 
   return (
     <View style={styles.card}>
-      <Pressable
-        onPress={() => setExpanded((e) => !e)}
-        style={({ pressed }) => [styles.settingsRow, pressed && styles.rowPressed]}
-        accessibilityRole="button"
-        accessibilityLabel={
-          expanded ? 'Collapse friend balances' : `Friends, ${PROFILE_TOTAL_FRIEND_COUNT} friends. Show balances`
-        }
-        accessibilityState={{ expanded }}
-      >
-        <View style={styles.rowIconPurple}>
-          <Ionicons name="people-outline" size={21} color={C.purple} />
-        </View>
-        <View style={styles.rowContent}>
-          <Text style={styles.rowTitle}>Friends</Text>
-          <View style={styles.stackRow}>
-            {visibleStack.map((e, i) => (
-              <FriendAvatarStackChip key={e.id} id={e.id} initials={e.initials} index={i} />
-            ))}
-            {overflow > 0 ? (
-              <View style={[stackStyles.chip, stackStyles.chipMore, { marginLeft: visibleStack.length === 0 ? 0 : -11 }]}>
-                <Text style={stackStyles.chipMoreTxt}>+{overflow}</Text>
-              </View>
-            ) : null}
+      <View style={styles.headerRow}>
+        <Pressable
+          onPress={() => router.push('/friends')}
+          style={({ pressed }) => [styles.headerMain, pressed && styles.rowPressed]}
+          accessibilityRole="button"
+          accessibilityLabel={`Friends, ${PROFILE_TOTAL_FRIEND_COUNT} friends. Open friends hub`}
+        >
+          <View style={styles.rowIconPurple}>
+            <Ionicons name="people-outline" size={21} color={C.purple} />
           </View>
-        </View>
-        <View style={styles.rowRight}>
+          <View style={styles.rowContent}>
+            <Text style={styles.rowTitle}>Friends</Text>
+            <Text style={styles.rowSubMuted}>Invites, search & balances</Text>
+            <View style={styles.stackRow}>
+              {visibleStack.map((e, i) => (
+                <FriendAvatarStackChip key={e.id} id={e.id} initials={e.initials} index={i} />
+              ))}
+              {overflow > 0 ? (
+                <View style={[stackStyles.chip, stackStyles.chipMore, { marginLeft: visibleStack.length === 0 ? 0 : -11 }]}>
+                  <Text style={stackStyles.chipMoreTxt}>+{overflow}</Text>
+                </View>
+              ) : null}
+            </View>
+          </View>
+        </Pressable>
+        <Pressable
+          onPress={() => setExpanded((e) => !e)}
+          style={({ pressed }) => [styles.chevronBtn, pressed && styles.rowPressed]}
+          accessibilityRole="button"
+          accessibilityLabel={expanded ? 'Collapse friend balances' : 'Expand friend balances'}
+          accessibilityState={{ expanded }}
+        >
           <Text style={styles.friendCountTxt}>{PROFILE_TOTAL_FRIEND_COUNT} friends</Text>
           <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={20} color="#C8C6C0" />
-        </View>
-      </Pressable>
+        </Pressable>
+      </View>
 
       {expanded ? (
         <>
@@ -419,6 +425,31 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowRadius: 10,
     elevation: 3,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 13,
+    paddingHorizontal: 14,
+    gap: 8,
+  },
+  headerMain: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    minWidth: 0,
+  },
+  rowSubMuted: {
+    fontSize: 12,
+    color: C.muted,
+    marginTop: 2,
+  },
+  chevronBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexShrink: 0,
   },
   settingsRow: {
     flexDirection: 'row',
