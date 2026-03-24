@@ -328,6 +328,14 @@ export default function HomeScreen() {
         onPress: () => router.push('/add-subscription'),
       },
       {
+        id: 'find-friends',
+        label: 'Find friends',
+        icon: 'people-outline' as const,
+        circleBg: '#E6F1FB',
+        iconColor: '#185FA5',
+        onPress: () => router.push('/friends'),
+      },
+      {
         id: 'invite',
         label: 'Invite friend',
         icon: 'people-outline' as const,
