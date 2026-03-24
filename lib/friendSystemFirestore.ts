@@ -3,6 +3,7 @@ import {
   Timestamp,
   collection,
   doc,
+  getDoc,
   onSnapshot,
   orderBy,
   query,
@@ -146,6 +147,35 @@ export async function acceptPendingInvite(inviteId: string, accepterUid: string)
     acceptedBy: accepterUid,
     acceptedAt: serverTimestamp(),
   });
+}
+
+export async function fetchInviteById(inviteId: string): Promise<FirestoreInvite | null> {
+  const db = getFirebaseFirestore();
+  if (!db) return null;
+  const snap = await getDoc(doc(db, INVITES_COLLECTION, inviteId));
+  if (!snap.exists()) return null;
+  return snap.data() as FirestoreInvite;
+}
+
+export type InviteSenderProfile = {
+  displayName: string | null;
+  avatarUrl: string | null;
+  createdAt: Timestamp | null;
+  lifetimeSaved: number | null;
+};
+
+export async function fetchUserProfileForInvite(uid: string): Promise<InviteSenderProfile | null> {
+  const db = getFirebaseFirestore();
+  if (!db) return null;
+  const snap = await getDoc(doc(db, 'users', uid));
+  if (!snap.exists()) return null;
+  const d = snap.data();
+  const displayName = typeof d.displayName === 'string' ? d.displayName : null;
+  const avatarUrl = typeof d.avatarUrl === 'string' ? d.avatarUrl : null;
+  const createdAt = d.createdAt instanceof Timestamp ? d.createdAt : null;
+  const ls = d.lifetime_saved;
+  const lifetimeSaved = typeof ls === 'number' && Number.isFinite(ls) ? ls : null;
+  return { displayName, avatarUrl, createdAt, lifetimeSaved };
 }
 
 /** Query used for friend lists (requires composite index: users ARRAY + connectedAt DESC). */

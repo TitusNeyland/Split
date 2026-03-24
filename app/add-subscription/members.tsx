@@ -10,7 +10,6 @@ import {
   FlatList,
   KeyboardAvoidingView,
   Platform,
-  Share,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -70,20 +69,6 @@ const TITUS: WizardMember = {
 type SheetFriend = Omit<WizardMember, 'isOwner' | 'invitePending'> & {
   mutualSubscriptionsCount: number;
 };
-
-const INVITE_URL = 'https://mysplit.app/join';
-
-function deriveInitials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return '?';
-  if (parts.length === 1) {
-    const w = parts[0]!;
-    return w.length >= 2 ? w.slice(0, 2).toUpperCase() : `${w}`.toUpperCase();
-  }
-  const a = parts[0]![0] ?? '';
-  const b = parts[parts.length - 1]![0] ?? '';
-  return `${a}${b}`.toUpperCase();
-}
 
 const MOCK_FRIENDS: SheetFriend[] = [
   {
@@ -380,32 +365,6 @@ export default function AddSubscriptionMembersScreen() {
     [mode, totalCents],
   );
 
-  const shareAppInvite = useCallback(async () => {
-    try {
-      await Share.share({
-        message:
-          Platform.OS === 'ios'
-            ? `Join me on mySplit — split subscriptions together.`
-            : `Join me on mySplit — split subscriptions together.\n${INVITE_URL}`,
-      });
-    } catch {
-      /* dismissed */
-    }
-  }, []);
-
-  const shareNamedInvite = useCallback(async (name: string) => {
-    try {
-      await Share.share({
-        message:
-          Platform.OS === 'ios'
-            ? `I'm inviting ${name} to split subscriptions with me on mySplit.`
-            : `I'm inviting ${name} to split subscriptions with me on mySplit.\n${INVITE_URL}`,
-      });
-    } catch {
-      /* dismissed */
-    }
-  }, []);
-
   const onToggleFriendInSplit = useCallback(
     (friend: SheetFriend) => {
       const isOnSplit = members.some((m) => m.memberId === friend.memberId);
@@ -434,18 +393,13 @@ export default function AddSubscriptionMembersScreen() {
     (name: string) => {
       const trim = name.trim();
       if (!trim) return;
-      const ok = appendMemberCore({
-        memberId: `pending-invite-${Date.now()}`,
-        displayName: trim,
-        initials: deriveInitials(trim),
-        avatarBg: C.purpleTint,
-        avatarColor: C.purple,
-        isOwner: false,
-        invitePending: true,
+      closeMemberPicker();
+      router.push({
+        pathname: '/invite-share',
+        params: { suggestedName: trim },
       });
-      if (ok) void shareNamedInvite(trim);
     },
-    [appendMemberCore, shareNamedInvite],
+    [closeMemberPicker, router],
   );
 
   const validationBarVisible = mode === 'customPercent';
@@ -732,7 +686,10 @@ export default function AddSubscriptionMembersScreen() {
               ListFooterComponent={
                 <Pressable
                   style={styles.sheetInviteRow}
-                  onPress={() => void shareAppInvite()}
+                  onPress={() => {
+                    closeMemberPicker();
+                    router.push('/invite-share');
+                  }}
                   accessibilityRole="button"
                   accessibilityLabel="Invite to mySplit, share link"
                 >

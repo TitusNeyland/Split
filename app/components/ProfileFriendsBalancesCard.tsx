@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, Alert, Image } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Image } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { CURRENT_USER_AVATAR, getFriendAvatarColors } from '../../lib/friendAvatar';
@@ -201,7 +201,7 @@ export default function ProfileFriendsBalancesCard({ userInitials, userAvatarUrl
   };
 
   const onInvite = () => {
-    Alert.alert('Invite a friend', 'Share link flow will open here.');
+    router.push('/invite-share');
   };
 
   return (
