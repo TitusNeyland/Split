@@ -163,9 +163,10 @@ type HomeRecentActivityItem = {
   viewerAvatarUrl?: string | null;
 };
 
+/** `id` matches `ActivityFeedItem.id` on the Activity tab for deep links. */
 const recentActivityFilled: HomeRecentActivityItem[] = [
   {
-    id: '1',
+    id: 't1',
     kind: 'payment',
     title: 'Alex paid Spotify',
     timestamp: '2 min ago',
@@ -174,7 +175,7 @@ const recentActivityFilled: HomeRecentActivityItem[] = [
     serviceMark: 'Spotify',
   },
   {
-    id: '2',
+    id: 't-audit-remind',
     kind: 'reminder',
     title: 'Reminder sent to Sam',
     timestamp: '1 hr ago',
@@ -182,7 +183,7 @@ const recentActivityFilled: HomeRecentActivityItem[] = [
     amountColor: C.orange,
   },
   {
-    id: '3',
+    id: 'y1',
     kind: 'payment',
     title: 'Taylor paid Xbox',
     timestamp: 'Yesterday',
@@ -272,7 +273,7 @@ export default function HomeScreen() {
     const base = recentActivityFilled.slice(0, 3);
     if (!isFirebaseConfigured() || !homeAvatarUrl) return base;
     const youRow: HomeRecentActivityItem = {
-      id: 'you-netflix',
+      id: 't-you-netflix',
       kind: 'payment',
       title: 'You paid Netflix',
       timestamp: 'Just now',
@@ -613,7 +614,7 @@ export default function HomeScreen() {
           <View style={styles.sh}>
             <Text style={styles.shTitle}>Recent activity</Text>
             <Pressable
-              onPress={() => router.push('/activity')}
+              onPress={() => router.push({ pathname: '/activity', params: { filter: 'all' } })}
               hitSlop={8}
               accessibilityRole="button"
               accessibilityLabel="See all activity"
@@ -624,9 +625,17 @@ export default function HomeScreen() {
           {recentActivity.length > 0 ? (
             <View style={styles.listCard}>
               {recentActivity.map((item, i) => (
-                <View
+                <Pressable
                   key={item.id}
+                  onPress={() =>
+                    router.push({
+                      pathname: '/activity',
+                      params: { filter: 'all', expandId: item.id },
+                    })
+                  }
                   style={[styles.actRow, i === recentActivity.length - 1 && styles.rowLast]}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${item.title}, open in Activity`}
                 >
                   {item.viewerAvatarUrl ? (
                     <View style={styles.actAvatarWrap}>
@@ -652,7 +661,7 @@ export default function HomeScreen() {
                     <Text style={styles.actTime}>{item.timestamp}</Text>
                   </View>
                   <Text style={[styles.actAmt, { color: item.amountColor }]}>{item.amount}</Text>
-                </View>
+                </Pressable>
               ))}
             </View>
           ) : (
