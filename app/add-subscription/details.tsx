@@ -21,9 +21,17 @@ import {
   parseBillingDayParam,
   showShortMonthBillingWarning,
 } from '../../lib/billingDayFormat';
+import {
+  getStaticTiersForService,
+  resolveServiceTierLookupKey,
+  tierPriceLabel,
+  type ServiceTier,
+} from '../../lib/serviceTiers';
+import { loadServiceTiersWithFallback } from '../../lib/serviceTiersFirestore';
 
 const C = {
   purple: '#534AB7',
+  purpleTint: '#EEEDFE',
   text: '#1a1a18',
   muted: '#888780',
   bg: '#F2F0EB',
@@ -102,6 +110,12 @@ export default function AddSubscriptionDetailsScreen() {
   const prefillPlan =
     typeof planNameParam === 'string' && planNameParam.trim() !== '' ? planNameParam.trim() : '';
 
+  const [tiers, setTiers] = useState<ServiceTier[]>(() =>
+    getStaticTiersForService(resolveServiceTierLookupKey(baseServiceName.trim() || '')),
+  );
+  const [selectedTierIndex, setSelectedTierIndex] = useState<number | null>(null);
+  const [useCustomPrice, setUseCustomPrice] = useState(false);
+
   const [planName, setPlanName] = useState(() => prefillPlan || baseServiceName);
   const [amountText, setAmountText] = useState(() => {
     if (prefillTotalCents !== null) return (prefillTotalCents / 100).toFixed(2);
@@ -130,14 +144,85 @@ export default function AddSubscriptionDetailsScreen() {
   const [costFocused, setCostFocused] = useState(false);
   const [costError, setCostError] = useState('');
   const costInputRef = useRef<TextInput>(null);
+  const tierInitForServiceRef = useRef<string | null>(null);
+
+  const showTierPicker = tiers.length > 0;
+
+  useEffect(() => {
+    tierInitForServiceRef.current = null;
+    setUseCustomPrice(false);
+    setTiers(getStaticTiersForService(resolveServiceTierLookupKey(baseServiceName)));
+
+    let cancelled = false;
+    (async () => {
+      const next = await loadServiceTiersWithFallback(baseServiceName);
+      if (!cancelled) setTiers(next);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [baseServiceName]);
+
+  const applyTier = useCallback(
+    (index: number, tierList: ServiceTier[]) => {
+      const t = tierList[index];
+      if (!t) return;
+      setSelectedTierIndex(index);
+      setUseCustomPrice(false);
+      setAmountText(t.price.toFixed(2));
+      setBillingCycle(t.cycle === 'year' ? 'yearly' : 'monthly');
+      setPlanName(t.name);
+      setCostError('');
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (!showTierPicker || tiers.length === 0) return;
+    if (tierInitForServiceRef.current === baseServiceName) return;
+    tierInitForServiceRef.current = baseServiceName;
+
+    let idx = 0;
+    if (prefillPlan) {
+      const j = tiers.findIndex((t) => t.name === prefillPlan);
+      if (j >= 0) idx = j;
+    } else {
+      const cents = prefillTotalCents ?? suggestedCents;
+      if (cents != null) {
+        const j = tiers.findIndex((t) => Math.round(t.price * 100) === cents);
+        if (j >= 0) idx = j;
+      }
+    }
+    applyTier(idx, tiers);
+  }, [
+    showTierPicker,
+    tiers,
+    baseServiceName,
+    prefillPlan,
+    prefillTotalCents,
+    suggestedCents,
+    applyTier,
+  ]);
+
+  useEffect(() => {
+    if (tiers.length === 0) {
+      if (selectedTierIndex != null) setSelectedTierIndex(null);
+      return;
+    }
+    if (selectedTierIndex != null && selectedTierIndex >= tiers.length) {
+      setSelectedTierIndex(tiers.length - 1);
+    }
+  }, [tiers, selectedTierIndex]);
 
   const hasPrefill = prefillTotalCents !== null || suggestedCents !== null;
   useEffect(() => {
+    if (showTierPicker) return;
     if (!hasPrefill) {
       const t = setTimeout(() => costInputRef.current?.focus(), 350);
       return () => clearTimeout(t);
     }
-  }, []);
+  }, [showTierPicker, hasPrefill]);
 
   const onAmountChange = useCallback((t: string) => {
     setAmountText(normalizeAmountInput(t));
@@ -171,7 +256,7 @@ export default function AddSubscriptionDetailsScreen() {
 
   const onContinue = useCallback(() => {
     if (totalCents === null) {
-      setCostError('Please enter the total cost');
+      setCostError(showTierPicker ? 'Enter a valid total cost' : 'Please enter the total cost');
       costInputRef.current?.focus();
       return;
     }
@@ -200,6 +285,7 @@ export default function AddSubscriptionDetailsScreen() {
     billingDayLabel,
     payerDisplay,
     autoCharge,
+    showTierPicker,
   ]);
 
   return (
@@ -224,7 +310,11 @@ export default function AddSubscriptionDetailsScreen() {
         <Text style={styles.title} numberOfLines={2}>
           {headerTitle}
         </Text>
-        <Text style={styles.sub}>Enter your plan cost and billing date</Text>
+        <Text style={styles.sub}>
+          {showTierPicker
+            ? 'Select your plan and billing date'
+            : 'Enter your plan cost and billing date'}
+        </Text>
         <View style={styles.progWrap}>
           <View style={styles.progTrack}>
             <View style={[styles.progFill, { width: '50%' }]} />
@@ -256,30 +346,116 @@ export default function AddSubscriptionDetailsScreen() {
           />
         </View>
 
-        <View style={styles.fieldWrap}>
-          <Text style={styles.fieldLabel}>Total cost</Text>
-          <View
-            style={[
-              styles.costRow,
-              costFocused && styles.costRowFocused,
-            ]}
-          >
-            <Text style={styles.dollarPrefix}>$</Text>
-            <TextInput
-              ref={costInputRef}
-              value={amountText}
-              onChangeText={onAmountChange}
-              placeholder="0.00"
-              placeholderTextColor={C.muted}
-              keyboardType={Platform.OS === 'android' ? 'numeric' : 'decimal-pad'}
-              onFocus={() => { setCostFocused(true); setCostError(''); }}
-              onBlur={onAmountBlur}
-              style={styles.costInput}
-              accessibilityLabel="Total cost"
-            />
+        {showTierPicker ? (
+          <>
+            <Text style={[styles.sectionLbl, styles.sectionLblTightTop]}>Select your plan</Text>
+            <View style={styles.tierList}>
+              {tiers.map((tier, index) => {
+                const selected = !useCustomPrice && selectedTierIndex === index;
+                return (
+                  <Pressable
+                    key={`${tier.name}-${index}`}
+                    onPress={() => applyTier(index, tiers)}
+                    style={[styles.tierRow, selected && styles.tierRowSelected]}
+                    accessibilityRole="radio"
+                    accessibilityState={{ checked: selected }}
+                    accessibilityLabel={`${tier.name}, ${tierPriceLabel(tier)}`}
+                  >
+                    <View style={styles.tierRowLeft}>
+                      <Text style={styles.tierName}>{tier.name}</Text>
+                      <Text style={styles.tierSubtitle}>{tierPriceLabel(tier)}</Text>
+                    </View>
+                    <View style={[styles.radioOuter, selected && styles.radioOuterOn]}>
+                      {selected ? <View style={styles.radioInner} /> : null}
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            <View style={styles.fieldWrap}>
+              <Text style={styles.fieldLabel}>Total cost</Text>
+              {useCustomPrice ? (
+                <View style={[styles.costRow, costFocused && styles.costRowFocused]}>
+                  <Text style={styles.dollarPrefix}>$</Text>
+                  <TextInput
+                    ref={costInputRef}
+                    value={amountText}
+                    onChangeText={onAmountChange}
+                    placeholder="0.00"
+                    placeholderTextColor={C.muted}
+                    keyboardType={Platform.OS === 'android' ? 'numeric' : 'decimal-pad'}
+                    onFocus={() => {
+                      setCostFocused(true);
+                      setCostError('');
+                    }}
+                    onBlur={onAmountBlur}
+                    style={styles.costInput}
+                    accessibilityLabel="Total cost"
+                  />
+                </View>
+              ) : (
+                <View style={styles.costRow}>
+                  <Text style={styles.dollarPrefix}>$</Text>
+                  <Text style={styles.costReadonlyTxt}>{amountText || '0.00'}</Text>
+                </View>
+              )}
+              {costError ? <Text style={styles.fieldError}>{costError}</Text> : null}
+            </View>
+
+            {useCustomPrice ? (
+              <Pressable
+                onPress={() => {
+                  setUseCustomPrice(false);
+                  if (selectedTierIndex != null) applyTier(selectedTierIndex, tiers);
+                }}
+                style={styles.customPriceLinkWrap}
+                accessibilityRole="button"
+                accessibilityLabel="Use plan tier price"
+              >
+                <Text style={styles.customPriceLink}>Use plan price</Text>
+              </Pressable>
+            ) : (
+              <Pressable
+                onPress={() => {
+                  setUseCustomPrice(true);
+                  setTimeout(() => {
+                    setCostFocused(true);
+                    costInputRef.current?.focus();
+                  }, 50);
+                }}
+                style={styles.customPriceLinkWrap}
+                accessibilityRole="button"
+                accessibilityLabel="Enter custom price"
+              >
+                <Text style={styles.customPriceLink}>Enter custom price</Text>
+              </Pressable>
+            )}
+          </>
+        ) : (
+          <View style={styles.fieldWrap}>
+            <Text style={styles.fieldLabel}>Total cost</Text>
+            <View style={[styles.costRow, costFocused && styles.costRowFocused]}>
+              <Text style={styles.dollarPrefix}>$</Text>
+              <TextInput
+                ref={costInputRef}
+                value={amountText}
+                onChangeText={onAmountChange}
+                placeholder="0.00"
+                placeholderTextColor={C.muted}
+                keyboardType={Platform.OS === 'android' ? 'numeric' : 'decimal-pad'}
+                onFocus={() => {
+                  setCostFocused(true);
+                  setCostError('');
+                }}
+                onBlur={onAmountBlur}
+                style={styles.costInput}
+                accessibilityLabel="Total cost"
+              />
+            </View>
+            {costError ? <Text style={styles.fieldError}>{costError}</Text> : null}
           </View>
-          {costError ? <Text style={styles.fieldError}>{costError}</Text> : null}
-        </View>
+        )}
 
         <View style={styles.fieldWrap}>
           <Text style={styles.fieldLabel}>Billing cycle</Text>
@@ -463,6 +639,80 @@ const styles = StyleSheet.create({
     letterSpacing: 0.6,
     textTransform: 'uppercase',
     marginBottom: 12,
+  },
+  sectionLblTightTop: {
+    marginTop: 4,
+  },
+  tierList: {
+    marginBottom: 6,
+  },
+  tierRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    borderWidth: 0.5,
+    borderColor: C.fieldBorder,
+    marginBottom: 8,
+  },
+  tierRowSelected: {
+    backgroundColor: C.purpleTint,
+    borderColor: C.purple,
+    borderWidth: 1.5,
+  },
+  tierRowLeft: {
+    flex: 1,
+    minWidth: 0,
+    paddingRight: 12,
+  },
+  tierName: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: C.text,
+  },
+  tierSubtitle: {
+    fontSize: 11,
+    color: C.muted,
+    marginTop: 3,
+  },
+  radioOuter: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    borderColor: C.muted,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  radioOuterOn: {
+    borderColor: C.purple,
+  },
+  radioInner: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: C.purple,
+  },
+  costReadonlyTxt: {
+    flex: 1,
+    paddingVertical: 15,
+    paddingHorizontal: 4,
+    fontSize: 18,
+    fontWeight: '600',
+    color: C.text,
+  },
+  customPriceLinkWrap: {
+    alignSelf: 'flex-start',
+    marginBottom: 14,
+    paddingVertical: 4,
+  },
+  customPriceLink: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: C.purple,
   },
   fieldWrap: {
     marginBottom: 18,
