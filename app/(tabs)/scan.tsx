@@ -28,7 +28,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
-import { ServiceIcon } from '../components/ServiceIcon';
 import Svg, { Defs, Line, Pattern, Rect } from 'react-native-svg';
 import Animated, {
   Easing,
@@ -637,9 +636,6 @@ function RecentReceiptRow({
   onPress: () => void;
   alwaysShowExactAmounts: boolean;
 }) {
-  const d = new Date(row.receiptDateMs);
-  const mon = d.toLocaleString('en-US', { month: 'short' }).toUpperCase();
-  const dayNum = d.getDate();
   const sharePct =
     row.totalAmount > 0
       ? Math.round((row.yourShare / row.totalAmount) * 100)
@@ -647,13 +643,13 @@ function RecentReceiptRow({
   return (
     <Pressable
       onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${row.merchantName}, ${row.peopleCount} ${row.peopleCount === 1 ? 'person' : 'people'}, ${row.itemCount} ${row.itemCount === 1 ? 'item' : 'items'}, total ${row.totalAmount.toFixed(2)} dollars, your share ${row.yourShare.toFixed(2)}`}
       style={({ pressed }) => [styles.recentRow, pressed && { opacity: 0.92 }]}
     >
-      <View style={styles.recentDateBadge}>
-        <Text style={styles.recentMon}>{mon}</Text>
-        <Text style={styles.recentDay}>{dayNum}</Text>
+      <View style={styles.recentReceiptIconCircle} accessibilityElementsHidden>
+        <Ionicons name="receipt-outline" size={20} color={C.muted} />
       </View>
-      <ServiceIcon serviceName={row.merchantName} size={36} />
       <View style={styles.recentMid}>
         <Text style={styles.recentMerchant} numberOfLines={1}>
           {row.merchantName}
@@ -667,8 +663,8 @@ function RecentReceiptRow({
         <Text style={styles.recentTotal}>${row.totalAmount.toFixed(2)}</Text>
         <Text style={styles.recentShare}>
           {alwaysShowExactAmounts
-            ? `your share $${row.yourShare.toFixed(2)} · ${sharePct}%`
-            : `your share $${row.yourShare.toFixed(2)}`}
+            ? `Your share $${row.yourShare.toFixed(2)} · ${sharePct}%`
+            : `Your share $${row.yourShare.toFixed(2)}`}
         </Text>
       </View>
     </Pressable>
@@ -916,7 +912,7 @@ const styles = StyleSheet.create({
   recentRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 12,
     backgroundColor: '#fff',
     borderRadius: 14,
     paddingVertical: 13,
@@ -930,40 +926,29 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
-  recentDateBadge: {
-    width: 44,
-    height: 44,
-    borderRadius: 11,
-    backgroundColor: C.lilacSurface,
+  recentReceiptIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#EBE9E4',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  recentMon: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: C.purple,
-    textTransform: 'uppercase',
-  },
-  recentDay: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: C.purple,
-    lineHeight: 20,
-    marginTop: -1,
+    flexShrink: 0,
   },
   recentMid: {
     flex: 1,
     minWidth: 0,
   },
   recentMerchant: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 13,
+    fontWeight: '700',
     color: C.text,
   },
   recentMeta: {
-    fontSize: 14,
+    fontSize: 11,
     color: C.muted,
-    marginTop: 3,
+    marginTop: 2,
+    lineHeight: 14,
   },
   recentRight: {
     alignItems: 'flex-end',
@@ -972,10 +957,12 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '700',
     color: C.text,
+    textAlign: 'right',
   },
   recentShare: {
-    fontSize: 13,
+    fontSize: 11,
     color: C.muted,
-    marginTop: 3,
+    marginTop: 2,
+    textAlign: 'right',
   },
 });
