@@ -438,65 +438,6 @@ export default function HomeScreen() {
           ) : null}
         </LinearGradient>
 
-        {/* Float card */}
-        <View style={styles.floatCard}>
-          <Pressable style={styles.fcRow}>
-            <View style={[styles.fcIcon, { backgroundColor: '#FCEBEB' }]}>
-              <Ionicons name="layers-outline" size={18} color={C.red} />
-            </View>
-            <View style={styles.fcMid}>
-              <Text style={styles.fcTitle}>You owe</Text>
-              <Text style={styles.fcSub}>
-                {isEmpty ? 'Nothing due yet' : 'Netflix · due in 2 days'}
-              </Text>
-            </View>
-            <View style={styles.fcRight}>
-              <Text style={[styles.fcAmt, { color: C.red }]}>
-                {isEmpty ? '$0.00' : '$12.00'}
-              </Text>
-              <Text style={styles.fcDetail}>{isEmpty ? 'add a bill' : 'tap to pay'}</Text>
-            </View>
-          </Pressable>
-          <Pressable style={styles.fcRow}>
-            <View style={[styles.fcIcon, { backgroundColor: '#E1F5EE' }]}>
-              <Ionicons name="checkmark" size={18} color={C.green} />
-            </View>
-            <View style={styles.fcMid}>
-              <Text style={styles.fcTitle}>
-                {isEmpty ? 'Pending' : 'Pending from 3 people'}
-              </Text>
-              <Text style={styles.fcSub}>
-                {isEmpty ? 'Invite friends to split' : 'Spotify, Xbox, iCloud'}
-              </Text>
-            </View>
-            <View style={styles.fcRight}>
-              <Text style={[styles.fcAmt, { color: C.green }]}>
-                {isEmpty ? '$0.00' : '$47.50'}
-              </Text>
-              <Text style={styles.fcDetail}>{isEmpty ? 'get started' : 'view all'}</Text>
-            </View>
-          </Pressable>
-          <Pressable style={[styles.fcRow, styles.fcRowLast]}>
-            <View style={[styles.fcIcon, { backgroundColor: '#FAEEDA' }]}>
-              <Ionicons name="time-outline" size={18} color="#854F0B" />
-            </View>
-            <View style={styles.fcMid}>
-              <Text style={styles.fcTitle}>
-                {isEmpty ? 'Overdue' : 'Sam overdue'}
-              </Text>
-              <Text style={styles.fcSub}>
-                {isEmpty ? 'No late balances yet' : 'Netflix · 3 days late'}
-              </Text>
-            </View>
-            <View style={styles.fcRight}>
-              <Text style={[styles.fcAmt, { color: C.orange }]}>
-                {isEmpty ? '$0.00' : '$5.33'}
-              </Text>
-              <Text style={styles.fcDetail}>{isEmpty ? 'all clear' : 'send reminder'}</Text>
-            </View>
-          </Pressable>
-        </View>
-
         <View style={styles.quickActionsBelowFloat}>
           <HomeQuickActionsRow actions={homeQuickActions} />
         </View>
@@ -816,45 +757,6 @@ const styles = StyleSheet.create({
     textAlign: 'right',
     flexShrink: 1,
   },
-  floatCard: {
-    backgroundColor: '#fff',
-    borderRadius: 22,
-    marginHorizontal: 14,
-    marginTop: -22,
-    paddingVertical: 4,
-    borderWidth: 0.5,
-    borderColor: C.border,
-    shadowColor: '#000',
-    shadowOpacity: 0.07,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 10,
-    elevation: 3,
-  },
-  fcRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderBottomWidth: 0.5,
-    borderBottomColor: C.divider,
-  },
-  fcRowLast: {
-    borderBottomWidth: 0,
-  },
-  fcIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  fcMid: { flex: 1 },
-  fcTitle: { fontSize: 16, fontWeight: '500', color: C.text },
-  fcSub: { fontSize: 13, color: C.muted, marginTop: 2 },
-  fcRight: { alignItems: 'flex-end' },
-  fcAmt: { fontSize: 17, fontWeight: '500' },
-  fcDetail: { fontSize: 13, color: C.muted, marginTop: 2 },
   body: {
     paddingHorizontal: 14,
     paddingBottom: 20,
@@ -889,7 +791,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   quickActionsBelowFloat: {
-    marginTop: 12,
+    marginTop: 18,
     marginBottom: 4,
   },
   calStrip: {
