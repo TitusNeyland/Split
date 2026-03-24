@@ -295,21 +295,6 @@ export default function HomeScreen() {
     return initialsFromName(n);
   }, [homeDisplayName, user?.displayName]);
 
-  const heroLegendCopy = useMemo(() => {
-    if (isEmpty) {
-      return {
-        youOweSub: 'Add a subscription to track',
-        owedSub: 'Invite friends to split',
-        overdueSub: 'No overdue balances',
-      };
-    }
-    return {
-      youOweSub: position.youOwe > 0 ? 'Netflix · due in 2 days' : 'Nothing due right now',
-      owedSub: position.owedToYou > 0 ? 'Spotify, Xbox, iCloud' : 'No incoming payments yet',
-      overdueSub: position.overdue > 0 ? 'Sam · 3 days overdue' : 'All caught up',
-    };
-  }, [isEmpty, position.youOwe, position.owedToYou, position.overdue]);
-
   const reminderCandidates = useMemo((): ReminderPickCandidate[] => {
     if (isEmpty) return [];
     return [
@@ -435,9 +420,6 @@ export default function HomeScreen() {
               youOwe={isEmpty ? 0 : position.youOwe}
               owedToYou={isEmpty ? 0 : position.owedToYou}
               overdue={isEmpty ? 0 : position.overdue}
-              youOweSub={heroLegendCopy.youOweSub}
-              owedSub={heroLegendCopy.owedSub}
-              overdueSub={heroLegendCopy.overdueSub}
             />
           </View>
           <HomeSavingsPill
