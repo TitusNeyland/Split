@@ -48,7 +48,7 @@ function ProgressBar({ pct, color }: { pct: number; color: string }) {
 export function SubscriptionsDemoFloatCard() {
   return (
     <View style={styles.floatCard}>
-      <ServiceIcon serviceName="Netflix" size={40} />
+      <ServiceIcon serviceName="Netflix" size={40} style={styles.serviceIconTile} />
       <View style={styles.fcMid}>
         <Text style={styles.fcTitle}>Netflix bills today</Text>
         <Text style={styles.fcSub}>2 of 3 members have paid · Sam still pending</Text>
@@ -231,7 +231,7 @@ function HuluOverdueCard() {
       accessibilityLabel="Open Hulu subscription details"
     >
       <View style={styles.overdueBanner}>
-        <Ionicons name="alert-circle-outline" size={14} color="#A32D2D" />
+        <Ionicons name="alert-circle-outline" size={12} color="#A32D2D" />
         <Text style={styles.overdueBannerTxt}>3 days overdue — Sam hasn&apos;t paid $4.00</Text>
         <Pressable style={styles.remindBtn} accessibilityRole="button" accessibilityLabel="Remind member">
           <Text style={styles.remindBtnTxt}>Remind</Text>
@@ -239,7 +239,7 @@ function HuluOverdueCard() {
       </View>
       <View style={styles.subMain}>
         <View style={styles.subTop}>
-          <ServiceIcon serviceName="Hulu" size={40} />
+          <ServiceIcon serviceName="Hulu" size={40} style={styles.serviceIconTile} />
           <View style={styles.subInfo}>
             <Text style={styles.subName}>Hulu</Text>
             <View style={styles.subMetaRow}>
@@ -284,7 +284,7 @@ function XboxPausedCard() {
       accessibilityLabel="Open Xbox Game Pass subscription details"
     >
       <View style={styles.pausedBanner}>
-        <Ionicons name="pause" size={14} color="#5F5E5A" />
+        <Ionicons name="pause" size={12} color="#5F5E5A" />
         <Text style={styles.pausedBannerTxt}>Paused · skipping billing cycles</Text>
         <Pressable hitSlop={6} accessibilityRole="button" accessibilityLabel="Resume subscription">
           <Text style={styles.resumeTxt}>Resume</Text>
@@ -292,7 +292,7 @@ function XboxPausedCard() {
       </View>
       <View style={styles.subMain}>
         <View style={styles.subTop}>
-          <ServiceIcon serviceName="Xbox Game Pass" size={40} />
+          <ServiceIcon serviceName="Xbox Game Pass" size={40} style={styles.serviceIconTile} />
           <View style={styles.subInfo}>
             <Text style={[styles.subName, { color: C.muted }]}>Xbox Game Pass</Text>
             <View style={styles.subMetaRow}>
@@ -326,8 +326,8 @@ export function SubscriptionsDemoPanel({ filter }: { filter: FilterId }) {
     return (
       <View style={styles.panel}>
         <View style={styles.sh}>
-          <Text style={[styles.shTitle, styles.activeSplitsShTitle]}>Active splits</Text>
-          <Text style={[styles.shAction, styles.activeSplitsShAction]}>Sort</Text>
+          <Text style={styles.shTitle}>Active splits</Text>
+          <Text style={styles.shAction}>Sort</Text>
         </View>
         <NetflixCard userAvatarUrl={userAvatarUrl} />
         <SpotifyCard userAvatarUrl={userAvatarUrl} />
@@ -369,6 +369,10 @@ export function SubscriptionsDemoPanel({ filter }: { filter: FilterId }) {
 }
 
 const styles = StyleSheet.create({
+  /** Align with `SubscriptionCard` / design spec: 40×40, 12px corners. */
+  serviceIconTile: {
+    borderRadius: 12,
+  },
   floatCard: {
     backgroundColor: '#fff',
     borderRadius: 22,
@@ -427,23 +431,16 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   shTitle: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '600',
     color: C.muted,
     letterSpacing: 0.7,
     textTransform: 'uppercase',
   },
   shAction: {
-    fontSize: 14,
+    fontSize: 16,
     color: C.purple,
     fontWeight: '500',
-  },
-  activeSplitsShTitle: {
-    fontSize: 16,
-    letterSpacing: 0.55,
-  },
-  activeSplitsShAction: {
-    fontSize: 19,
   },
   subCard: {
     backgroundColor: '#fff',
@@ -470,7 +467,7 @@ const styles = StyleSheet.create({
   },
   overdueBannerTxt: {
     flex: 1,
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '500',
     color: '#A32D2D',
   },
@@ -495,12 +492,12 @@ const styles = StyleSheet.create({
   },
   pausedBannerTxt: {
     flex: 1,
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '500',
     color: '#5F5E5A',
   },
   resumeTxt: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '500',
     color: C.purple,
   },
@@ -529,7 +526,7 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   subName: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '600',
     color: C.text,
     letterSpacing: -0.2,
@@ -542,7 +539,7 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
   subCycle: {
-    fontSize: 12,
+    fontSize: 11,
     color: C.muted,
   },
   ownerBadge: {
@@ -567,7 +564,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.3,
   },
   subPer: {
-    fontSize: 12,
+    fontSize: 11,
     color: C.muted,
     textAlign: 'right',
     marginTop: 2,
@@ -631,11 +628,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   progLbl: {
-    fontSize: 11,
+    fontSize: 10,
     color: C.muted,
   },
   progAmt: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '600',
   },
   empty: {

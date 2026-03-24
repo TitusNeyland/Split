@@ -142,7 +142,7 @@ export function SubscriptionCard({
     <>
       {priceChange ? (
         <View style={styles.priceBanner}>
-          <Ionicons name="alert-circle" size={18} color={C.amberOk} />
+          <Ionicons name="alert-circle" size={12} color={C.amberOk} />
           <Text style={styles.priceBannerTxt}>{priceChange.message}</Text>
           <Pressable
             onPress={() => void priceChange.onDismiss()}
@@ -157,7 +157,7 @@ export function SubscriptionCard({
 
       <View style={styles.main}>
         <View style={styles.topRow}>
-          <ServiceIcon serviceName={serviceName} size={iconSize} />
+          <ServiceIcon serviceName={serviceName} size={iconSize} style={styles.serviceIconTile} />
           <View style={styles.info}>
             <Text style={[styles.name, { color: nameColor }]}>{name}</Text>
             <Text style={styles.cycle}>{cycleLine}</Text>
@@ -165,13 +165,13 @@ export function SubscriptionCard({
               <View style={styles.badgeRow}>
                 {isOwner ? (
                   <View style={styles.ownerBadge}>
-                    <Ionicons name="person-outline" size={11} color={C.purple} />
+                    <Ionicons name="person-outline" size={10} color={C.purple} />
                     <Text style={styles.ownerBadgeTxt}>You pay</Text>
                   </View>
                 ) : null}
                 {autoCharge === 'on' ? (
                   <View style={styles.autoOnBadge}>
-                    <Ionicons name="checkmark" size={11} color={C.greenDark} />
+                    <Ionicons name="checkmark" size={10} color={C.greenDark} />
                     <Text style={styles.autoOnBadgeTxt}>Auto-on</Text>
                   </View>
                 ) : null}
@@ -263,6 +263,10 @@ export function SubscriptionCard({
 }
 
 const styles = StyleSheet.create({
+  /** 40×40 tile, 12px corners (matches Subscriptions demo cards). */
+  serviceIconTile: {
+    borderRadius: 12,
+  },
   card: {
     backgroundColor: '#fff',
     borderRadius: 18,
@@ -284,7 +288,7 @@ const styles = StyleSheet.create({
   },
   priceBannerTxt: {
     flex: 1,
-    fontSize: 13,
+    fontSize: 11,
     fontWeight: '500',
     color: C.amberBannerText,
   },
@@ -308,12 +312,12 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   name: {
-    fontSize: 17,
+    fontSize: 14,
     fontWeight: '600',
     letterSpacing: -0.2,
   },
   cycle: {
-    fontSize: 14,
+    fontSize: 11,
     color: C.muted,
     marginTop: 3,
   },
@@ -334,7 +338,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
   },
   ownerBadgeTxt: {
-    fontSize: 12,
+    fontSize: 10,
     fontWeight: '500',
     color: C.purple,
   },
@@ -348,7 +352,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
   },
   autoOnBadgeTxt: {
-    fontSize: 12,
+    fontSize: 10,
     fontWeight: '500',
     color: C.greenDark,
   },
@@ -359,18 +363,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
   },
   autoOffBadgeTxt: {
-    fontSize: 12,
+    fontSize: 10,
     fontWeight: '500',
     color: C.muted,
   },
   total: {
-    fontSize: 20,
+    fontSize: 17,
     fontWeight: '600',
     textAlign: 'right',
     letterSpacing: -0.3,
   },
   perPerson: {
-    fontSize: 14,
+    fontSize: 11,
     color: C.muted,
     textAlign: 'right',
     marginTop: 2,
@@ -390,9 +394,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
   },
   pip: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: -6,
@@ -404,12 +408,12 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   pipImg: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
   },
   pipTxt: {
-    fontSize: 11,
+    fontSize: 9,
     fontWeight: '600',
   },
   statusPill: {
@@ -426,7 +430,7 @@ const styles = StyleSheet.create({
     borderRadius: 2.5,
   },
   statusTxt: {
-    fontSize: 12,
+    fontSize: 10,
     fontWeight: '500',
   },
   dueBadge: {
@@ -436,7 +440,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   dueBadgeTxt: {
-    fontSize: 12,
+    fontSize: 10,
     color: C.muted,
     fontWeight: '500',
   },
@@ -459,11 +463,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   progLbl: {
-    fontSize: 12,
+    fontSize: 10,
     color: C.muted,
   },
   progAmt: {
-    fontSize: 12,
+    fontSize: 10,
     fontWeight: '600',
   },
   editSplitBtn: {
