@@ -230,6 +230,28 @@ const MOCK_ACTIVITY_GROUPS: ActivityFeedGroup[] = [
     sectionTitle: 'Today',
     items: [
       {
+        id: 't-you-netflix',
+        kind: 'received',
+        serviceMark: 'Netflix Premium',
+        icon: 'checkmark',
+        iconBg: '#E1F5EE',
+        iconColor: '#1D9E75',
+        title: 'You paid Netflix Premium',
+        sub: 'Mar cycle · your share',
+        time: 'Just now',
+        amount: '$12.00',
+        amountColor: '#1D9E75',
+        badge: 'Paid',
+        badgeVariant: 'green',
+        detail: {
+          rows: [
+            { label: 'Subscription', value: 'Netflix Premium' },
+            { label: 'Your share', value: '$12.00' },
+            { label: 'Method', value: 'Charged to your card on file' },
+          ],
+        },
+      },
+      {
         id: 't1',
         friendLinkIds: ['alex'],
         kind: 'received',
@@ -828,7 +850,11 @@ function ActivityItemRow({
 
 export default function ActivityScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ filter?: string | string[]; friendId?: string | string[] }>();
+  const params = useLocalSearchParams<{
+    filter?: string | string[];
+    friendId?: string | string[];
+    expandId?: string | string[];
+  }>();
   const insets = useSafeAreaInsets();
   const [filter, setFilter] = useState<ActivityFilterId>('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -846,13 +872,37 @@ export default function ActivityScreen() {
 
   useEffect(() => {
     if (friendIdFilter) {
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
       setFilter('all');
+      setExpandedId(null);
+      setMarkPaidDrawerOpenForId(null);
       return;
     }
     const raw = params.filter;
     const f = Array.isArray(raw) ? raw[0] : raw;
-    if (f === 'receipts') setFilter('receipts');
+    if (f === 'receipts') {
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      setExpandedId(null);
+      setMarkPaidDrawerOpenForId(null);
+      setFilter('receipts');
+    } else if (f === 'all') {
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      setExpandedId(null);
+      setMarkPaidDrawerOpenForId(null);
+      setFilter('all');
+    }
   }, [params.filter, friendIdFilter]);
+
+  useEffect(() => {
+    const raw = params.expandId;
+    const eid = Array.isArray(raw) ? raw[0] : raw;
+    const trimmed = eid != null && String(eid).trim() !== '' ? String(eid).trim() : '';
+    if (!trimmed) return;
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setFilter('all');
+    setExpandedId(trimmed);
+    setMarkPaidDrawerOpenForId(null);
+  }, [params.expandId]);
 
   const collectedDisplay = useMemo(() => '+$47.50', []);
   const trendDisplay = useMemo(() => '↑ $12 vs last month', []);
@@ -926,11 +976,12 @@ export default function ActivityScreen() {
     [manualPaidByItemId, markPaidNotes],
   );
 
-  useEffect(() => {
+  const applyFilter = useCallback((id: ActivityFilterId) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setExpandedId(null);
     setMarkPaidDrawerOpenForId(null);
-  }, [filter, friendIdFilter]);
+    setFilter(id);
+  }, []);
 
   return (
     <View style={styles.root}>
@@ -1003,7 +1054,7 @@ export default function ActivityScreen() {
               return (
                 <Pressable
                   key={p.id}
-                  onPress={() => setFilter(p.id)}
+                  onPress={() => applyFilter(p.id)}
                   style={[styles.fpill, active ? styles.fpillOn : styles.fpillOff]}
                   accessibilityRole="button"
                   accessibilityState={{ selected: active }}
