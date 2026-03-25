@@ -35,6 +35,10 @@ yarn-error.*
 .env*.local
 server/.env
 
+# Firebase native config files (contain sensitive credentials)
+GoogleService-Info.plist
+google-services.json
+
 # typescript
 *.tsbuildinfo
 
