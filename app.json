@@ -13,9 +13,11 @@
     },
     "ios": {
       "supportsTablet": true,
+      "bundleIdentifier": "com.innova.split",
       "associatedDomains": ["applinks:mysplit.app"]
     },
     "android": {
+      "package": "com.innova.split",
       "intentFilters": [
         {
           "action": "VIEW",
