@@ -14,7 +14,9 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.innova.split",
-      "associatedDomains": ["applinks:mysplit.app"]
+      "associatedDomains": [
+        "applinks:mysplit.app"
+      ]
     },
     "android": {
       "package": "com.innova.split",
@@ -29,7 +31,10 @@
               "pathPrefix": "/invite"
             }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
       ],
       "adaptiveIcon": {
@@ -78,7 +83,8 @@
         {
           "contactsPermission": "Allow Split to find which of your contacts are on mySplit."
         }
-      ]
+      ],
+      "expo-web-browser"
     ],
     "extra": {
       "receiptApiUrl": "http://localhost:8787"
