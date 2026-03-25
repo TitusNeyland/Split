@@ -20,6 +20,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { getFriendFilterDisplayName } from '../../lib/profileFriendsBalance';
 import { ServiceIcon } from '../components/ServiceIcon';
+import { recordManualSettlement } from '../../lib/paymentsFirestore';
+import { useFirebaseUid } from '../../lib/useFirebaseUid';
 
 type IonIconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -99,13 +101,11 @@ type ManualSettlementRecord = {
   recordedAt: number;
 };
 
-const MOCK_CURRENT_USER_ID = 'user_titus';
-
 async function persistManualSettlementToFirestore(
-  _activityItemId: string,
-  _record: ManualSettlementRecord,
+  activityItemId: string,
+  record: ManualSettlementRecord,
 ): Promise<void> {
-  // TODO: Firestore — payment doc: status, partial_amount, note, settlementMethod, recordedBy, timestamp
+  await recordManualSettlement(activityItemId, record.recordedByUserId, record.noteText);
 }
 
 function itemEligibleForMarkPaid(item: ActivityFeedItem): boolean {
@@ -849,6 +849,7 @@ function ActivityItemRow({
 }
 
 export default function ActivityScreen() {
+  const uid = useFirebaseUid();
   const router = useRouter();
   const params = useLocalSearchParams<{
     filter?: string | string[];
@@ -955,7 +956,7 @@ export default function ActivityScreen() {
         status: 'paid',
         settlementMethod: 'manual',
         noteText: note,
-        recordedByUserId: MOCK_CURRENT_USER_ID,
+        recordedByUserId: uid ?? '',
         recordedAt: Date.now(),
       };
       try {
