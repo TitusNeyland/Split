@@ -16,7 +16,7 @@ const CX = SIZE / 2;
 const CY = SIZE / 2;
 const OUTER_R = 77;
 /** Inner hole vs outer ring (larger = more padding between center text and the arc). */
-const CUTOUT_RATIO = 0.82;
+const CUTOUT_RATIO = 0.78;
 const INNER_R = OUTER_R * CUTOUT_RATIO;
 const R_MID = (OUTER_R + INNER_R) / 2;
 const STROKE_W = OUTER_R - INNER_R;
@@ -24,9 +24,9 @@ const SPACING_PX = 3;
 const GAP_RAD = SPACING_PX / R_MID;
 
 /** Match hero legend segment dots. */
-const RED = '#E24B4A';
-const GREEN = '#1D9E75';
-const AMBER = '#EF9F27';
+const RED = '#EF4444';
+const GREEN = '#22C55E';
+const AMBER = '#EAB308';
 
 function arcPath(cx: number, cy: number, r: number, a0: number, a1: number): string {
   const x0 = cx + r * Math.cos(a0);
@@ -103,7 +103,7 @@ export function HomeDonutChart({
 
   const net = owedToYou - youOwe;
   const netColor =
-    net > 0.005 ? '#86efac' : net < -0.005 ? '#ff8080' : '#ffffff';
+    net > 0.005 ? '#4ADE80' : net < -0.005 ? '#FB7185' : '#ffffff';
 
   return (
     <View style={styles.wrap} accessibilityRole="image" accessibilityLabel={`Net balance ${formatNet(net)} this month`}>
