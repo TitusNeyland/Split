@@ -1,5 +1,6 @@
-import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
+import { addDoc, collection, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { getFirebaseFirestore } from './firebase';
+import { getNextFirstChargeDate } from './billingDayFormat';
 
 export type WizardSplitMethod = 'equal' | 'custom_percent' | 'fixed_amount' | 'owner_less';
 
@@ -93,6 +94,10 @@ export async function createSubscriptionFromWizard(
     status: 'active',
     createdAt: serverTimestamp(),
     splitUpdatedAt: serverTimestamp(),
+    nextBillingAt: (() => {
+      const d = getNextFirstChargeDate(input.billingCycle, input.billingDay);
+      return d ? Timestamp.fromDate(d) : null;
+    })(),
   });
 
   const subId = docRef.id;

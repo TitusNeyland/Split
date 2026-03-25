@@ -65,6 +65,14 @@
       ]
     },
     {
+      "collectionGroup": "subscriptions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "nextBillingAt", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "payment_intents",
       "queryScope": "COLLECTION",
       "fields": [
