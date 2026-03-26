@@ -1,5 +1,4 @@
 import React, { useCallback, useMemo } from 'react';
-;
 import { View, Text, StyleSheet, Pressable, Alert, Platform } from 'react-native';
 import { router } from 'expo-router';
 import * as Linking from 'expo-linking';
@@ -87,6 +86,7 @@ export default function ProfileSupportLegalSection() {
             }
             try {
               await signOut(auth);
+              router.replace('/sign-in');
             } catch (e) {
               const msg = e instanceof Error ? e.message : 'Sign out failed.';
               Alert.alert('Error', msg);
