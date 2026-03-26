@@ -8,6 +8,7 @@ export default function OnboardingLayout() {
       <Stack.Screen name="goals" />
       <Stack.Screen name="name" />
       <Stack.Screen name="email" />
+      <Stack.Screen name="password" />
     </Stack>
   );
 }

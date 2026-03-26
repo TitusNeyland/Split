@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { useOnboardingBack } from './useOnboardingBack';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Circle, Line, Path, Polyline, Rect } from 'react-native-svg';
 import {
@@ -86,6 +87,7 @@ function GoalIcon({ id, color }: { id: OnboardingGoalId; color: string }) {
 export default function OnboardingGoalsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const goBack = useOnboardingBack('/onboarding');
   const [selected, setSelected] = useState<Record<OnboardingGoalId, boolean>>(() =>
     initialGoalSelection()
   );
@@ -153,7 +155,7 @@ export default function OnboardingGoalsScreen() {
     <View style={[styles.root, { paddingTop: insets.top }]}>
       <View style={styles.topRow}>
         <Pressable
-          onPress={() => router.back()}
+          onPress={goBack}
           hitSlop={12}
           style={({ pressed }) => [styles.backBtn, pressed && { opacity: 0.6 }]}
         >
