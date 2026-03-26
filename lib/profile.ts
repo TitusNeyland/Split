@@ -22,6 +22,8 @@ import type { PrivacySettings } from './privacySettings';
 export type UserProfileDoc = {
   /** True after the user finishes the full in-app onboarding flow (9 steps). */
   onboardingComplete?: boolean | null;
+  /** When onboarding was marked complete (Firestore server time). */
+  onboardingCompletedAt?: { toDate?: () => Date } | null;
   /** Goal ids from onboarding step 2 (`OnboardingGoalId` strings). */
   onboardingGoals?: string[] | null;
   displayName?: string | null;
