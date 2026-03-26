@@ -84,7 +84,8 @@
           "contactsPermission": "Allow Split to find which of your contacts are on mySplit."
         }
       ],
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-notifications"
     ],
     "extra": {
       "receiptApiUrl": "http://localhost:8787"
