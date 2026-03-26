@@ -290,7 +290,14 @@ export default function SignInScreen() {
             {/* Forgot password */}
             <Pressable
               style={({ pressed }) => [styles.forgotBtn, pressed && { opacity: 0.6 }]}
-              onPress={() => router.push('/forgot-password')}
+              onPress={() => {
+                const e = email.trim();
+                if (e) {
+                  router.push({ pathname: '/forgot-password', params: { email: e } });
+                } else {
+                  router.push('/forgot-password');
+                }
+              }}
             >
               <Text style={styles.forgotTxt}>Forgot password?</Text>
             </Pressable>
