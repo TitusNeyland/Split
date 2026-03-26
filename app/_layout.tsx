@@ -46,6 +46,8 @@ export default function RootLayout() {
         <InviteDeepLinkBootstrap />
         <PendingInviteAfterAuth />
         <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="index" />
+          <Stack.Screen name="onboarding" options={{ headerShown: false }} />
           <Stack.Screen
             name="(tabs)"
             options={{
