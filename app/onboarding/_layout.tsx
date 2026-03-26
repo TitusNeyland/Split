@@ -6,6 +6,7 @@ export default function OnboardingLayout() {
     <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
       <Stack.Screen name="index" options={{ gestureEnabled: false }} />
       <Stack.Screen name="goals" />
+      <Stack.Screen name="name" />
     </Stack>
   );
 }

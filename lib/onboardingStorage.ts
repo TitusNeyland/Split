@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { doc, setDoc } from 'firebase/firestore';
 import { getFirebaseFirestore } from './firebase';
+import { ONBOARDING_GOALS_STORAGE_KEY } from './onboardingGoals';
 
 export const ONBOARDING_COMPLETE_STORAGE_KEY = '@split/onboarding_complete';
 
@@ -35,5 +36,6 @@ export async function setOnboardingCompleteInFirestore(uid: string): Promise<voi
 /** Persists completion locally and, when signed in, on Firestore. */
 export async function markOnboardingFullyComplete(uid: string | null): Promise<void> {
   await setOnboardingCompleteInStorage(true);
+  await AsyncStorage.removeItem(ONBOARDING_GOALS_STORAGE_KEY);
   if (uid) await setOnboardingCompleteInFirestore(uid);
 }

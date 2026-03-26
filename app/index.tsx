@@ -4,9 +4,11 @@ import { Redirect } from 'expo-router';
 import { onAuthStateChanged } from 'firebase/auth';
 import { getFirebaseAuth, isFirebaseConfigured } from '../lib/firebase';
 import { getOnboardingCompleteFromStorage } from '../lib/onboardingStorage';
+import { hasLocalOnboardingGoalsDraft } from '../lib/onboardingGoals';
 
 /**
- * Entry: signed-in users → tabs; guests with completed onboarding → sign-in; else → onboarding.
+ * Entry: completed onboarding → tabs (or sign-in if guest); anonymous mid-flow → resume name step;
+ * otherwise onboarding welcome or sign-in.
  */
 export default function IndexRoute() {
   const [href, setHref] = useState<string | null>(null);
@@ -30,9 +32,17 @@ export default function IndexRoute() {
         return;
       }
 
-      unsubAuth = onAuthStateChanged(auth, (user) => {
+      unsubAuth = onAuthStateChanged(auth, async (user) => {
         if (cancelled) return;
         if (user) {
+          if (onboardingDone) {
+            setHref('/(tabs)');
+            return;
+          }
+          if (user.isAnonymous && (await hasLocalOnboardingGoalsDraft())) {
+            setHref('/onboarding/name');
+            return;
+          }
           setHref('/(tabs)');
           return;
         }
