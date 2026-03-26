@@ -25,6 +25,8 @@ export type UserProfileDoc = {
   /** Goal ids from onboarding step 2 (`OnboardingGoalId` strings). */
   onboardingGoals?: string[] | null;
   displayName?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
   /** Lowercased display name for prefix search; keep in sync with `displayName`. */
   displayNameLower?: string | null;
   email?: string | null;
@@ -220,6 +222,34 @@ export async function saveUserDisplayName(displayName: string): Promise<void> {
     {
       displayName: trimmed || null,
       displayNameLower: trimmed ? trimmed.toLowerCase() : null,
+      email: user.email ?? null,
+      emailNormalized: user.email ? normalizeInviteEmail(user.email) : null,
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true }
+  );
+}
+
+/** Onboarding: Auth displayName + Firestore displayName, displayNameLower, firstName, lastName. */
+export async function saveOnboardingLegalName(firstName: string, lastName: string): Promise<void> {
+  const auth = getFirebaseAuth();
+  const db = getFirebaseFirestore();
+  if (!auth || !db) throw new Error('Firebase is not configured.');
+  const user = auth.currentUser;
+  if (!user) throw new Error('Sign in to continue.');
+
+  const first = firstName.trim();
+  const last = lastName.trim();
+  const displayName = `${first} ${last}`.trim();
+
+  await updateProfile(user, { displayName });
+  await setDoc(
+    doc(db, 'users', user.uid),
+    {
+      displayName,
+      displayNameLower: displayName ? displayName.toLowerCase() : null,
+      firstName: first,
+      lastName: last,
       email: user.email ?? null,
       emailNormalized: user.email ? normalizeInviteEmail(user.email) : null,
       updatedAt: serverTimestamp(),
