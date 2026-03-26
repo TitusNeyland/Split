@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { useOnboardingBack } from './useOnboardingBack';
+import { useOnboardingBack } from '../../lib/useOnboardingBack';
 import { Ionicons } from '@expo/vector-icons';
 import { WebView } from 'react-native-webview';
 import { fetchSignInMethodsForEmail } from 'firebase/auth';

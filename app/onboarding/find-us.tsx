@@ -12,7 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Circle, Line, Path, Polyline, Rect } from 'react-native-svg';
-import { useOnboardingBack } from './useOnboardingBack';
+import { useOnboardingBack } from '../../lib/useOnboardingBack';
 import {
   ACQUISITION_OPTIONS,
   type AcquisitionSourceId,

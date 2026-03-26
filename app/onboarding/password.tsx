@@ -15,7 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Circle, Path, Polyline } from 'react-native-svg';
-import { useOnboardingBack } from './useOnboardingBack';
+import { useOnboardingBack } from '../../lib/useOnboardingBack';
 import { getFirebaseAuth, isFirebaseConfigured } from '../../lib/firebase';
 import {
   createOrLinkOnboardingEmailPassword,
@@ -34,6 +34,7 @@ const C = {
   purple: '#534AB7',
   inputBg: '#F5F3EE',
   green: '#1D9E75',
+  errorRed: '#E24B4A',
   checkBorder: '#D3D1C7',
 };
 
@@ -106,12 +107,59 @@ function CheckRow({ label, met }: { label: string; met: boolean }) {
   );
 }
 
+function PasswordsMatchRow({ passwordsMatch, showMismatch }: { passwordsMatch: boolean; showMismatch: boolean }) {
+  return (
+    <View style={styles.checkRow}>
+      <View
+        style={[
+          styles.checkCircle,
+          passwordsMatch && styles.checkCircleMet,
+          showMismatch && styles.checkCircleMismatch,
+        ]}
+      >
+        {passwordsMatch ? (
+          <Svg width={10} height={10} viewBox="0 0 24 24" fill="none">
+            <Polyline
+              points="20 6 9 17 4 12"
+              stroke="#fff"
+              strokeWidth={3}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </Svg>
+        ) : showMismatch ? (
+          <Svg width={10} height={10} viewBox="0 0 24 24" fill="none">
+            <Path
+              d="M18 6L6 18M6 6l12 12"
+              stroke="#fff"
+              strokeWidth={2.5}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </Svg>
+        ) : null}
+      </View>
+      <Text
+        style={[
+          styles.checkLabel,
+          passwordsMatch && styles.checkLabelMet,
+          showMismatch && styles.checkLabelMismatch,
+        ]}
+      >
+        Passwords match
+      </Text>
+    </View>
+  );
+}
+
 export default function OnboardingPasswordScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const goBack = useOnboardingBack('/onboarding/email');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [signupEmail, setSignupEmail] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -126,13 +174,25 @@ export default function OnboardingPasswordScreen() {
     };
   }, []);
 
-  const allMet = useMemo(
-    () => STRENGTH.every((s) => s.test(password)),
-    [password]
+  const hasMinLength = password.length >= 8;
+  const hasLower = /[a-z]/.test(password);
+  const hasUpper = /[A-Z]/.test(password);
+  const hasNumber = /\d/.test(password);
+  const passwordsMatch = password.length > 0 && confirmPassword === password;
+  const showMismatch = confirmPassword.length > 0 && !passwordsMatch;
+
+  const allChecksPassed = useMemo(
+    () =>
+      hasMinLength &&
+      hasLower &&
+      hasUpper &&
+      hasNumber &&
+      passwordsMatch,
+    [hasMinLength, hasLower, hasUpper, hasNumber, passwordsMatch]
   );
 
   const onContinue = useCallback(async () => {
-    if (!allMet) return;
+    if (!allChecksPassed) return;
     if (!isFirebaseConfigured() || !getFirebaseAuth()) {
       Alert.alert('Setup required', 'Firebase is not configured.');
       return;
@@ -151,8 +211,11 @@ export default function OnboardingPasswordScreen() {
       await setOnboardingPasswordSaved();
       router.push('/onboarding/notifications');
     } catch (e: unknown) {
-      const code =
-        typeof e === 'object' && e && 'code' in e ? String((e as { code: string }).code) : '';
+      const err = e as { code?: string; message?: string };
+      const code = typeof err.code === 'string' ? err.code : '';
+      if (__DEV__) {
+        console.warn('[onboarding password]', code || '(no code)', err.message ?? e);
+      }
       if (code === 'auth/email-already-in-use' || code === 'auth/credential-already-in-use') {
         Alert.alert(
           'Email in use',
@@ -164,13 +227,50 @@ export default function OnboardingPasswordScreen() {
         );
       } else if (code === 'auth/weak-password') {
         Alert.alert('Weak password', 'Choose a stronger password.');
+      } else if (code === 'auth/network-request-failed') {
+        Alert.alert(
+          'No connection',
+          'Check your internet connection and try again.'
+        );
+      } else if (code === 'auth/operation-not-allowed') {
+        Alert.alert(
+          'Sign-in not enabled',
+          'Enable Email/Password in the Firebase Console (Authentication → Sign-in method).'
+        );
+      } else if (code === 'auth/invalid-email') {
+        Alert.alert('Invalid email', 'Go back and enter a valid email address.');
+      } else if (code === 'auth/invalid-credential') {
+        Alert.alert(
+          'Could not link account',
+          'This email may already be in use. Try signing in, or use a different email.'
+        );
+      } else if (code === 'permission-denied') {
+        Alert.alert(
+          'Could not save profile',
+          'Your account may have been created, but saving your profile failed (Firestore rules). Check the console in development.'
+        );
+      } else if (code === 'auth/internal-error') {
+        Alert.alert(
+          'Authentication error',
+          'Something went wrong on the server. Try again in a moment.'
+        );
+      } else if (code === 'auth/onboarding-session-mismatch') {
+        Alert.alert(
+          'Different account',
+          'You are signed in with another email. Sign out from the sign-in screen, then continue onboarding.'
+        );
       } else {
-        Alert.alert('Could not create account', 'Check your connection and try again.');
+        Alert.alert(
+          'Could not create account',
+          code
+            ? `Error: ${code}. Check the Metro/console logs for details.`
+            : 'Check your connection and try again. If this keeps happening, open the console (dev) for the error code.'
+        );
       }
     } finally {
       setSaving(false);
     }
-  }, [allMet, signupEmail, password, router]);
+  }, [allChecksPassed, signupEmail, password, router]);
 
   return (
     <KeyboardAvoidingView
@@ -201,31 +301,61 @@ export default function OnboardingPasswordScreen() {
           <Text style={styles.title}>Set your password</Text>
           <Text style={styles.sub}>Create a secure password for your account.</Text>
 
-          <View style={styles.pwWrap}>
-            <TextInput
-              style={styles.pwInput}
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry={!showPassword}
-              autoCapitalize="none"
-              autoCorrect={false}
-              autoComplete="password-new"
-              textContentType="newPassword"
-              editable={!saving}
-            />
-            <Pressable
-              style={styles.eyeHit}
-              onPress={() => setShowPassword((v) => !v)}
-              hitSlop={8}
-            >
-              <EyeIcon visible={showPassword} />
-            </Pressable>
+          <View style={styles.fieldBlock}>
+            <Text style={styles.fieldLabel}>New password</Text>
+            <View style={styles.pwWrap}>
+              <TextInput
+                style={styles.pwInput}
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
+                autoCapitalize="none"
+                autoCorrect={false}
+                autoComplete="password-new"
+                textContentType="newPassword"
+                editable={!saving}
+              />
+              <Pressable
+                style={styles.eyeHit}
+                onPress={() => setShowPassword((v) => !v)}
+                hitSlop={8}
+                accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
+              >
+                <EyeIcon visible={showPassword} />
+              </Pressable>
+            </View>
+          </View>
+
+          <View style={[styles.fieldBlock, styles.fieldBlockBeforeChecklist]}>
+            <Text style={styles.fieldLabel}>Confirm password</Text>
+            <View style={styles.pwWrap}>
+              <TextInput
+                style={styles.pwInput}
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+                secureTextEntry={!showConfirmPassword}
+                autoCapitalize="none"
+                autoCorrect={false}
+                autoComplete="password-new"
+                textContentType="newPassword"
+                editable={!saving}
+              />
+              <Pressable
+                style={styles.eyeHit}
+                onPress={() => setShowConfirmPassword((v) => !v)}
+                hitSlop={8}
+                accessibilityLabel={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
+              >
+                <EyeIcon visible={showConfirmPassword} />
+              </Pressable>
+            </View>
           </View>
 
           <View style={styles.checklist}>
             {STRENGTH.map((s) => (
               <CheckRow key={s.id} label={s.label} met={s.test(password)} />
             ))}
+            <PasswordsMatchRow passwordsMatch={passwordsMatch} showMismatch={showMismatch} />
           </View>
 
           <View style={styles.spacer} />
@@ -233,11 +363,11 @@ export default function OnboardingPasswordScreen() {
           <Pressable
             style={({ pressed }) => [
               styles.primaryBtn,
-              (!allMet || saving) && styles.primaryBtnDisabled,
-              pressed && allMet && !saving && styles.primaryBtnPressed,
+              (!allChecksPassed || saving) && styles.primaryBtnDisabled,
+              pressed && allChecksPassed && !saving && styles.primaryBtnPressed,
             ]}
             onPress={onContinue}
-            disabled={!allMet || saving}
+            disabled={!allChecksPassed || saving}
           >
             {saving ? (
               <ActivityIndicator color="#fff" />
@@ -287,9 +417,20 @@ const styles = StyleSheet.create({
     lineHeight: 15 * 1.5,
     marginBottom: 20,
   },
+  fieldBlock: {
+    marginBottom: 16,
+  },
+  fieldBlockBeforeChecklist: {
+    marginBottom: 20,
+  },
+  fieldLabel: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: C.muted,
+    marginBottom: 5,
+  },
   pwWrap: {
     position: 'relative',
-    marginBottom: 20,
   },
   pwInput: {
     width: '100%',
@@ -334,12 +475,19 @@ const styles = StyleSheet.create({
     backgroundColor: C.green,
     borderColor: C.green,
   },
+  checkCircleMismatch: {
+    backgroundColor: C.errorRed,
+    borderColor: C.errorRed,
+  },
   checkLabel: {
     fontSize: 13,
     color: C.text,
   },
   checkLabelMet: {
     color: C.green,
+  },
+  checkLabelMismatch: {
+    color: C.errorRed,
   },
   spacer: {
     flexGrow: 1,
