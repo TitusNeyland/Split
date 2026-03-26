@@ -37,6 +37,8 @@ export type UserProfileDoc = {
   avatarUrl?: string | null;
   /** Stripe Customer id — card PaymentMethods live only in Stripe. */
   stripeCustomerId?: string | null;
+  /** PaymentMethod id from onboarding card capture (token reference only). */
+  stripePaymentMethodId?: string | null;
   /** Push / email toggles; FCM should respect before sending. */
   notificationPreferences?: Partial<NotificationPreferences> | null;
   /** Dispute-reduction defaults for splits (amounts, confirmations, cycle, method). */

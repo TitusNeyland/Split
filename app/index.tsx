@@ -8,6 +8,7 @@ import {
   hasOnboardingEmailSaved,
   hasOnboardingNameSaved,
   hasOnboardingNotificationsStepDone,
+  hasOnboardingPaymentStepDone,
   hasOnboardingPasswordSaved,
 } from '../lib/onboardingStorage';
 import { hasLocalOnboardingGoalsDraft } from '../lib/onboardingGoals';
@@ -46,6 +47,10 @@ export default function IndexRoute() {
             return;
           }
           if (!user.isAnonymous) {
+            if (await hasOnboardingPaymentStepDone()) {
+              setHref('/onboarding/find-us');
+              return;
+            }
             if (await hasOnboardingNotificationsStepDone()) {
               setHref('/onboarding/payment');
               return;
