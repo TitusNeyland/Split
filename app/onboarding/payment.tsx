@@ -21,7 +21,7 @@ import { saveOnboardingStripePaymentMethodId } from '../../lib/onboardingPayment
 import {
   setOnboardingPaymentStepDone,
 } from '../../lib/onboardingStorage';
-import { useOnboardingBack } from './useOnboardingBack';
+import { useOnboardingBack } from '../../lib/useOnboardingBack';
 
 const STRIPE_CONFIGURED = Boolean(process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY?.trim());
 

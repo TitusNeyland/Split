@@ -34,7 +34,18 @@ export async function createOrLinkOnboardingEmailPassword(
     return user;
   }
 
-  throw new Error('Already signed in.');
+  // Already signed in (non-anonymous), e.g. restored session from Sign in — don't create/link again.
+  const existing = auth.currentUser;
+  const existingEmail = existing.email?.trim().toLowerCase() ?? '';
+  if (existingEmail && existingEmail === trimmedEmail.toLowerCase()) {
+    return existing;
+  }
+
+  const err = new Error(
+    'You are signed in with a different account. Sign out from Settings or the sign-in screen, then try again.'
+  ) as Error & { code?: string };
+  err.code = 'auth/onboarding-session-mismatch';
+  throw err;
 }
 
 /** Merge email + onboarding goals onto `users/{uid}` after password step. */
