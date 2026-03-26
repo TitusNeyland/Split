@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -22,6 +22,7 @@ import * as AppleAuthentication from 'expo-apple-authentication';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { getFirebaseAuth } from '../lib/firebase';
 import { signInWithEmail, signInWithApple } from '../lib/authProviders';
+import { setOnboardingCompleteInStorage } from '../lib/onboardingStorage';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -103,6 +104,12 @@ export default function SignInScreen() {
     const t = setTimeout(() => emailRef.current?.focus(), 300);
     return () => clearTimeout(t);
   }, []);
+
+  /** Sign up must go to onboarding, not `/` — index sends completed users back to sign-in. */
+  const goToSignUp = useCallback(async () => {
+    await setOnboardingCompleteInStorage(false);
+    router.replace('/onboarding');
+  }, [router]);
 
   // Google OAuth
   const [request, response, promptGoogleAsync] = Google.useAuthRequest({
@@ -373,7 +380,7 @@ export default function SignInScreen() {
             {/* Sign up link */}
             <Pressable
               style={({ pressed }) => [styles.signUpBtn, pressed && { opacity: 0.6 }]}
-              onPress={() => router.replace('/')}
+              onPress={goToSignUp}
             >
               <Text style={styles.signUpTxt}>
                 Don't have an account?{' '}

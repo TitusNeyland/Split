@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { doc, setDoc } from 'firebase/firestore';
+import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { getFirebaseFirestore } from './firebase';
 import { ONBOARDING_GOALS_STORAGE_KEY } from './onboardingGoals';
 
@@ -134,7 +134,7 @@ export async function setOnboardingCompleteInFirestore(uid: string): Promise<voi
   if (!db) return;
   await setDoc(
     doc(db, 'users', uid),
-    { onboardingComplete: true },
+    { onboardingComplete: true, onboardingCompletedAt: serverTimestamp() },
     { merge: true }
   );
 }
