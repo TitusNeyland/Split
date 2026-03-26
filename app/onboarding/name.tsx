@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { useOnboardingBack } from './useOnboardingBack';
 import { Ionicons } from '@expo/vector-icons';
 import { saveOnboardingLegalName } from '../../lib/profile';
 import { ensureOnboardingAuthUid } from '../../lib/onboardingGoals';
@@ -32,6 +33,7 @@ const MAX_NAME_LEN = 50;
 export default function OnboardingNameScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const goBack = useOnboardingBack('/onboarding/goals');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [firstFocused, setFirstFocused] = useState(false);
@@ -76,7 +78,7 @@ export default function OnboardingNameScreen() {
       <View style={[styles.root, { paddingTop: insets.top }]}>
         <View style={styles.topRow}>
           <Pressable
-            onPress={() => router.back()}
+            onPress={goBack}
             hitSlop={12}
             style={({ pressed }) => [styles.backBtn, pressed && { opacity: 0.6 }]}
           >

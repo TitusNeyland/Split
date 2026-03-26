@@ -5,12 +5,13 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { getFirebaseAuth, isFirebaseConfigured } from '../lib/firebase';
 import {
   getOnboardingCompleteFromStorage,
+  hasOnboardingEmailSaved,
   hasOnboardingNameSaved,
 } from '../lib/onboardingStorage';
 import { hasLocalOnboardingGoalsDraft } from '../lib/onboardingGoals';
 
 /**
- * Entry: completed onboarding → tabs (or sign-in if guest); anonymous mid-flow → resume name or email;
+ * Entry: completed onboarding → tabs (or sign-in if guest); anonymous mid-flow → resume password / email / name;
  * otherwise onboarding welcome or sign-in.
  */
 export default function IndexRoute() {
@@ -43,6 +44,10 @@ export default function IndexRoute() {
             return;
           }
           if (user.isAnonymous) {
+            if (await hasOnboardingEmailSaved()) {
+              setHref('/onboarding/password');
+              return;
+            }
             if (await hasOnboardingNameSaved()) {
               setHref('/onboarding/email');
               return;

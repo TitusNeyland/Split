@@ -34,6 +34,32 @@ export const LEGAL_SECTIONS: LegalSection[] = [
   },
 ];
 
+/** Single section for in-app WebView (e.g. onboarding Terms / Privacy links). */
+export function buildSingleLegalSectionHtml(sectionId: 'terms' | 'privacy'): string {
+  const section = LEGAL_SECTIONS.find((s) => s.id === sectionId);
+  if (!section) return buildLegalDocumentHtml();
+  const blocks = `<h2 id="${section.id}">${escapeHtml(section.title)}</h2>${section.paragraphs
+    .map((p) => `<p>${escapeHtml(p)}</p>`)
+    .join('')}`;
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #1a1a18; padding: 16px 18px 40px; line-height: 1.5; font-size: 15px; background: #fff; }
+    h2 { font-size: 18px; margin: 0 0 10px; }
+    p { margin: 0 0 12px; color: #444; }
+    .muted { color: #888; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <p class="muted">${escapeHtml(LEGAL_INTRO)}</p>
+  ${blocks}
+</body>
+</html>`;
+}
+
 export function buildLegalDocumentHtml(): string {
   const nav = LEGAL_SECTIONS.map(
     (s) => `<a href="#${s.id}">${escapeHtml(s.title)}</a>`
