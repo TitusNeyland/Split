@@ -1,5 +1,4 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-;
 import {
   View,
   Text,
@@ -28,8 +27,7 @@ import ProfileSecurityCard from '../components/ProfileSecurityCard';
 import ProfileActiveSessionsCard from '../components/ProfileActiveSessionsCard';
 import ProfileSupportLegalSection from '../components/ProfileSupportLegalSection';
 import { ENABLE_PROFILE_SECURITY } from '../../constants/features';
-import { isFirebaseConfigured, getFirebaseAuth } from '../../lib/firebase';
-import { signOut } from 'firebase/auth';
+import { isFirebaseConfigured } from '../../lib/firebase';
 import {
   formatMemberSince,
   initialsFromName,
@@ -96,15 +94,27 @@ export default function ProfileScreen() {
   const [cropVisible, setCropVisible] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const toastOpacity = useRef(new Animated.Value(0)).current;
+  const [authHydrated, setAuthHydrated] = useState(false);
 
   useEffect(() => {
-    if (!isFirebaseConfigured()) return;
+    if (!isFirebaseConfigured()) {
+      setAuthHydrated(true);
+      return;
+    }
     return subscribeAuthAndProfile((s) => {
       setUser(s.user);
       setProfile(s.profile);
       setProfileLoading(s.profileLoading);
+      setAuthHydrated(true);
     });
   }, []);
+
+  useEffect(() => {
+    if (!isFirebaseConfigured() || !authHydrated) return;
+    if (!user || user.isAnonymous) {
+      router.replace('/sign-in');
+    }
+  }, [user, authHydrated]);
 
   const displayName = useMemo(() => {
     if (!isFirebaseConfigured()) return DEMO.displayName;
@@ -403,38 +413,6 @@ export default function ProfileScreen() {
           />
         </View>
 
-        {isFirebaseConfigured() && (
-          <View style={styles.authSection}>
-            {!user || user.isAnonymous ? (
-              <Pressable
-                style={({ pressed }) => [styles.signInBtn, pressed && styles.authBtnPressed]}
-                onPress={() => router.push('/sign-in')}
-              >
-                <Text style={styles.signInBtnTxt}>Sign in / Create account</Text>
-              </Pressable>
-            ) : (
-              <Pressable
-                style={({ pressed }) => [styles.signOutBtn, pressed && styles.authBtnPressed]}
-                onPress={() => {
-                  Alert.alert('Sign out', 'Are you sure you want to sign out?', [
-                    { text: 'Cancel', style: 'cancel' },
-                    {
-                      text: 'Sign out',
-                      style: 'destructive',
-                      onPress: () => {
-                        const auth = getFirebaseAuth();
-                        if (auth) signOut(auth);
-                      },
-                    },
-                  ]);
-                }}
-              >
-                <Text style={styles.signOutBtnTxt}>Sign out</Text>
-              </Pressable>
-            )}
-          </View>
-        )}
-
         <ProfileSupportLegalSection />
 
         <View style={styles.bodyPad} />
@@ -644,37 +622,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.6,
     color: '#72727F',
     marginBottom: 10,
-  },
-  authSection: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-  },
-  signInBtn: {
-    backgroundColor: '#534AB7',
-    borderRadius: 12,
-    paddingVertical: 15,
-    alignItems: 'center',
-  },
-  signInBtnTxt: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  signOutBtn: {
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.12)',
-    paddingVertical: 15,
-    alignItems: 'center',
-    backgroundColor: '#fff',
-  },
-  signOutBtnTxt: {
-    color: '#E24B4A',
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  authBtnPressed: {
-    opacity: 0.8,
   },
   bodyPad: {
     minHeight: 24,

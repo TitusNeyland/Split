@@ -195,20 +195,6 @@ export default function SignInScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* Back */}
-          <View style={styles.backRow}>
-            <Pressable
-              style={({ pressed }) => [styles.backBtn, pressed && { opacity: 0.5 }]}
-              onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))}
-              hitSlop={12}
-              accessibilityRole="button"
-              accessibilityLabel="Go back"
-            >
-              <Ionicons name="chevron-back" size={22} color={C.text} />
-            </Pressable>
-          </View>
-
-          {/* Header */}
           <View style={styles.content}>
             <Text style={styles.title}>Welcome back</Text>
             <Text style={styles.subtitle}>Sign in to your mySplit account.</Text>
@@ -464,18 +450,6 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   flex: { flex: 1 },
   scroll: {},
-
-  backRow: {
-    paddingHorizontal: 20,
-    paddingTop: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  backBtn: {
-    width: 36,
-    height: 36,
-    justifyContent: 'center',
-  },
 
   content: {
     flex: 1,
