@@ -39,6 +39,8 @@ export type UserProfileDoc = {
   stripeCustomerId?: string | null;
   /** PaymentMethod id from onboarding card capture (token reference only). */
   stripePaymentMethodId?: string | null;
+  /** Onboarding attribution survey; analytics only, not shown to other users. */
+  acquisitionSource?: string | null;
   /** Push / email toggles; FCM should respect before sending. */
   notificationPreferences?: Partial<NotificationPreferences> | null;
   /** Dispute-reduction defaults for splits (amounts, confirmations, cycle, method). */

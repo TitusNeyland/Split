@@ -11,6 +11,7 @@ export const ONBOARDING_SIGNUP_EMAIL_KEY = '@split/onboarding_signup_email';
 export const ONBOARDING_PASSWORD_SAVED_KEY = '@split/onboarding_password_saved';
 export const ONBOARDING_NOTIFICATIONS_DONE_KEY = '@split/onboarding_notifications_done';
 export const ONBOARDING_PAYMENT_DONE_KEY = '@split/onboarding_payment_done';
+export const ONBOARDING_FIND_US_DONE_KEY = '@split/onboarding_find_us_done';
 /** Set on email Continue; after account creation, copy into `BIOMETRIC_ENABLED_STORAGE_KEY` via `commitPendingBiometricToEnabledFlag`. */
 export const ONBOARDING_BIOMETRIC_PENDING_KEY = '@split/onboarding_biometric_pending';
 export const BIOMETRIC_ENABLED_STORAGE_KEY = '@split/biometric_enabled';
@@ -80,6 +81,18 @@ export async function hasOnboardingPaymentStepDone(): Promise<boolean> {
   }
 }
 
+export async function setOnboardingFindUsStepDone(): Promise<void> {
+  await AsyncStorage.setItem(ONBOARDING_FIND_US_DONE_KEY, 'true');
+}
+
+export async function hasOnboardingFindUsStepDone(): Promise<boolean> {
+  try {
+    return (await AsyncStorage.getItem(ONBOARDING_FIND_US_DONE_KEY)) === 'true';
+  } catch {
+    return false;
+  }
+}
+
 export async function hasOnboardingEmailSaved(): Promise<boolean> {
   try {
     return (await AsyncStorage.getItem(ONBOARDING_EMAIL_SAVED_KEY)) === 'true';
@@ -136,6 +149,7 @@ export async function markOnboardingFullyComplete(uid: string | null): Promise<v
   await AsyncStorage.removeItem(ONBOARDING_PASSWORD_SAVED_KEY);
   await AsyncStorage.removeItem(ONBOARDING_NOTIFICATIONS_DONE_KEY);
   await AsyncStorage.removeItem(ONBOARDING_PAYMENT_DONE_KEY);
+  await AsyncStorage.removeItem(ONBOARDING_FIND_US_DONE_KEY);
   await AsyncStorage.removeItem(ONBOARDING_BIOMETRIC_PENDING_KEY);
   if (uid) await setOnboardingCompleteInFirestore(uid);
 }
