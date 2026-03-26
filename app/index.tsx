@@ -7,6 +7,7 @@ import {
   getOnboardingCompleteFromStorage,
   hasOnboardingEmailSaved,
   hasOnboardingNameSaved,
+  hasOnboardingNotificationsStepDone,
   hasOnboardingPasswordSaved,
 } from '../lib/onboardingStorage';
 import { hasLocalOnboardingGoalsDraft } from '../lib/onboardingGoals';
@@ -45,6 +46,10 @@ export default function IndexRoute() {
             return;
           }
           if (!user.isAnonymous) {
+            if (await hasOnboardingNotificationsStepDone()) {
+              setHref('/onboarding/payment');
+              return;
+            }
             if (await hasOnboardingPasswordSaved()) {
               setHref('/onboarding/notifications');
               return;

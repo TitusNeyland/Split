@@ -10,6 +10,7 @@ export default function OnboardingLayout() {
       <Stack.Screen name="email" />
       <Stack.Screen name="password" />
       <Stack.Screen name="notifications" />
+      <Stack.Screen name="payment" />
     </Stack>
   );
 }

@@ -12,7 +12,10 @@ export const NOTIFICATION_PREF_KEYS = [
 
 export type NotificationPreferenceKey = (typeof NOTIFICATION_PREF_KEYS)[number];
 
-export type NotificationPreferences = Record<NotificationPreferenceKey, boolean>;
+export type NotificationPreferences = Record<NotificationPreferenceKey, boolean> & {
+  /** OS notification permission + master push toggle (set during onboarding or settings). */
+  notificationsEnabled?: boolean;
+};
 
 export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
   upcomingRenewals: true,
