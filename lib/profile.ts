@@ -20,6 +20,8 @@ import type { SplitPreferences } from './splitPreferences';
 import type { PrivacySettings } from './privacySettings';
 
 export type UserProfileDoc = {
+  /** True after the user finishes the full in-app onboarding flow (9 steps). */
+  onboardingComplete?: boolean | null;
   displayName?: string | null;
   /** Lowercased display name for prefix search; keep in sync with `displayName`. */
   displayNameLower?: string | null;
