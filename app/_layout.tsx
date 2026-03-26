@@ -99,6 +99,7 @@ export default function RootLayout() {
           <Stack.Screen name="friends" options={{ headerShown: false }} />
           <Stack.Screen name="friends-contacts" options={{ headerShown: false }} />
           <Stack.Screen name="sign-in" options={{ headerShown: false, animation: 'fade' }} />
+          <Stack.Screen name="forgot-password" options={{ headerShown: false, animation: 'slide_from_right' }} />
         </Stack>
         {showSplash && (
           <Animated.View style={[styles.splashOverlay, { opacity }]}>
