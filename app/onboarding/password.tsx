@@ -11,6 +11,8 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
+import { CommonActions } from '@react-navigation/native';
+import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -155,6 +157,7 @@ function PasswordsMatchRow({ passwordsMatch, showMismatch }: { passwordsMatch: b
 export default function OnboardingPasswordScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const navigation = useNavigation();
   const goBack = useOnboardingBack('/onboarding/email');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -209,7 +212,13 @@ export default function OnboardingPasswordScreen() {
       await mergeOnboardingUserDocAfterSignup(user.uid);
       await commitPendingBiometricToEnabledFlag();
       await setOnboardingPasswordSaved();
-      router.push('/onboarding/notifications');
+      // Drop screens 1–5 from the stack so the user cannot return to password/email after signup.
+      navigation.dispatch(
+        CommonActions.reset({
+          index: 0,
+          routes: [{ name: 'notifications' as never }],
+        })
+      );
     } catch (e: unknown) {
       const err = e as { code?: string; message?: string };
       const code = typeof err.code === 'string' ? err.code : '';
@@ -270,7 +279,7 @@ export default function OnboardingPasswordScreen() {
     } finally {
       setSaving(false);
     }
-  }, [allChecksPassed, signupEmail, password, router]);
+  }, [allChecksPassed, signupEmail, password, router, navigation]);
 
   return (
     <KeyboardAvoidingView

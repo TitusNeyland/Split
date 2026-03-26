@@ -10,9 +10,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
 import Svg, { Circle, Line, Path, Polyline, Rect } from 'react-native-svg';
-import { useOnboardingBack } from '../../lib/useOnboardingBack';
 import {
   ACQUISITION_OPTIONS,
   type AcquisitionSourceId,
@@ -133,7 +131,6 @@ function RadioSelected() {
 export default function OnboardingFindUsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const goBack = useOnboardingBack('/onboarding/payment');
   const [selected, setSelected] = useState<AcquisitionSourceId | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -165,13 +162,6 @@ export default function OnboardingFindUsScreen() {
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
       <View style={styles.topRow}>
-        <Pressable
-          onPress={goBack}
-          hitSlop={12}
-          style={({ pressed }) => [styles.backBtn, pressed && { opacity: 0.6 }]}
-        >
-          <Ionicons name="chevron-back" size={22} color={C.text} />
-        </Pressable>
         <Pressable onPress={onSkip} hitSlop={12} style={({ pressed }) => pressed && { opacity: 0.7 }}>
           <Text style={styles.skip}>Skip</Text>
         </Pressable>
@@ -239,14 +229,10 @@ const styles = StyleSheet.create({
   topRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-end',
     paddingHorizontal: 20,
     paddingTop: 14,
     paddingBottom: 4,
-  },
-  backBtn: {
-    paddingVertical: 4,
-    paddingRight: 8,
   },
   skip: {
     fontSize: 13,
