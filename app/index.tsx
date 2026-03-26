@@ -10,6 +10,7 @@ import {
   hasOnboardingNotificationsStepDone,
   hasOnboardingPaymentStepDone,
   hasOnboardingPasswordSaved,
+  hasOnboardingFindUsStepDone,
 } from '../lib/onboardingStorage';
 import { hasLocalOnboardingGoalsDraft } from '../lib/onboardingGoals';
 
@@ -47,6 +48,10 @@ export default function IndexRoute() {
             return;
           }
           if (!user.isAnonymous) {
+            if (await hasOnboardingFindUsStepDone()) {
+              setHref('/onboarding/complete');
+              return;
+            }
             if (await hasOnboardingPaymentStepDone()) {
               setHref('/onboarding/find-us');
               return;
