@@ -24,6 +24,7 @@ import { getFirebaseAuth, isFirebaseConfigured } from '../../lib/firebase';
 import {
   setOnboardingBiometricPending,
   setOnboardingEmailSaved,
+  setOnboardingSignupEmail,
 } from '../../lib/onboardingStorage';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -111,6 +112,7 @@ export default function OnboardingEmailScreen() {
         return;
       }
       await setOnboardingBiometricPending(faceIdEnabled);
+      await setOnboardingSignupEmail(trimmed);
       await setOnboardingEmailSaved();
       router.push('/onboarding/password');
     } catch {

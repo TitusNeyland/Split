@@ -6,6 +6,9 @@ import { ONBOARDING_GOALS_STORAGE_KEY } from './onboardingGoals';
 export const ONBOARDING_COMPLETE_STORAGE_KEY = '@split/onboarding_complete';
 export const ONBOARDING_NAME_SAVED_KEY = '@split/onboarding_name_saved';
 export const ONBOARDING_EMAIL_SAVED_KEY = '@split/onboarding_email_saved';
+/** Email string from step 4 for `createUserWithEmailAndPassword` / link on step 5. */
+export const ONBOARDING_SIGNUP_EMAIL_KEY = '@split/onboarding_signup_email';
+export const ONBOARDING_PASSWORD_SAVED_KEY = '@split/onboarding_password_saved';
 /** Set on email Continue; after account creation, copy into `BIOMETRIC_ENABLED_STORAGE_KEY` via `commitPendingBiometricToEnabledFlag`. */
 export const ONBOARDING_BIOMETRIC_PENDING_KEY = '@split/onboarding_biometric_pending';
 export const BIOMETRIC_ENABLED_STORAGE_KEY = '@split/biometric_enabled';
@@ -33,6 +36,22 @@ export async function hasOnboardingNameSaved(): Promise<boolean> {
 
 export async function setOnboardingEmailSaved(): Promise<void> {
   await AsyncStorage.setItem(ONBOARDING_EMAIL_SAVED_KEY, 'true');
+}
+
+export async function setOnboardingSignupEmail(email: string): Promise<void> {
+  await AsyncStorage.setItem(ONBOARDING_SIGNUP_EMAIL_KEY, email.trim());
+}
+
+export async function setOnboardingPasswordSaved(): Promise<void> {
+  await AsyncStorage.setItem(ONBOARDING_PASSWORD_SAVED_KEY, 'true');
+}
+
+export async function hasOnboardingPasswordSaved(): Promise<boolean> {
+  try {
+    return (await AsyncStorage.getItem(ONBOARDING_PASSWORD_SAVED_KEY)) === 'true';
+  } catch {
+    return false;
+  }
 }
 
 export async function hasOnboardingEmailSaved(): Promise<boolean> {
@@ -87,6 +106,8 @@ export async function markOnboardingFullyComplete(uid: string | null): Promise<v
   await AsyncStorage.removeItem(ONBOARDING_GOALS_STORAGE_KEY);
   await AsyncStorage.removeItem(ONBOARDING_NAME_SAVED_KEY);
   await AsyncStorage.removeItem(ONBOARDING_EMAIL_SAVED_KEY);
+  await AsyncStorage.removeItem(ONBOARDING_SIGNUP_EMAIL_KEY);
+  await AsyncStorage.removeItem(ONBOARDING_PASSWORD_SAVED_KEY);
   await AsyncStorage.removeItem(ONBOARDING_BIOMETRIC_PENDING_KEY);
   if (uid) await setOnboardingCompleteInFirestore(uid);
 }
