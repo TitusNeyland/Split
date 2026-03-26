@@ -9,10 +9,10 @@ export default function OnboardingLayout() {
       <Stack.Screen name="name" />
       <Stack.Screen name="email" />
       <Stack.Screen name="password" />
-      <Stack.Screen name="notifications" />
-      <Stack.Screen name="payment" />
-      <Stack.Screen name="find-us" />
-      <Stack.Screen name="complete" />
+      <Stack.Screen name="notifications" options={{ gestureEnabled: false }} />
+      <Stack.Screen name="payment" options={{ gestureEnabled: false }} />
+      <Stack.Screen name="find-us" options={{ gestureEnabled: false }} />
+      <Stack.Screen name="complete" options={{ gestureEnabled: false }} />
     </Stack>
   );
 }

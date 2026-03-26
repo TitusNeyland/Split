@@ -14,14 +14,12 @@ import {
 import { CardField, useStripe } from '@stripe/stripe-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
 import Svg, { Path, Rect } from 'react-native-svg';
 import { getFirebaseAuth } from '../../lib/firebase';
 import { saveOnboardingStripePaymentMethodId } from '../../lib/onboardingPaymentFirestore';
 import {
   setOnboardingPaymentStepDone,
 } from '../../lib/onboardingStorage';
-import { useOnboardingBack } from '../../lib/useOnboardingBack';
 
 const STRIPE_CONFIGURED = Boolean(process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY?.trim());
 
@@ -65,7 +63,6 @@ function PaymentWithStripe() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { createPaymentMethod } = useStripe();
-  const goBack = useOnboardingBack('/onboarding/notifications');
 
   const [nameOnCard, setNameOnCard] = useState('');
   const [cardComplete, setCardComplete] = useState(false);
@@ -83,7 +80,7 @@ function PaymentWithStripe() {
 
   const goNext = useCallback(async () => {
     await setOnboardingPaymentStepDone();
-    router.push('/onboarding/find-us');
+    router.replace('/onboarding/find-us');
   }, [router]);
 
   const onAddCard = useCallback(async () => {
@@ -121,13 +118,6 @@ function PaymentWithStripe() {
     >
       <View style={[styles.root, { paddingTop: insets.top }]}>
         <View style={styles.topRow}>
-          <Pressable
-            onPress={goBack}
-            hitSlop={12}
-            style={({ pressed }) => [styles.backBtn, pressed && { opacity: 0.6 }]}
-          >
-            <Ionicons name="chevron-back" size={22} color={C.text} />
-          </Pressable>
           <Pressable onPress={goNext} hitSlop={12} style={({ pressed }) => pressed && { opacity: 0.7 }}>
             <Text style={styles.skip}>Skip</Text>
           </Pressable>
@@ -216,23 +206,15 @@ function PaymentWithStripe() {
 function PaymentWithoutStripe() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const goBack = useOnboardingBack('/onboarding/notifications');
 
   const goNext = useCallback(async () => {
     await setOnboardingPaymentStepDone();
-    router.push('/onboarding/find-us');
+    router.replace('/onboarding/find-us');
   }, [router]);
 
   return (
     <View style={[styles.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       <View style={styles.topRow}>
-        <Pressable
-          onPress={goBack}
-          hitSlop={12}
-          style={({ pressed }) => [styles.backBtn, pressed && { opacity: 0.6 }]}
-        >
-          <Ionicons name="chevron-back" size={22} color={C.text} />
-        </Pressable>
         <Pressable onPress={goNext} hitSlop={12}>
           <Text style={styles.skip}>Skip</Text>
         </Pressable>
@@ -278,14 +260,10 @@ const styles = StyleSheet.create({
   topRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-end',
     paddingHorizontal: 20,
     paddingTop: 14,
     paddingBottom: 4,
-  },
-  backBtn: {
-    paddingVertical: 4,
-    paddingRight: 8,
   },
   skip: {
     fontSize: 13,

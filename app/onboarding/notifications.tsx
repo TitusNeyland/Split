@@ -12,9 +12,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as Notifications from 'expo-notifications';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
 import Svg, { Line, Polyline } from 'react-native-svg';
-import { useOnboardingBack } from '../../lib/useOnboardingBack';
 import { saveNotificationPermissionEnabled } from '../../lib/notificationPermissionFirestore';
 import { setOnboardingNotificationsStepDone } from '../../lib/onboardingStorage';
 
@@ -77,12 +75,11 @@ function NotifCard({
 export default function OnboardingNotificationsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const goBack = useOnboardingBack('/onboarding/password');
   const [busy, setBusy] = useState(false);
 
   const goToPayment = useCallback(async () => {
     await setOnboardingNotificationsStepDone();
-    router.push('/onboarding/payment');
+    router.replace('/onboarding/payment');
   }, [router]);
 
   const onContinue = useCallback(async () => {
@@ -112,16 +109,6 @@ export default function OnboardingNotificationsScreen() {
 
   return (
     <View style={[styles.root, { paddingTop: insets.top, backgroundColor: C.bg }]}>
-      <View style={styles.topRow}>
-        <Pressable
-          onPress={goBack}
-          hitSlop={12}
-          style={({ pressed }) => [styles.backBtn, pressed && { opacity: 0.6 }]}
-        >
-          <Ionicons name="chevron-back" size={22} color={C.text} />
-        </Pressable>
-      </View>
-
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={[
@@ -186,23 +173,12 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
   },
-  topRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 14,
-    paddingBottom: 4,
-  },
-  backBtn: {
-    paddingVertical: 4,
-    paddingRight: 8,
-  },
   scroll: {
     flex: 1,
   },
   scrollContent: {
     paddingHorizontal: 24,
-    paddingTop: 8,
+    paddingTop: 22,
   },
   title: {
     fontSize: 28,
