@@ -14,12 +14,14 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.innova.split",
+      "googleServicesFile": "./GoogleService-Info.plist",
       "associatedDomains": [
         "applinks:mysplit.app"
       ]
     },
     "android": {
       "package": "com.innova.split",
+      "googleServicesFile": "./google-services.json",
       "intentFilters": [
         {
           "action": "VIEW",

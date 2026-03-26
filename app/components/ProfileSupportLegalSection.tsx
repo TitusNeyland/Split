@@ -4,7 +4,6 @@ import { router } from 'expo-router';
 import * as Linking from 'expo-linking';
 import Constants from 'expo-constants';
 import { Ionicons } from '@expo/vector-icons';
-import { signOut } from 'firebase/auth';
 import {
   APP_MARKETING_NAME,
   HELP_WEB_URL,
@@ -12,7 +11,8 @@ import {
   SUPPORT_EMAIL,
   SUPPORT_MAILTO_SUBJECT,
 } from '../../constants/support';
-import { getFirebaseAuth, isFirebaseConfigured } from '../../lib/firebase';
+import { isFirebaseConfigured } from '../../lib/firebase';
+import { signOutAndClearSession } from '../../lib/signOut';
 
 const C = {
   text: '#1a1a18',
@@ -79,13 +79,8 @@ export default function ProfileSupportLegalSection() {
               Alert.alert('Demo', 'Firebase is not configured; nothing to sign out.');
               return;
             }
-            const auth = getFirebaseAuth();
-            if (!auth?.currentUser) {
-              Alert.alert('Not signed in', 'Sign in from the home or security flow first.');
-              return;
-            }
             try {
-              await signOut(auth);
+              await signOutAndClearSession();
               router.replace('/sign-in');
             } catch (e) {
               const msg = e instanceof Error ? e.message : 'Sign out failed.';
