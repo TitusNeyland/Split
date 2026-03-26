@@ -3,11 +3,14 @@ import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { Redirect } from 'expo-router';
 import { onAuthStateChanged } from 'firebase/auth';
 import { getFirebaseAuth, isFirebaseConfigured } from '../lib/firebase';
-import { getOnboardingCompleteFromStorage } from '../lib/onboardingStorage';
+import {
+  getOnboardingCompleteFromStorage,
+  hasOnboardingNameSaved,
+} from '../lib/onboardingStorage';
 import { hasLocalOnboardingGoalsDraft } from '../lib/onboardingGoals';
 
 /**
- * Entry: completed onboarding → tabs (or sign-in if guest); anonymous mid-flow → resume name step;
+ * Entry: completed onboarding → tabs (or sign-in if guest); anonymous mid-flow → resume name or email;
  * otherwise onboarding welcome or sign-in.
  */
 export default function IndexRoute() {
@@ -39,9 +42,15 @@ export default function IndexRoute() {
             setHref('/(tabs)');
             return;
           }
-          if (user.isAnonymous && (await hasLocalOnboardingGoalsDraft())) {
-            setHref('/onboarding/name');
-            return;
+          if (user.isAnonymous) {
+            if (await hasOnboardingNameSaved()) {
+              setHref('/onboarding/email');
+              return;
+            }
+            if (await hasLocalOnboardingGoalsDraft()) {
+              setHref('/onboarding/name');
+              return;
+            }
           }
           setHref('/(tabs)');
           return;

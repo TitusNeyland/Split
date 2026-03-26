@@ -73,7 +73,8 @@ export function selectionToGoalArray(selected: Record<OnboardingGoalId, boolean>
   return ONBOARDING_GOAL_IDS.filter((id) => selected[id]);
 }
 
-async function ensureAuthUidForOnboarding(): Promise<string | null> {
+/** Anonymous or existing user — needed before onboarding steps that write `users/{uid}`. */
+export async function ensureOnboardingAuthUid(): Promise<string | null> {
   const auth = getFirebaseAuth();
   if (!auth) return null;
   if (auth.currentUser) return auth.currentUser.uid;
@@ -102,7 +103,7 @@ export async function hasLocalOnboardingGoalsDraft(): Promise<boolean> {
 /** Writes `onboardingGoals` to Firestore; ensures an auth uid (anonymous if needed). */
 export async function persistOnboardingGoals(goals: string[]): Promise<void> {
   await saveOnboardingGoalsDraftLocally(goals);
-  const uid = await ensureAuthUidForOnboarding();
+  const uid = await ensureOnboardingAuthUid();
   const db = getFirebaseFirestore();
   if (!uid || !db) return;
   await setDoc(doc(db, 'users', uid), { onboardingGoals: goals }, { merge: true });
