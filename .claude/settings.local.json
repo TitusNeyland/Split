@@ -2,7 +2,18 @@
   "permissions": {
     "allow": [
       "Bash(git:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(grep -r \"Recaptcha\\\\|recaptcha\\\\|RECAPTCHA\" /c/Users/neyla/workspaces/Split --include=*.ts --include=*.tsx --include=*.json ! -path */node_modules/*)",
+      "Bash(grep -r \"import.*firebase\\\\|from.*firebase\" /c/Users/neyla/workspaces/Split/app --include=\"*.tsx\" --include=\"*.ts\" ! -path \"*/node_modules/*\")",
+      "Bash(grep -r \"payments\\\\|payment_intents\\\\|billing_cycles\" /c/Users/neyla/workspaces/Split/lib --include=*.ts ! -path */node_modules/*)",
+      "Bash(grep -r \"FIREBASE_SERVICE_ACCOUNT\\\\|FIREBASE_CONFIG\\\\|serviceAccountKey\" /c/Users/neyla/workspaces/Split --include=*.md --include=*.env* --include=*.js --include=*.ts ! -path */node_modules/*)",
+      "Bash(find /c/Users/neyla/workspaces/Split/lib -name *.ts -type f ! -path */node_modules/*)",
+      "Bash(find /c/Users/neyla/workspaces/Split -maxdepth 2 -name README* -o -name SETUP* -o -name *.md ! -path */node_modules/*)",
+      "Bash(gh repo:*)",
+      "Bash(gh issue:*)",
+      "Bash(gcloud projects:*)",
+      "Bash(xargs grep:*)",
+      "Bash(grep -r \"email.*password\\\\|username.*password\" /c/Users/neyla/workspaces/Split/app /c/Users/neyla/workspaces/Split/lib --include=*.tsx --include=*.ts)"
     ]
   }
 }
