@@ -13,8 +13,8 @@ import * as Notifications from 'expo-notifications';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Svg, { Line, Polyline } from 'react-native-svg';
-import { saveNotificationPermissionEnabled } from '../../lib/notificationPermissionFirestore';
-import { setOnboardingNotificationsStepDone } from '../../lib/onboardingStorage';
+import { saveNotificationPermissionEnabled } from '../../lib/notifications/notificationPermissionFirestore';
+import { setOnboardingNotificationsStepDone } from '../../lib/onboarding/onboardingStorage';
 
 const C = {
   bg: '#F5F5F7',

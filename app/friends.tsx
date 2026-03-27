@@ -28,15 +28,15 @@ import {
   fetchOutgoingPendingInviteEmails,
   subscribeFriendships,
   type OutgoingPendingInviteSummary,
-} from '../lib/friendSystemFirestore';
-import { searchUsersForFriendConnect, type FriendSearchUserRow } from '../lib/userSearchFirestore';
-import { initialsFromName } from '../lib/profile';
-import { getFriendAvatarColors } from '../lib/friendAvatar';
+} from '../lib/friends/friendSystemFirestore';
+import { searchUsersForFriendConnect, type FriendSearchUserRow } from '../lib/friends/userSearchFirestore';
 import {
+  initialsFromName,
   getFriendsHubFriendRows,
   type FriendsHubFriendRow,
-} from '../lib/profileFriendsBalance';
-import { formatInviteExpiresIn, formatInviteSentAgo } from '../lib/friendsTimeFormat';
+} from '../lib/profile';
+import { getFriendAvatarColors } from '../lib/friends/friendAvatar';
+import { formatInviteExpiresIn, formatInviteSentAgo } from '../lib/friends/friendsTimeFormat';
 import FriendsInviteModal from './components/FriendsInviteModal';
 
 const C = {

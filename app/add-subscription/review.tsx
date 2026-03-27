@@ -15,20 +15,20 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
-import { fmtCents } from '../../lib/addSubscriptionSplitMath';
+import { fmtCents } from '../../lib/subscription/addSubscriptionSplitMath';
 import { getFirebaseAuth, isFirebaseConfigured } from '../../lib/firebase';
 import {
   createSubscriptionFromWizard,
   runSubscriptionWizardSideEffects,
   type WizardMemberRow,
   type WizardSplitMethod,
-} from '../../lib/createSubscriptionWizardFirestore';
+} from '../../lib/subscription/createSubscriptionWizardFirestore';
 import {
   billingWhenForSentence,
   formatFirstChargeDateLong,
   formatFirstChargeDateShort,
   getNextFirstChargeDate,
-} from '../../lib/billingDayFormat';
+} from '../../lib/subscription/billingDayFormat';
 import { getServiceIconBackgroundColor, ServiceIcon } from '../components/ServiceIcon';
 
 const C = {

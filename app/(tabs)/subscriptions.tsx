@@ -17,8 +17,8 @@ import { getFirebaseAuth } from '../../lib/firebase';
 import {
   subscribeSubscriptionsTabPrefetch,
   type SubscriptionsTabPrefetchState,
-} from '../../lib/subscriptionTabBadgesFirestore';
-import { DEMO_TAB_BADGES, SUBSCRIPTIONS_DEMO_MODE } from '../../lib/subscriptionsScreenDemo';
+} from '../../lib/subscription/subscriptionTabBadgesFirestore';
+import { DEMO_TAB_BADGES, SUBSCRIPTIONS_DEMO_MODE } from '../../lib/subscription/subscriptionsScreenDemo';
 import { SubscriptionsDemoFloatCard, SubscriptionsDemoPanel } from '../components/SubscriptionsDemoPanels';
 import { spacing } from '../../constants/theme';
 

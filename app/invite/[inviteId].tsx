@@ -24,10 +24,10 @@ import {
   fetchUserProfileForInvite,
   type FirestoreInvite,
   type InviteSenderProfile,
-} from '../../lib/friendSystemFirestore';
+} from '../../lib/friends/friendSystemFirestore';
 import { formatMemberSince, initialsFromName } from '../../lib/profile';
-import { setPendingInviteId } from '../../lib/pendingInviteStorage';
-import { buildInviteUrl } from '../../lib/inviteLinks';
+import { setPendingInviteId } from '../../lib/friends/pendingInviteStorage';
+import { buildInviteUrl } from '../../lib/friends/inviteLinks';
 
 function inviteIsExpired(invite: FirestoreInvite): boolean {
   if (invite.status === 'expired') return true;

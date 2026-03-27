@@ -6,8 +6,8 @@ import { onAuthStateChanged, type User } from 'firebase/auth';
 import { useRouter } from 'expo-router';
 import { InviteShareSheetPanel } from './InviteShareSheetPanel';
 import { getFirebaseAuth, isFirebaseConfigured } from '../../lib/firebase';
-import { createPendingInvite } from '../../lib/friendSystemFirestore';
-import { buildInviteShareMessage, buildInviteUrl } from '../../lib/inviteLinks';
+import { createPendingInvite } from '../../lib/friends/friendSystemFirestore';
+import { buildInviteShareMessage, buildInviteUrl } from '../../lib/friends/inviteLinks';
 
 type Props = {
   visible: boolean;

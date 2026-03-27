@@ -39,7 +39,7 @@ export default function RootLayout() {
 
   const stackAndSplash = (
     <GestureHandlerRootView style={styles.root}>
-      {/* LOCAL_PROFILE_AVATAR_OFFLINE — remove LocalProfileAvatarProvider when Firebase-only avatars (see lib/localProfileAvatarStorage.ts). */}
+      {/* LOCAL_PROFILE_AVATAR_OFFLINE — remove LocalProfileAvatarProvider when Firebase-only avatars (see lib/profile/localProfileAvatarStorage.ts). */}
       <LocalProfileAvatarProvider>
       <View style={styles.root}>
         <AuthSessionSync />

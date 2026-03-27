@@ -17,17 +17,17 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Circle, Path, Polyline } from 'react-native-svg';
-import { useOnboardingBack } from '../../lib/useOnboardingBack';
+import { useOnboardingBack } from '../../lib/onboarding/useOnboardingBack';
 import { getFirebaseAuth, isFirebaseConfigured } from '../../lib/firebase';
 import {
   createOrLinkOnboardingEmailPassword,
   mergeOnboardingUserDocAfterSignup,
   readStoredSignupEmail,
-} from '../../lib/onboardingAccount';
+} from '../../lib/onboarding/onboardingAccount';
 import {
   commitPendingBiometricToEnabledFlag,
   setOnboardingPasswordSaved,
-} from '../../lib/onboardingStorage';
+} from '../../lib/onboarding/onboardingStorage';
 
 const C = {
   bg: '#fff',

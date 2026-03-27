@@ -21,7 +21,7 @@ import {
   stripeDetachPaymentMethod,
   stripeListPaymentMethods,
   stripeSetDefaultPaymentMethod,
-} from '../../lib/stripeApi';
+} from '../../lib/payment/stripeApi';
 
 const C = {
   text: '#1a1a18',

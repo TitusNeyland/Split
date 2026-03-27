@@ -21,14 +21,14 @@ import {
   formatBillingDayFieldLabel,
   parseBillingDayParam,
   showShortMonthBillingWarning,
-} from '../../lib/billingDayFormat';
+} from '../../lib/subscription/billingDayFormat';
 import {
   getStaticTiersForService,
   resolveServiceTierLookupKey,
   tierPriceLabel,
   type ServiceTier,
-} from '../../lib/serviceTiers';
-import { loadServiceTiersWithFallback } from '../../lib/serviceTiersFirestore';
+} from '../../lib/subscription/serviceTiers';
+import { loadServiceTiersWithFallback } from '../../lib/subscription/serviceTiersFirestore';
 
 const C = {
   purple: '#534AB7',

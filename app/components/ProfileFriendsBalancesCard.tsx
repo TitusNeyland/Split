@@ -3,14 +3,14 @@ import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, Image } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { CURRENT_USER_AVATAR, getFriendAvatarColors } from '../../lib/friendAvatar';
+import { CURRENT_USER_AVATAR, getFriendAvatarColors } from '../../lib/friends/friendAvatar';
 import {
   PROFILE_FRIEND_BALANCES,
   PROFILE_TOTAL_FRIEND_COUNT,
   computeNetBarTotals,
   getProfileFriendStackEntries,
   type ProfileFriendBalanceRow,
-} from '../../lib/profileFriendsBalance';
+} from '../../lib/profile';
 
 const C = {
   text: '#1a1a18',

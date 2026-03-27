@@ -7,7 +7,7 @@ import {
   mergeNotificationPreferences,
   type NotificationPreferenceKey,
   type NotificationPreferences,
-} from '../../lib/notificationPreferences';
+} from '../../lib/notifications/notificationPreferences';
 import { saveNotificationPreferences } from '../../lib/profile';
 import { ProfilePurpleToggleVisual } from './ProfilePurpleToggleVisual';
 
