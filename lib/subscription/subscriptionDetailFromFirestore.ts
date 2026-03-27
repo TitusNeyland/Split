@@ -177,28 +177,34 @@ export function useSubscriptionDetailFromFirestore(
   subscriptionId: string,
   viewerUid: string | null,
   userAvatarUrl: string | null,
-  options: { enabled: boolean }
+  options: { enabled: boolean; retryKey?: number }
 ): {
   detail: SubscriptionDetailModel | null;
   loading: boolean;
   error: 'not-found' | 'permission' | 'unavailable' | null;
+  /** Present when `error === 'unavailable'` or listener threw (for support / retry copy). */
+  errorMessage: string | null;
 } {
   const enabled = options.enabled;
+  const retryKey = options.retryKey ?? 0;
   const [detail, setDetail] = useState<SubscriptionDetailModel | null>(null);
   const [loading, setLoading] = useState(enabled);
   const [error, setError] = useState<'not-found' | 'permission' | 'unavailable' | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (!enabled) {
       setDetail(null);
       setLoading(false);
       setError(null);
+      setErrorMessage(null);
       return;
     }
     if (!subscriptionId || !viewerUid) {
       setDetail(null);
       setLoading(false);
       setError(null);
+      setErrorMessage(null);
       return;
     }
 
@@ -207,11 +213,14 @@ export function useSubscriptionDetailFromFirestore(
       setDetail(null);
       setLoading(false);
       setError('unavailable');
+      setErrorMessage('Firestore is not configured.');
+      console.error('SubscriptionDetail: Firestore not configured');
       return;
     }
 
     setLoading(true);
     setError(null);
+    setErrorMessage(null);
 
     const ref = doc(db, 'subscriptions', subscriptionId);
     let unsub: Unsubscribe | undefined;
@@ -219,27 +228,35 @@ export function useSubscriptionDetailFromFirestore(
       ref,
       (snap) => {
         if (!snap.exists()) {
+          console.error('Subscription not found:', subscriptionId);
           setDetail(null);
           setError('not-found');
+          setErrorMessage(null);
           setLoading(false);
           return;
         }
         const raw = { id: snap.id, ...snap.data() } as Record<string, unknown> & { id: string };
         const model = mapFirestoreSubscriptionToDetailModel(raw, viewerUid, userAvatarUrl);
         if (!model) {
+          console.error('Subscription detail: document missing splitMemberShares or invalid shape', subscriptionId);
           setDetail(null);
           setError('unavailable');
+          setErrorMessage(null);
           setLoading(false);
           return;
         }
         setDetail(model);
         setError(null);
+        setErrorMessage(null);
         setLoading(false);
       },
       (err) => {
+        console.error('Firestore error on subscription detail:', err);
         const code = (err as { code?: string }).code;
+        const msg = err instanceof Error ? err.message : String(err);
         setDetail(null);
         setLoading(false);
+        setErrorMessage(msg);
         if (code === 'permission-denied') {
           setError('permission');
         } else {
@@ -251,7 +268,7 @@ export function useSubscriptionDetailFromFirestore(
     return () => {
       unsub?.();
     };
-  }, [subscriptionId, viewerUid, userAvatarUrl, enabled]);
+  }, [subscriptionId, viewerUid, userAvatarUrl, enabled, retryKey]);
 
-  return { detail, loading, error };
+  return { detail, loading, error, errorMessage };
 }
