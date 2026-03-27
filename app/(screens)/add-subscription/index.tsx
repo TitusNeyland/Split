@@ -7,6 +7,7 @@ import {
   ScrollView,
   Pressable,
   TextInput,
+  BackHandler,
   useWindowDimensions,
   type LayoutChangeEvent,
   type NativeSyntheticEvent,
@@ -119,6 +120,13 @@ export default function AddSubscriptionStep1Screen() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const router = useRouter();
+  const leaveAddSubscriptionFlow = useCallback(() => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(tabs)/subscriptions');
+    }
+  }, [router]);
   const [selectedCategoryId, setSelectedCategoryId] = useState<CategoryFilterId>('all');
   const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null);
   const [customName, setCustomName] = useState('');
@@ -217,6 +225,14 @@ export default function AddSubscriptionStep1Screen() {
     return () => cancelAnimationFrame(id);
   }, [selectedCategoryId, scrollSelectedPillIntoView]);
 
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      leaveAddSubscriptionFlow();
+      return true;
+    });
+    return () => sub.remove();
+  }, [leaveAddSubscriptionFlow]);
+
   const onFilterScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
     filterScrollX.current = e.nativeEvent.contentOffset.x;
   }, []);
@@ -242,7 +258,7 @@ export default function AddSubscriptionStep1Screen() {
         style={[styles.hero, { paddingTop: Math.max(insets.top, 12) + 4 }]}
       >
         <Pressable
-          onPress={() => router.back()}
+          onPress={leaveAddSubscriptionFlow}
           style={styles.backRow}
           accessibilityRole="button"
           accessibilityLabel="Back to subscriptions"
