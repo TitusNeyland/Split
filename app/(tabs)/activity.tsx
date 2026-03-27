@@ -19,7 +19,7 @@ import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { getFriendFilterDisplayName } from '../../lib/profile';
-import { ServiceIcon } from '../components/ServiceIcon';
+import { ServiceIcon } from '../components/shared/ServiceIcon';
 import { recordManualSettlement } from '../../lib/payment/paymentsFirestore';
 import { useFirebaseUid } from '../../lib/auth/useFirebaseUid';
 

@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 ;
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { useLocalSearchParams, Stack } from 'expo-router';
-import { ServiceIcon } from '../components/ServiceIcon';
+import { ServiceIcon } from '../components/shared/ServiceIcon';
 
 const C = {
   bg: '#F2F0EB',

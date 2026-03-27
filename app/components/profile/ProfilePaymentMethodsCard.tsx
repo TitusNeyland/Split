@@ -13,15 +13,15 @@ import { Swipeable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { useStripe } from '@stripe/stripe-react-native';
 import type { User } from 'firebase/auth';
-import { getFirebaseAuth, isFirebaseConfigured } from '../../lib/firebase';
-import { saveStripeCustomerId } from '../../lib/profile';
+import { getFirebaseAuth, isFirebaseConfigured } from '../../../lib/firebase';
+import { saveStripeCustomerId } from '../../../lib/profile';
 import {
   stripeCreateCustomer,
   stripeCreateSetupIntent,
   stripeDetachPaymentMethod,
   stripeListPaymentMethods,
   stripeSetDefaultPaymentMethod,
-} from '../../lib/payment/stripeApi';
+} from '../../../lib/payment/stripeApi';
 
 const C = {
   text: '#1a1a18',

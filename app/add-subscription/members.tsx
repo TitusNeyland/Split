@@ -29,7 +29,7 @@ import {
   parsePercent,
   percentTotalIsExactly100,
 } from '../../lib/subscription/addSubscriptionSplitMath';
-import { getServiceIconBackgroundColor } from '../components/ServiceIcon';
+import { getServiceIconBackgroundColor } from '../components/shared/ServiceIcon';
 
 const C = {
   purple: '#534AB7',

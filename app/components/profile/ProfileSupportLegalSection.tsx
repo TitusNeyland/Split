@@ -11,8 +11,8 @@ import {
   LEGAL_WEB_URL,
   SUPPORT_EMAIL,
   SUPPORT_MAILTO_SUBJECT,
-} from '../../constants/support';
-import { getFirebaseAuth, isFirebaseConfigured } from '../../lib/firebase';
+} from '../../../constants/support';
+import { getFirebaseAuth, isFirebaseConfigured } from '../../../lib/firebase';
 
 const C = {
   text: '#1a1a18',

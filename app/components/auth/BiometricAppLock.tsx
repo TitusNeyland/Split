@@ -14,7 +14,7 @@ import {
 import * as LocalAuthentication from 'expo-local-authentication';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { useSecurityPrefs } from '../contexts/SecurityPrefsContext';
+import { useSecurityPrefs } from '../../contexts/SecurityPrefsContext';
 
 const BACKGROUND_LOCK_MS = 5 * 60 * 1000;
 

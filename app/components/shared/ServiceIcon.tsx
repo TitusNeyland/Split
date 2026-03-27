@@ -7,7 +7,7 @@ import {
   type ResolvedServiceIcon,
   type ServiceGlyphKind,
   getServiceIconBackgroundColor,
-} from '../../lib/subscription/serviceIconResolve';
+} from '../../../lib/subscription/serviceIconResolve';
 
 export type { ServiceGlyphKind, ResolvedServiceIcon };
 export { resolveServiceIcon, getServiceIconBackgroundColor };

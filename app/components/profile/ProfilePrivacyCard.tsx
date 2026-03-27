@@ -16,12 +16,12 @@ import {
   mergePrivacySettings,
   type PrivacySettings,
   savePrivacySettings,
-} from '../../lib/profile';
+} from '../../../lib/profile';
 import {
   getPaymentHistoryForExport,
   sharePaymentHistoryCsv,
   sharePaymentHistoryPdf,
-} from '../../lib/payment/paymentHistoryExport';
+} from '../../../lib/payment/paymentHistoryExport';
 import { ProfilePurpleToggleVisual } from './ProfilePurpleToggleVisual';
 
 const C = {

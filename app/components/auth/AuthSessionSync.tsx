@@ -1,10 +1,10 @@
 import { useEffect } from 'react';
 import { AppState } from 'react-native';
 import { onAuthStateChanged } from 'firebase/auth';
-import { getFirebaseAuth, isFirebaseConfigured } from '../../lib/firebase';
-import { getOrCreateDeviceSessionId } from '../../lib/auth/deviceSessionIdentity';
-import { getDeviceDisplayName, getDeviceTypeCategory } from '../../lib/auth/deviceSessionMetadata';
-import { upsertCurrentAuthSession } from '../../lib/auth/authSessionsFirestore';
+import { getFirebaseAuth, isFirebaseConfigured } from '../../../lib/firebase';
+import { getOrCreateDeviceSessionId } from '../../../lib/auth/deviceSessionIdentity';
+import { getDeviceDisplayName, getDeviceTypeCategory } from '../../../lib/auth/deviceSessionMetadata';
+import { upsertCurrentAuthSession } from '../../../lib/auth/authSessionsFirestore';
 
 /**
  * Writes `users/{uid}/sessions/{deviceSessionId}` on sign-in and when the app becomes active.

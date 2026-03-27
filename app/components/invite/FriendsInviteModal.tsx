@@ -5,9 +5,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { useRouter } from 'expo-router';
 import { InviteShareSheetPanel } from './InviteShareSheetPanel';
-import { getFirebaseAuth, isFirebaseConfigured } from '../../lib/firebase';
-import { createPendingInvite } from '../../lib/friends/friendSystemFirestore';
-import { buildInviteShareMessage, buildInviteUrl } from '../../lib/friends/inviteLinks';
+import { getFirebaseAuth, isFirebaseConfigured } from '../../../lib/firebase';
+import { createPendingInvite } from '../../../lib/friends/friendSystemFirestore';
+import { buildInviteShareMessage, buildInviteUrl } from '../../../lib/friends/inviteLinks';
 
 type Props = {
   visible: boolean;

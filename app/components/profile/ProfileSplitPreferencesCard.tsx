@@ -9,8 +9,8 @@ import {
   defaultSplitMethodSubLabel,
   type DefaultSplitMethod,
   type SplitPreferences,
-} from '../../lib/split-preferences/splitPreferences';
-import { saveSplitPreferences } from '../../lib/profile';
+} from '../../../lib/split-preferences/splitPreferences';
+import { saveSplitPreferences } from '../../../lib/profile';
 import { ProfilePurpleToggleVisual } from './ProfilePurpleToggleVisual';
 
 const C = {

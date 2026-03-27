@@ -17,7 +17,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { getServiceIconBackgroundColor, ServiceIcon } from '../components/ServiceIcon';
+import { getServiceIconBackgroundColor, ServiceIcon } from '../components/shared/ServiceIcon';
 
 const FILTER_PILL_SCROLL_PADDING = 16;
 

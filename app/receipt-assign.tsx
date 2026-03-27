@@ -17,7 +17,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { router, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { ServiceIcon } from './components/ServiceIcon';
+import { ServiceIcon } from './components/shared/ServiceIcon';
 import {
   getReceiptAssignSession,
   setReceiptAssignSession,

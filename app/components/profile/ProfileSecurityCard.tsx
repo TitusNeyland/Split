@@ -18,15 +18,15 @@ import { onAuthStateChanged } from 'firebase/auth';
 import type { User } from 'firebase/auth';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ProfilePurpleToggleVisual } from './ProfilePurpleToggleVisual';
-import MfaPhoneEnrollmentModal from './MfaPhoneEnrollmentModal';
-import { useSecurityPrefs } from '../contexts/SecurityPrefsContext';
-import { getFirebaseAuth, getFirebaseWebOptions, isFirebaseConfigured } from '../../lib/firebase';
+import MfaPhoneEnrollmentModal from '../auth/MfaPhoneEnrollmentModal';
+import { useSecurityPrefs } from '../../contexts/SecurityPrefsContext';
+import { getFirebaseAuth, getFirebaseWebOptions, isFirebaseConfigured } from '../../../lib/firebase';
 import {
   isPhoneMfaEnrolled,
   reauthenticateWithEmailPassword,
   unenrollPhoneMfa,
   userHasPasswordProvider,
-} from '../../lib/auth/phoneMfa';
+} from '../../../lib/auth/phoneMfa';
 
 const C = {
   text: '#1a1a18',

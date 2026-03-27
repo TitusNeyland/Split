@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 ;
 import { View, Text, StyleSheet, Animated, type ViewStyle } from 'react-native';
-import { subscribeProfileStats, type ProfileStats } from '../../lib/profile';
+import { subscribeProfileStats, type ProfileStats } from '../../../lib/profile';
 
 const C = {
   text: '#1a1a18',
