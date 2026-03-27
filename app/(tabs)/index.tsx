@@ -15,7 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { spacing } from '../../constants/theme';
-import { getFriendAvatarColors } from '../../lib/friendAvatar';
+import { getFriendAvatarColors } from '../../lib/friends/friendAvatar';
 import { getFirebaseAuth, isFirebaseConfigured } from '../../lib/firebase';
 import { initialsFromName } from '../../lib/profile';
 import { useProfileAvatarUrl } from '../hooks/useProfileAvatarUrl';
@@ -23,17 +23,17 @@ import { UserAvatarCircle } from '../components/UserAvatarCircle';
 import {
   subscribeHomeFinancialPosition,
   type HomeFinancialPosition,
-} from '../../lib/homeFinancialPositionFirestore';
+} from '../../lib/home/homeFinancialPositionFirestore';
 import {
   formatMemberTenureMonths,
   subscribeHomeSavings,
   type HomeSavingsSnapshot,
-} from '../../lib/homeSavingsFirestore';
+} from '../../lib/home/homeSavingsFirestore';
 import {
   buildCalendarStripDays,
   getHomeDemoBills,
   pickNextBillPreview,
-} from '../../lib/homeWeekCalendar';
+} from '../../lib/home/homeWeekCalendar';
 import { HomeDonutChart, HOME_DONUT_SIZE } from '../components/HomeDonutChart';
 import { HomeHeroDonutLegend } from '../components/HomeHeroDonutLegend';
 import { HomeSavingsPill } from '../components/HomeSavingsPill';

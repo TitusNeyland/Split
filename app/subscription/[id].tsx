@@ -17,13 +17,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { ServiceIcon } from '../components/ServiceIcon';
 import { SubscriptionSplitEditor } from '../components/SubscriptionSplitEditor';
 import { spacing } from '../../constants/theme';
-import { SUBSCRIPTIONS_DEMO_MODE } from '../../lib/subscriptionsScreenDemo';
+import { SUBSCRIPTIONS_DEMO_MODE } from '../../lib/subscription/subscriptionsScreenDemo';
 import {
   getDemoSubscriptionDetail,
   type CyclePaymentStatus,
   type SubscriptionHistoryCycle,
-} from '../../lib/subscriptionDetailDemo';
-import { fmtCents } from '../../lib/addSubscriptionSplitMath';
+} from '../../lib/subscription/subscriptionDetailDemo';
+import { fmtCents } from '../../lib/subscription/addSubscriptionSplitMath';
 import { useProfileAvatarUrl } from '../hooks/useProfileAvatarUrl';
 
 const C = {

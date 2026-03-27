@@ -22,9 +22,9 @@ import {
   getReceiptAssignSession,
   setReceiptAssignSession,
   clearReceiptAssignSession,
-} from '../lib/receiptParseSession';
-import { newReceiptId, upsertRecentFromSession } from '../lib/recentReceipts';
-import type { AssignReceiptLine, ReceiptAssignSession } from '../lib/receiptTypes';
+} from '../lib/receipts/receiptParseSession';
+import { newReceiptId, upsertRecentFromSession } from '../lib/receipts/recentReceipts';
+import type { AssignReceiptLine, ReceiptAssignSession } from '../lib/receipts/receiptTypes';
 
 const C = {
   bg: '#F2F0EB',

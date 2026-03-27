@@ -28,7 +28,7 @@ import {
   parseDollarToCents,
   parsePercent,
   percentTotalIsExactly100,
-} from '../../lib/addSubscriptionSplitMath';
+} from '../../lib/subscription/addSubscriptionSplitMath';
 import { getServiceIconBackgroundColor } from '../components/ServiceIcon';
 
 const C = {

@@ -15,7 +15,7 @@ import {
   saveSubscriptionSplitToFirestore,
   type FirestoreMemberShare,
   type FirestoreSplitMethod,
-} from '../../lib/subscriptionSplitFirestore';
+} from '../../lib/subscription/subscriptionSplitFirestore';
 import {
   allocateCents,
   equalCentsSplit,
@@ -24,7 +24,7 @@ import {
   parseDollarToCents,
   parsePercent,
   percentTotalIsExactly100,
-} from '../../lib/addSubscriptionSplitMath';
+} from '../../lib/subscription/addSubscriptionSplitMath';
 const C = {
   purple: '#534AB7',
   text: '#1a1a18',

@@ -15,8 +15,8 @@ import {
   ACQUISITION_OPTIONS,
   type AcquisitionSourceId,
   saveAcquisitionSourceToFirestore,
-} from '../../lib/onboardingAcquisition';
-import { setOnboardingFindUsStepDone } from '../../lib/onboardingStorage';
+} from '../../lib/onboarding/onboardingAcquisition';
+import { setOnboardingFindUsStepDone } from '../../lib/onboarding/onboardingStorage';
 import { isFirebaseConfigured } from '../../lib/firebase';
 
 const C = {

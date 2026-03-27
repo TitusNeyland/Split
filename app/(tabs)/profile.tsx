@@ -36,7 +36,7 @@ import {
   removeProfileAvatar,
   type UserProfileDoc,
 } from '../../lib/profile';
-// LOCAL_PROFILE_AVATAR_OFFLINE — `persistLocalAvatar` / `clearLocalAvatar` / `localAvatarHydrated` go away with local-only avatar code (see lib/localProfileAvatarStorage.ts).
+// LOCAL_PROFILE_AVATAR_OFFLINE — `persistLocalAvatar` / `clearLocalAvatar` / `localAvatarHydrated` go away with local-only avatar code (see lib/profile/localProfileAvatarStorage.ts).
 import { useProfileAvatarUrl } from '../hooks/useProfileAvatarUrl';
 import type { User } from 'firebase/auth';
 

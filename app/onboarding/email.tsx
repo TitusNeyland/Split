@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { useOnboardingBack } from '../../lib/useOnboardingBack';
+import { useOnboardingBack } from '../../lib/onboarding/useOnboardingBack';
 import { Ionicons } from '@expo/vector-icons';
 import { WebView } from 'react-native-webview';
 import { fetchSignInMethodsForEmail } from 'firebase/auth';
@@ -25,7 +25,7 @@ import {
   setOnboardingBiometricPending,
   setOnboardingEmailSaved,
   setOnboardingSignupEmail,
-} from '../../lib/onboardingStorage';
+} from '../../lib/onboarding/onboardingStorage';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 

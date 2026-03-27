@@ -13,12 +13,12 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { useOnboardingBack } from '../../lib/useOnboardingBack';
+import { useOnboardingBack } from '../../lib/onboarding/useOnboardingBack';
 import { Ionicons } from '@expo/vector-icons';
 import { saveOnboardingLegalName } from '../../lib/profile';
-import { ensureOnboardingAuthUid } from '../../lib/onboardingGoals';
+import { ensureOnboardingAuthUid } from '../../lib/onboarding/onboardingGoals';
 import { isFirebaseConfigured } from '../../lib/firebase';
-import { setOnboardingNameSaved } from '../../lib/onboardingStorage';
+import { setOnboardingNameSaved } from '../../lib/onboarding/onboardingStorage';
 
 const C = {
   bg: '#fff',

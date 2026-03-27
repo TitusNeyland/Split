@@ -5,14 +5,14 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { SubscriptionCard } from './SubscriptionCard';
 import { ServiceIcon } from './ServiceIcon';
-import { SUBSCRIPTIONS_DEMO_MODE } from '../../lib/subscriptionsScreenDemo';
-import { useSubscriptionPriceBanner } from '../../lib/useSubscriptionPriceBanner';
-import { useFirebaseUid } from '../../lib/useFirebaseUid';
+import { SUBSCRIPTIONS_DEMO_MODE } from '../../lib/subscription/subscriptionsScreenDemo';
+import { useSubscriptionPriceBanner } from '../../lib/subscription/useSubscriptionPriceBanner';
+import { useFirebaseUid } from '../../lib/auth/useFirebaseUid';
 import { useProfileAvatarUrl } from '../hooks/useProfileAvatarUrl';
 import {
   perPersonAmountLabelEqualSplit,
   type SubscriptionPriceBannerFields,
-} from '../../lib/subscriptionPriceChangeBanner';
+} from '../../lib/subscription/subscriptionPriceChangeBanner';
 
 const C = {
   purple: '#534AB7',

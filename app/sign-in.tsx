@@ -21,8 +21,8 @@ import { GoogleAuthProvider, signInWithCredential } from 'firebase/auth';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { getFirebaseAuth } from '../lib/firebase';
-import { signInWithEmail, signInWithApple } from '../lib/authProviders';
-import { setOnboardingCompleteInStorage } from '../lib/onboardingStorage';
+import { signInWithEmail, signInWithApple } from '../lib/auth/authProviders';
+import { setOnboardingCompleteInStorage } from '../lib/onboarding/onboardingStorage';
 
 WebBrowser.maybeCompleteAuthSession();
 

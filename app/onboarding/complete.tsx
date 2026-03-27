@@ -15,7 +15,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Circle, Line, Path, Polyline } from 'react-native-svg';
 import { getFirebaseAuth } from '../../lib/firebase';
-import { markOnboardingFullyComplete } from '../../lib/onboardingStorage';
+import { markOnboardingFullyComplete } from '../../lib/onboarding/onboardingStorage';
 
 const C = {
   bg: '#FFFFFF',

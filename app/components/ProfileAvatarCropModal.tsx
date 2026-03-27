@@ -14,7 +14,7 @@ import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-g
 import Animated, { useSharedValue, useAnimatedStyle, runOnJS } from 'react-native-reanimated';
 import Svg, { Circle, Defs, Mask, Rect } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { exportAvatarSquareJpeg } from '../../lib/avatarCropExport';
+import { exportAvatarSquareJpeg } from '../../lib/profile';
 
 type Props = {
   visible: boolean;

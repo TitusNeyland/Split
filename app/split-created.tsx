@@ -17,7 +17,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
-import { fmtCents } from '../lib/addSubscriptionSplitMath';
+import { fmtCents } from '../lib/subscription/addSubscriptionSplitMath';
 
 const C = {
   text: '#1a1a18',

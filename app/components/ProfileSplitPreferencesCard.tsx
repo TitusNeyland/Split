@@ -9,7 +9,7 @@ import {
   defaultSplitMethodSubLabel,
   type DefaultSplitMethod,
   type SplitPreferences,
-} from '../../lib/splitPreferences';
+} from '../../lib/split-preferences/splitPreferences';
 import { saveSplitPreferences } from '../../lib/profile';
 import { ProfilePurpleToggleVisual } from './ProfilePurpleToggleVisual';
 

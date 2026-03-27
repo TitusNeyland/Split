@@ -26,8 +26,8 @@ import {
 
 type SubscriptionChoiceValue = (typeof SUBSCRIPTION_CHOICES)[number]['value'];
 import { getFirebaseAuth, isFirebaseConfigured } from '../../lib/firebase';
-import { submitPaymentIssueViaApi } from '../../lib/submitPaymentIssueApi';
-import { submitPaymentIssueToFirestore } from '../../lib/supportRequestsFirestore';
+import { submitPaymentIssueViaApi } from '../../lib/payment/submitPaymentIssueApi';
+import { submitPaymentIssueToFirestore } from '../../lib/payment/supportRequestsFirestore';
 
 export default function ReportPaymentScreen() {
   const insets = useSafeAreaInsets();

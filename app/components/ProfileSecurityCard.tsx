@@ -26,7 +26,7 @@ import {
   reauthenticateWithEmailPassword,
   unenrollPhoneMfa,
   userHasPasswordProvider,
-} from '../../lib/phoneMfa';
+} from '../../lib/auth/phoneMfa';
 
 const C = {
   text: '#1a1a18',

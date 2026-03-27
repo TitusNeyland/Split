@@ -18,7 +18,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   completePhoneMfaEnrollment,
   startPhoneMfaEnrollment,
-} from '../../lib/phoneMfa';
+} from '../../lib/auth/phoneMfa';
 import { useFirebaseRecaptchaRef } from '../contexts/FirebaseRecaptchaContext';
 import type { FirebaseOptions } from 'firebase/app';
 

@@ -16,10 +16,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Svg, { Path, Rect } from 'react-native-svg';
 import { getFirebaseAuth } from '../../lib/firebase';
-import { saveOnboardingStripePaymentMethodId } from '../../lib/onboardingPaymentFirestore';
+import { saveOnboardingStripePaymentMethodId } from '../../lib/onboarding/onboardingPaymentFirestore';
 import {
   setOnboardingPaymentStepDone,
-} from '../../lib/onboardingStorage';
+} from '../../lib/onboarding/onboardingStorage';
 
 const STRIPE_CONFIGURED = Boolean(process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY?.trim());
 

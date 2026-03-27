@@ -12,13 +12,16 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import type { User } from 'firebase/auth';
-import { mergePrivacySettings, type PrivacySettings } from '../../lib/privacySettings';
-import { savePrivacySettings } from '../../lib/profile';
+import {
+  mergePrivacySettings,
+  type PrivacySettings,
+  savePrivacySettings,
+} from '../../lib/profile';
 import {
   getPaymentHistoryForExport,
   sharePaymentHistoryCsv,
   sharePaymentHistoryPdf,
-} from '../../lib/paymentHistoryExport';
+} from '../../lib/payment/paymentHistoryExport';
 import { ProfilePurpleToggleVisual } from './ProfilePurpleToggleVisual';
 
 const C = {

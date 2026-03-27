@@ -6,8 +6,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { InviteShareSheetPanel } from './components/InviteShareSheetPanel';
 import { getFirebaseAuth, isFirebaseConfigured } from '../lib/firebase';
-import { createPendingInvite } from '../lib/friendSystemFirestore';
-import { buildInviteShareMessage, buildInviteUrl } from '../lib/inviteLinks';
+import { createPendingInvite } from '../lib/friends/friendSystemFirestore';
+import { buildInviteShareMessage, buildInviteUrl } from '../lib/friends/inviteLinks';
 
 export default function InviteShareScreen() {
   const router = useRouter();
