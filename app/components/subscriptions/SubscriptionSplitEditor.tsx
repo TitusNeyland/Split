@@ -10,12 +10,12 @@ import {
   Alert,
   Image,
 } from 'react-native';
-import { getFirebaseAuth } from '../../lib/firebase';
+import { getFirebaseAuth } from '../../../lib/firebase';
 import {
   saveSubscriptionSplitToFirestore,
   type FirestoreMemberShare,
   type FirestoreSplitMethod,
-} from '../../lib/subscription/subscriptionSplitFirestore';
+} from '../../../lib/subscription/subscriptionSplitFirestore';
 import {
   allocateCents,
   equalCentsSplit,
@@ -24,7 +24,7 @@ import {
   parseDollarToCents,
   parsePercent,
   percentTotalIsExactly100,
-} from '../../lib/subscription/addSubscriptionSplitMath';
+} from '../../../lib/subscription/addSubscriptionSplitMath';
 const C = {
   purple: '#534AB7',
   text: '#1a1a18',

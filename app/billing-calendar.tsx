@@ -27,7 +27,7 @@ import {
   type BillingCalendarSubscription,
   weekdayLabelsShort,
 } from '../lib/subscription/billingCalendarModel';
-import { ServiceIcon } from './components/ServiceIcon';
+import { ServiceIcon } from './components/shared/ServiceIcon';
 import { spacing } from '../constants/theme';
 
 const C = {

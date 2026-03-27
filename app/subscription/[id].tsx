@@ -14,8 +14,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
-import { ServiceIcon } from '../components/ServiceIcon';
-import { SubscriptionSplitEditor } from '../components/SubscriptionSplitEditor';
+import { ServiceIcon } from '../components/shared/ServiceIcon';
+import { SubscriptionSplitEditor } from '../components/subscriptions/SubscriptionSplitEditor';
 import { spacing } from '../../constants/theme';
 import { SUBSCRIPTIONS_DEMO_MODE } from '../../lib/subscription/subscriptionsScreenDemo';
 import {

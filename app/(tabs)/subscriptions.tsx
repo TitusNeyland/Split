@@ -19,7 +19,7 @@ import {
   type SubscriptionsTabPrefetchState,
 } from '../../lib/subscription/subscriptionTabBadgesFirestore';
 import { DEMO_TAB_BADGES, SUBSCRIPTIONS_DEMO_MODE } from '../../lib/subscription/subscriptionsScreenDemo';
-import { SubscriptionsDemoFloatCard, SubscriptionsDemoPanel } from '../components/SubscriptionsDemoPanels';
+import { SubscriptionsDemoFloatCard, SubscriptionsDemoPanel } from '../components/subscriptions/SubscriptionsDemoPanels';
 import { spacing } from '../../constants/theme';
 
 const C = {

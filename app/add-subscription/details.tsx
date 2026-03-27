@@ -15,8 +15,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
-import { BillingDayPickerSheet } from '../components/BillingDayPickerSheet';
-import { getServiceIconBackgroundColor } from '../components/ServiceIcon';
+import { BillingDayPickerSheet } from '../components/subscriptions/BillingDayPickerSheet';
+import { getServiceIconBackgroundColor } from '../components/shared/ServiceIcon';
 import {
   formatBillingDayFieldLabel,
   parseBillingDayParam,

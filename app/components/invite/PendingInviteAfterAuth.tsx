@@ -1,8 +1,8 @@
 import { useEffect, useRef } from 'react';
 import { useRouter } from 'expo-router';
 import { onAuthStateChanged } from 'firebase/auth';
-import { getFirebaseAuth, isFirebaseConfigured } from '../../lib/firebase';
-import { getPendingInviteId, setPendingInviteId } from '../../lib/friends/pendingInviteStorage';
+import { getFirebaseAuth, isFirebaseConfigured } from '../../../lib/firebase';
+import { getPendingInviteId, setPendingInviteId } from '../../../lib/friends/pendingInviteStorage';
 
 /**
  * After sign-up / sign-in, if an invite id was stored (link opened while logged out), open the accept screen.

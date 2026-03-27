@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import * as Linking from 'expo-linking';
 import { useRouter } from 'expo-router';
-import { extractInviteIdFromUrl } from '../../lib/friends/inviteLinks';
+import { extractInviteIdFromUrl } from '../../../lib/friends/inviteLinks';
 
 /**
  * Handles cold start and foreground URLs pointing at `/invite/{id}` (universal links or custom scheme).

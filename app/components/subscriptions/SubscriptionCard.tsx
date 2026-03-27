@@ -2,7 +2,7 @@ import React from 'react';
 ;
 import { View, Text, StyleSheet, Pressable, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { ServiceIcon } from './ServiceIcon';
+import { ServiceIcon } from '../shared/ServiceIcon';
 
 const C = {
   purple: '#534AB7',

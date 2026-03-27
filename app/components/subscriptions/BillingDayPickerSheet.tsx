@@ -3,7 +3,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, Modal, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { clampDayToMonth } from '../../lib/subscription/billingDayFormat';
+import { clampDayToMonth } from '../../../lib/subscription/billingDayFormat';
 
 const C = {
   purple: '#534AB7',

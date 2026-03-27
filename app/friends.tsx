@@ -37,7 +37,7 @@ import {
 } from '../lib/profile';
 import { getFriendAvatarColors } from '../lib/friends/friendAvatar';
 import { formatInviteExpiresIn, formatInviteSentAgo } from '../lib/friends/friendsTimeFormat';
-import FriendsInviteModal from './components/FriendsInviteModal';
+import FriendsInviteModal from './components/invite/FriendsInviteModal';
 
 const C = {
   text: '#1a1a18',

@@ -6,9 +6,9 @@ import type { User } from 'firebase/auth';
 import {
   subscribeAuthSessions,
   type AuthSessionEntry,
-} from '../../lib/auth/authSessionsFirestore';
-import { getOrCreateDeviceSessionId } from '../../lib/auth/deviceSessionIdentity';
-import { revokeOtherAuthSession } from '../../lib/auth/revokeAuthSession';
+} from '../../../lib/auth/authSessionsFirestore';
+import { getOrCreateDeviceSessionId } from '../../../lib/auth/deviceSessionIdentity';
+import { revokeOtherAuthSession } from '../../../lib/auth/revokeAuthSession';
 
 const C = {
   text: '#1a1a18',

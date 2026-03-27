@@ -29,7 +29,7 @@ import {
   formatFirstChargeDateShort,
   getNextFirstChargeDate,
 } from '../../lib/subscription/billingDayFormat';
-import { getServiceIconBackgroundColor, ServiceIcon } from '../components/ServiceIcon';
+import { getServiceIconBackgroundColor, ServiceIcon } from '../components/shared/ServiceIcon';
 
 const C = {
   purple: '#534AB7',

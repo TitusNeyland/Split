@@ -19,7 +19,7 @@ import { getFriendAvatarColors } from '../../lib/friends/friendAvatar';
 import { getFirebaseAuth, isFirebaseConfigured } from '../../lib/firebase';
 import { initialsFromName } from '../../lib/profile';
 import { useProfileAvatarUrl } from '../hooks/useProfileAvatarUrl';
-import { UserAvatarCircle } from '../components/UserAvatarCircle';
+import { UserAvatarCircle } from '../components/shared/UserAvatarCircle';
 import {
   subscribeHomeFinancialPosition,
   type HomeFinancialPosition,
@@ -34,15 +34,15 @@ import {
   getHomeDemoBills,
   pickNextBillPreview,
 } from '../../lib/home/homeWeekCalendar';
-import { HomeDonutChart, HOME_DONUT_SIZE } from '../components/HomeDonutChart';
-import { HomeHeroDonutLegend } from '../components/HomeHeroDonutLegend';
-import { HomeSavingsPill } from '../components/HomeSavingsPill';
-import { HomeQuickActionsRow } from '../components/HomeQuickActionsRow';
+import { HomeDonutChart, HOME_DONUT_SIZE } from '../components/home/HomeDonutChart';
+import { HomeHeroDonutLegend } from '../components/home/HomeHeroDonutLegend';
+import { HomeSavingsPill } from '../components/home/HomeSavingsPill';
+import { HomeQuickActionsRow } from '../components/home/HomeQuickActionsRow';
 import {
   HomeReminderPickerModal,
   type ReminderPickCandidate,
-} from '../components/HomeReminderPickerModal';
-import { ServiceIcon } from '../components/ServiceIcon';
+} from '../components/home/HomeReminderPickerModal';
+import { ServiceIcon } from '../components/shared/ServiceIcon';
 
 /** Toggle to `'empty'` to preview the new-user home (zeros + setup CTAs). */
 const HOME_PREVIEW: 'filled' | 'empty' = 'filled';
