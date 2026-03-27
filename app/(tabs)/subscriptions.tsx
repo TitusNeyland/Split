@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -14,12 +14,20 @@ import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { getFirebaseAuth } from '../../lib/firebase';
+import { fmtCents } from '../../lib/subscription/addSubscriptionSplitMath';
+import { subscribeMemberSubscriptions, type MemberSubscriptionDoc } from '../../lib/subscription/memberSubscriptionsFirestore';
 import {
-  subscribeSubscriptionsTabPrefetch,
-  type SubscriptionsTabPrefetchState,
-} from '../../lib/subscription/subscriptionTabBadgesFirestore';
-import { DEMO_TAB_BADGES, SUBSCRIPTIONS_DEMO_MODE } from '../../lib/subscription/subscriptionsScreenDemo';
+  getTotalCents,
+  getViewerShareCents,
+  normalizeSubscriptionStatus,
+  subscriptionIsUserOverdue,
+} from '../../lib/subscription/subscriptionToCardModel';
+import { subscribeAuthAndProfile } from '../../lib/profile';
+import { SUBSCRIPTIONS_DEMO_MODE, DEMO_TAB_BADGES } from '../../lib/subscription/subscriptionsScreenDemo';
 import { SubscriptionsDemoFloatCard, SubscriptionsDemoPanel } from '../components/subscriptions/SubscriptionsDemoPanels';
+import { LiveSubscriptionCard } from '../components/subscriptions/LiveSubscriptionCard';
+import { SubscriptionCardSkeletonList } from '../components/subscriptions/SubscriptionCardSkeleton';
+import { useProfileAvatarUrl } from '../hooks/useProfileAvatarUrl';
 import { spacing } from '../../constants/theme';
 
 const C = {
@@ -44,18 +52,23 @@ function formatBadgeCount(n: number): string {
   return String(n);
 }
 
+function heroMoneyLabel(cents: number): string {
+  return fmtCents(Math.max(0, Math.round(cents)));
+}
+
 export default function SubscriptionsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const [user, setUser] = useState<User | null>(null);
   const [filter, setFilter] = useState<FilterId>('active');
-  const [tabData, setTabData] = useState<SubscriptionsTabPrefetchState>({
-    overdue: 0,
-    paused: 0,
-    active: 0,
-    archived: 0,
-  });
+  const [memberSubscriptions, setMemberSubscriptions] = useState<MemberSubscriptionDoc[]>([]);
+  const [subscriptionsLoading, setSubscriptionsLoading] = useState(true);
+  const [lastSeenPriceMap, setLastSeenPriceMap] = useState<
+    Record<string, { toMillis?: () => number }> | null | undefined
+  >(null);
+
+  const { avatarUrl: userAvatarUrl } = useProfileAvatarUrl();
 
   useEffect(() => {
     const auth = getFirebaseAuth();
@@ -70,13 +83,67 @@ export default function SubscriptionsScreen() {
     if (SUBSCRIPTIONS_DEMO_MODE) {
       return;
     }
-    const uid = user?.uid;
-    if (!uid) {
-      setTabData({ overdue: 0, paused: 0, active: 0, archived: 0 });
+    return subscribeAuthAndProfile((s) => {
+      setLastSeenPriceMap(s.profile?.lastSeenPriceChangeBySubscription ?? null);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (SUBSCRIPTIONS_DEMO_MODE) {
       return;
     }
-    return subscribeSubscriptionsTabPrefetch(uid, setTabData);
+    const uid = user?.uid;
+    if (!uid) {
+      setMemberSubscriptions([]);
+      setSubscriptionsLoading(false);
+      return;
+    }
+    return subscribeMemberSubscriptions(uid, (subs, loading) => {
+      setMemberSubscriptions(subs);
+      setSubscriptionsLoading(loading);
+    });
   }, [user?.uid]);
+
+  const uid = user?.uid ?? '';
+
+  const { activeSubs, overdueSubs, pausedSubs, archivedSubs } = useMemo(() => {
+    const active: MemberSubscriptionDoc[] = [];
+    const overdue: MemberSubscriptionDoc[] = [];
+    const paused: MemberSubscriptionDoc[] = [];
+    const archived: MemberSubscriptionDoc[] = [];
+    for (const s of memberSubscriptions) {
+      const st = normalizeSubscriptionStatus(s.status);
+      if (st === 'archived' || st === 'cancelled') {
+        archived.push(s);
+        continue;
+      }
+      if (st === 'paused') {
+        paused.push(s);
+      }
+      if (st === 'active') {
+        active.push(s);
+        if (uid && subscriptionIsUserOverdue(s, uid)) {
+          overdue.push(s);
+        }
+      }
+    }
+    return { activeSubs: active, overdueSubs: overdue, pausedSubs: paused, archivedSubs: archived };
+  }, [memberSubscriptions, uid]);
+
+  const monthlyTotalCents = useMemo(
+    () => activeSubs.reduce((sum, s) => sum + getTotalCents(s), 0),
+    [activeSubs]
+  );
+
+  const yourShareCents = useMemo(
+    () => activeSubs.reduce((sum, s) => sum + (uid ? getViewerShareCents(s, uid) : 0), 0),
+    [activeSubs, uid]
+  );
+
+  const activeCount = activeSubs.length;
+
+  const overdueBadge = SUBSCRIPTIONS_DEMO_MODE ? DEMO_TAB_BADGES.overdue : overdueSubs.length;
+  const pausedBadge = SUBSCRIPTIONS_DEMO_MODE ? DEMO_TAB_BADGES.paused : pausedSubs.length;
 
   return (
     <View style={styles.root}>
@@ -117,15 +184,19 @@ export default function SubscriptionsScreen() {
 
           <View style={styles.heroStats}>
             <View style={styles.hstat}>
-              <Text style={styles.hstatVal}>$127</Text>
+              <Text style={styles.hstatVal}>
+                {SUBSCRIPTIONS_DEMO_MODE ? '$127' : heroMoneyLabel(monthlyTotalCents)}
+              </Text>
               <Text style={styles.hstatLbl}>Monthly total</Text>
             </View>
             <View style={styles.hstat}>
-              <Text style={styles.hstatVal}>$28</Text>
+              <Text style={styles.hstatVal}>
+                {SUBSCRIPTIONS_DEMO_MODE ? '$28' : heroMoneyLabel(yourShareCents)}
+              </Text>
               <Text style={styles.hstatLbl}>Your share</Text>
             </View>
             <View style={styles.hstat}>
-              <Text style={styles.hstatVal}>4</Text>
+              <Text style={styles.hstatVal}>{SUBSCRIPTIONS_DEMO_MODE ? '4' : String(activeCount)}</Text>
               <Text style={styles.hstatLbl}>Active splits</Text>
             </View>
           </View>
@@ -135,13 +206,9 @@ export default function SubscriptionsScreen() {
               const selected = filter === f.id;
               const badgeCount =
                 f.badge === 'overdue'
-                  ? SUBSCRIPTIONS_DEMO_MODE
-                    ? DEMO_TAB_BADGES.overdue
-                    : tabData.overdue
+                  ? overdueBadge
                   : f.badge === 'paused'
-                    ? SUBSCRIPTIONS_DEMO_MODE
-                      ? DEMO_TAB_BADGES.paused
-                      : tabData.paused
+                    ? pausedBadge
                     : 0;
               return (
                 <Pressable
@@ -199,11 +266,39 @@ export default function SubscriptionsScreen() {
                     <Text style={styles.shTitle}>Active splits</Text>
                     <Text style={styles.shAction}>Sort</Text>
                   </View>
-                  <Text style={styles.panelHint}>
-                    {tabData.active === 0
-                      ? 'No active subscriptions yet. Subscription cards will appear here.'
-                      : `${tabData.active} active subscription${tabData.active === 1 ? '' : 's'} — cards will appear here.`}
-                  </Text>
+                  {subscriptionsLoading && uid ? (
+                    <SubscriptionCardSkeletonList count={3} />
+                  ) : !uid ? (
+                    <Text style={styles.panelHint}>Sign in to see your subscription splits.</Text>
+                  ) : activeSubs.length === 0 ? (
+                    <View style={styles.empty}>
+                      <View style={styles.emptyIcon}>
+                        <Ionicons name="archive-outline" size={30} color={C.muted} />
+                      </View>
+                      <Text style={styles.emptyTitle}>No active splits yet</Text>
+                      <Text style={styles.emptySub}>
+                        Tap + Add to create your first subscription split
+                      </Text>
+                      <Pressable
+                        style={styles.emptyAddBtn}
+                        accessibilityRole="button"
+                        accessibilityLabel="Add subscription"
+                        onPress={() => router.push('/add-subscription')}
+                      >
+                        <Text style={styles.emptyAddBtnTxt}>+ Add</Text>
+                      </Pressable>
+                    </View>
+                  ) : (
+                    activeSubs.map((doc) => (
+                      <LiveSubscriptionCard
+                        key={doc.id}
+                        doc={doc}
+                        viewerUid={uid}
+                        viewerAvatarUrl={userAvatarUrl}
+                        lastSeenPriceMap={lastSeenPriceMap}
+                      />
+                    ))
+                  )}
                 </View>
               ) : null}
 
@@ -212,11 +307,25 @@ export default function SubscriptionsScreen() {
                   <View style={styles.sh}>
                     <Text style={styles.shTitle}>Needs attention</Text>
                   </View>
-                  <Text style={styles.panelHint}>
-                    {tabData.overdue === 0
-                      ? 'Nothing overdue. Subscriptions with a member payment past due will show here.'
-                      : `${tabData.overdue} overdue payment${tabData.overdue === 1 ? '' : 's'} — details will appear here.`}
-                  </Text>
+                  {subscriptionsLoading && uid ? (
+                    <SubscriptionCardSkeletonList count={2} />
+                  ) : !uid ? (
+                    <Text style={styles.panelHint}>Sign in to see overdue payments.</Text>
+                  ) : overdueSubs.length === 0 ? (
+                    <Text style={styles.panelHint}>
+                      Nothing overdue. Subscriptions with a member payment past due will show here.
+                    </Text>
+                  ) : (
+                    overdueSubs.map((doc) => (
+                      <LiveSubscriptionCard
+                        key={doc.id}
+                        doc={doc}
+                        viewerUid={uid}
+                        viewerAvatarUrl={userAvatarUrl}
+                        lastSeenPriceMap={lastSeenPriceMap}
+                      />
+                    ))
+                  )}
                 </View>
               ) : null}
 
@@ -225,17 +334,32 @@ export default function SubscriptionsScreen() {
                   <View style={styles.sh}>
                     <Text style={styles.shTitle}>Paused</Text>
                   </View>
-                  <Text style={styles.panelHint}>
-                    {tabData.paused === 0
-                      ? 'No paused subscriptions. Paused splits will appear here.'
-                      : `${tabData.paused} paused subscription${tabData.paused === 1 ? '' : 's'} — cards will appear here.`}
-                  </Text>
+                  {subscriptionsLoading && uid ? (
+                    <SubscriptionCardSkeletonList count={2} />
+                  ) : !uid ? (
+                    <Text style={styles.panelHint}>Sign in to see paused subscriptions.</Text>
+                  ) : pausedSubs.length === 0 ? (
+                    <Text style={styles.panelHint}>
+                      No paused subscriptions. Paused splits will appear here.
+                    </Text>
+                  ) : (
+                    pausedSubs.map((doc) => (
+                      <LiveSubscriptionCard
+                        key={doc.id}
+                        doc={doc}
+                        viewerUid={uid}
+                        viewerAvatarUrl={userAvatarUrl}
+                        lastSeenPriceMap={lastSeenPriceMap}
+                        muted
+                      />
+                    ))
+                  )}
                 </View>
               ) : null}
 
               {filter === 'archived' ? (
                 <View style={styles.panel}>
-                  {tabData.archived === 0 ? (
+                  {archivedSubs.length === 0 ? (
                     <View style={styles.empty}>
                       <View style={styles.emptyIcon}>
                         <Ionicons name="archive-outline" size={30} color={C.muted} />
@@ -249,8 +373,8 @@ export default function SubscriptionsScreen() {
                         <Text style={styles.shTitle}>Archived</Text>
                       </View>
                       <Text style={styles.panelHint}>
-                        {tabData.archived} archived subscription{tabData.archived === 1 ? '' : 's'} — list will
-                        appear here.
+                        {archivedSubs.length} archived subscription{archivedSubs.length === 1 ? '' : 's'} — list
+                        coming soon.
                       </Text>
                     </>
                   )}
@@ -459,5 +583,17 @@ const styles = StyleSheet.create({
     color: C.muted,
     textAlign: 'center',
     lineHeight: 22,
+    marginBottom: 16,
+  },
+  emptyAddBtn: {
+    backgroundColor: C.purple,
+    paddingHorizontal: 22,
+    paddingVertical: 12,
+    borderRadius: 22,
+  },
+  emptyAddBtnTxt: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
   },
 });

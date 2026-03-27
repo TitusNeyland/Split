@@ -45,36 +45,50 @@ export async function runSubscriptionWizardSideEffects(
 
 /**
  * Creates `subscriptions/{id}` plus an initial `billing_cycles` doc.
- * `members` array is `[ownerUid]` so tab queries work; full roster lives in `splitMemberShares`.
+ * `members` / `memberUids` list every split participant so subscription tab queries resolve.
  */
+/** Wizard UI uses a placeholder (e.g. `owner-self`); Firestore rules require the real uid in `members`. */
+function persistMemberId(m: WizardMemberRow, actorUid: string): string {
+  if (m.role === 'owner') return actorUid;
+  return m.memberId;
+}
+
 export async function createSubscriptionFromWizard(
   input: CreateSubscriptionWizardInput
 ): Promise<string> {
   const db = getFirebaseFirestore();
   if (!db) throw new Error('Firestore is not configured.');
 
-  const splitMemberShares = input.members.map((m) => ({
-    memberId: m.memberId,
-    displayName: m.displayName,
-    role: m.role,
-    percent: Math.round(m.percent * 100) / 100,
-    amountCents: m.amountCents,
-    initials: m.initials,
-    avatarBg: m.avatarBg,
-    avatarColor: m.avatarColor,
-    invitePending: Boolean(m.invitePending),
-  }));
+  const splitMemberShares = input.members.map((m) => {
+    const id = persistMemberId(m, input.actorUid);
+    return {
+      memberId: id,
+      displayName: m.displayName,
+      role: m.role,
+      percent: Math.round(m.percent * 100) / 100,
+      amountCents: m.amountCents,
+      initials: m.initials,
+      avatarBg: m.avatarBg,
+      avatarColor: m.avatarColor,
+      invitePending: Boolean(m.invitePending),
+    };
+  });
 
   const memberPaymentStatus: Record<string, string> = {};
   for (const m of input.members) {
+    const id = persistMemberId(m, input.actorUid);
     if (m.role === 'owner') {
-      memberPaymentStatus[m.memberId] = 'owner';
+      memberPaymentStatus[id] = 'owner';
     } else if (m.invitePending) {
-      memberPaymentStatus[m.memberId] = 'invited_pending';
+      memberPaymentStatus[id] = 'invited_pending';
     } else {
-      memberPaymentStatus[m.memberId] = 'pending';
+      memberPaymentStatus[id] = 'pending';
     }
   }
+
+  const memberIds = input.members
+    .map((m) => persistMemberId(m, input.actorUid))
+    .filter((id): id is string => Boolean(id));
 
   const col = collection(db, 'subscriptions');
   const docRef = await addDoc(col, {
@@ -90,7 +104,9 @@ export async function createSubscriptionFromWizard(
     splitMethod: input.splitMethod,
     splitMemberShares,
     memberPaymentStatus,
-    members: [input.actorUid],
+    /** Uid strings for `array-contains` queries; mirrors `members`. */
+    memberUids: memberIds,
+    members: memberIds,
     status: 'active',
     createdAt: serverTimestamp(),
     splitUpdatedAt: serverTimestamp(),
