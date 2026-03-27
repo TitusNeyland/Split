@@ -8,6 +8,7 @@ import {
   Modal,
   Image,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -23,7 +24,9 @@ import {
   type CyclePaymentStatus,
   type SubscriptionHistoryCycle,
 } from '../../lib/subscription/subscriptionDetailDemo';
+import { useSubscriptionDetailFromFirestore } from '../../lib/subscription/subscriptionDetailFromFirestore';
 import { fmtCents } from '../../lib/subscription/addSubscriptionSplitMath';
+import { useFirebaseUid } from '../../lib/auth/useFirebaseUid';
 import { useProfileAvatarUrl } from '../hooks/useProfileAvatarUrl';
 
 const C = {
@@ -64,15 +67,25 @@ export default function SubscriptionDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string | string[] }>();
   const subscriptionId = typeof id === 'string' ? id : id?.[0] ?? '';
   const { avatarUrl: userAvatarUrl } = useProfileAvatarUrl();
+  const firebaseUid = useFirebaseUid();
   const nextCycleStart = useNextBillingCycleStart();
 
   const [editorOpen, setEditorOpen] = useState(false);
   const [historyModalCycle, setHistoryModalCycle] = useState<SubscriptionHistoryCycle | null>(null);
 
-  const detail = useMemo(() => {
+  const demoDetail = useMemo(() => {
     if (!SUBSCRIPTIONS_DEMO_MODE || !subscriptionId) return null;
     return getDemoSubscriptionDetail(subscriptionId, userAvatarUrl);
   }, [subscriptionId, userAvatarUrl]);
+
+  const { detail: liveDetail, loading: liveLoading, error: liveError } = useSubscriptionDetailFromFirestore(
+    subscriptionId,
+    firebaseUid,
+    userAvatarUrl,
+    { enabled: !SUBSCRIPTIONS_DEMO_MODE }
+  );
+
+  const detail = SUBSCRIPTIONS_DEMO_MODE ? demoDetail : liveDetail;
 
   const openEditor = useCallback(() => setEditorOpen(true), []);
   const closeEditor = useCallback(() => setEditorOpen(false), []);
@@ -80,6 +93,68 @@ export default function SubscriptionDetailScreen() {
   const onDemoAction = (title: string) => {
     Alert.alert(title, 'This action will be available when subscription management is connected.');
   };
+
+  if (!SUBSCRIPTIONS_DEMO_MODE && subscriptionId && liveLoading) {
+    return (
+      <View style={[styles.unknownRoot, { paddingTop: insets.top + 12 }]}>
+        <StatusBar style="dark" />
+        <Pressable
+          onPress={() => router.back()}
+          style={styles.unknownBack}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+        >
+          <Ionicons name="chevron-back" size={28} color={C.purple} />
+        </Pressable>
+        <ActivityIndicator size="large" color={C.purple} style={{ marginTop: 24 }} />
+        <Text style={[styles.unknownSub, { marginTop: 16 }]}>Loading subscription…</Text>
+      </View>
+    );
+  }
+
+  if (!SUBSCRIPTIONS_DEMO_MODE && liveError) {
+    const errSub =
+      liveError === 'permission'
+        ? 'You do not have access to this subscription.'
+        : liveError === 'not-found'
+          ? 'This subscription may have been removed or is not available.'
+          : 'Subscription could not be loaded. Check your connection and try again.';
+    return (
+      <View style={[styles.unknownRoot, { paddingTop: insets.top + 12 }]}>
+        <StatusBar style="dark" />
+        <Pressable
+          onPress={() => router.back()}
+          style={styles.unknownBack}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+        >
+          <Ionicons name="chevron-back" size={28} color={C.purple} />
+        </Pressable>
+        <Text style={styles.unknownTitle}>
+          {liveError === 'not-found' ? 'Subscription not found' : 'Unable to open subscription'}
+        </Text>
+        <Text style={styles.unknownSub}>{errSub}</Text>
+      </View>
+    );
+  }
+
+  if (!SUBSCRIPTIONS_DEMO_MODE && !firebaseUid && !liveLoading) {
+    return (
+      <View style={[styles.unknownRoot, { paddingTop: insets.top + 12 }]}>
+        <StatusBar style="dark" />
+        <Pressable
+          onPress={() => router.back()}
+          style={styles.unknownBack}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+        >
+          <Ionicons name="chevron-back" size={28} color={C.purple} />
+        </Pressable>
+        <Text style={styles.unknownTitle}>Sign in required</Text>
+        <Text style={styles.unknownSub}>Sign in to view this subscription.</Text>
+      </View>
+    );
+  }
 
   if (!detail) {
     return (
