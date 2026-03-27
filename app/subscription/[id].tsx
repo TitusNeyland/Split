@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -8,7 +8,6 @@ import {
   Modal,
   Image,
   Alert,
-  ActivityIndicator,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -16,6 +15,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { ServiceIcon } from '../components/shared/ServiceIcon';
+import { SubscriptionDetailSkeleton } from '../components/subscriptions/SubscriptionDetailSkeleton';
 import { SubscriptionSplitEditor } from '../components/subscriptions/SubscriptionSplitEditor';
 import { spacing } from '../../constants/theme';
 import { SUBSCRIPTIONS_DEMO_MODE } from '../../lib/subscription/subscriptionsScreenDemo';
@@ -72,20 +72,28 @@ export default function SubscriptionDetailScreen() {
 
   const [editorOpen, setEditorOpen] = useState(false);
   const [historyModalCycle, setHistoryModalCycle] = useState<SubscriptionHistoryCycle | null>(null);
+  const [detailRetryKey, setDetailRetryKey] = useState(0);
 
   const demoDetail = useMemo(() => {
     if (!SUBSCRIPTIONS_DEMO_MODE || !subscriptionId) return null;
     return getDemoSubscriptionDetail(subscriptionId, userAvatarUrl);
   }, [subscriptionId, userAvatarUrl]);
 
-  const { detail: liveDetail, loading: liveLoading, error: liveError } = useSubscriptionDetailFromFirestore(
-    subscriptionId,
-    firebaseUid,
-    userAvatarUrl,
-    { enabled: !SUBSCRIPTIONS_DEMO_MODE }
-  );
+  const { detail: liveDetail, loading: liveLoading, error: liveError, errorMessage: liveErrorMessage } =
+    useSubscriptionDetailFromFirestore(subscriptionId, firebaseUid, userAvatarUrl, {
+      enabled: !SUBSCRIPTIONS_DEMO_MODE,
+      retryKey: detailRetryKey,
+    });
 
   const detail = SUBSCRIPTIONS_DEMO_MODE ? demoDetail : liveDetail;
+
+  useEffect(() => {
+    if (SUBSCRIPTIONS_DEMO_MODE) return;
+    if (!subscriptionId.trim()) {
+      console.error('SubscriptionDetail: missing subscription id param');
+      router.back();
+    }
+  }, [subscriptionId, router]);
 
   const openEditor = useCallback(() => setEditorOpen(true), []);
   const closeEditor = useCallback(() => setEditorOpen(false), []);
@@ -94,31 +102,38 @@ export default function SubscriptionDetailScreen() {
     Alert.alert(title, 'This action will be available when subscription management is connected.');
   };
 
-  if (!SUBSCRIPTIONS_DEMO_MODE && subscriptionId && liveLoading) {
+  if (!SUBSCRIPTIONS_DEMO_MODE && subscriptionId.trim() && firebaseUid && liveLoading) {
     return (
-      <View style={[styles.unknownRoot, { paddingTop: insets.top + 12 }]}>
+      <View style={styles.loadingRoot}>
         <StatusBar style="dark" />
-        <Pressable
-          onPress={() => router.back()}
-          style={styles.unknownBack}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-        >
-          <Ionicons name="chevron-back" size={28} color={C.purple} />
-        </Pressable>
-        <ActivityIndicator size="large" color={C.purple} style={{ marginTop: 24 }} />
-        <Text style={[styles.unknownSub, { marginTop: 16 }]}>Loading subscription…</Text>
+        <View style={[styles.loadingTopBar, { paddingTop: insets.top + 12 }]}>
+          <Pressable
+            onPress={() => router.back()}
+            style={styles.unknownBack}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+          >
+            <Ionicons name="chevron-back" size={28} color={C.purple} />
+          </Pressable>
+        </View>
+        <SubscriptionDetailSkeleton />
       </View>
     );
   }
 
   if (!SUBSCRIPTIONS_DEMO_MODE && liveError) {
-    const errSub =
-      liveError === 'permission'
+    const isNotFound = liveError === 'not-found';
+    const title = isNotFound
+      ? 'This subscription could not be found'
+      : liveError === 'permission'
+        ? 'Unable to open subscription'
+        : 'Something went wrong loading this split';
+    const errSub = isNotFound
+      ? 'It may have been removed, or the link is invalid.'
+      : liveError === 'permission'
         ? 'You do not have access to this subscription.'
-        : liveError === 'not-found'
-          ? 'This subscription may have been removed or is not available.'
-          : 'Subscription could not be loaded. Check your connection and try again.';
+        : 'Check your connection and try again.';
+    const showRetry = liveError === 'unavailable';
     return (
       <View style={[styles.unknownRoot, { paddingTop: insets.top + 12 }]}>
         <StatusBar style="dark" />
@@ -130,10 +145,29 @@ export default function SubscriptionDetailScreen() {
         >
           <Ionicons name="chevron-back" size={28} color={C.purple} />
         </Pressable>
-        <Text style={styles.unknownTitle}>
-          {liveError === 'not-found' ? 'Subscription not found' : 'Unable to open subscription'}
-        </Text>
+        <Text style={styles.unknownTitle}>{title}</Text>
         <Text style={styles.unknownSub}>{errSub}</Text>
+        {liveErrorMessage && !isNotFound ? (
+          <Text style={styles.unknownTech}>{liveErrorMessage}</Text>
+        ) : null}
+        <Pressable
+          style={styles.unknownPrimaryBtn}
+          onPress={() => router.back()}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+        >
+          <Text style={styles.unknownPrimaryBtnTxt}>Go back</Text>
+        </Pressable>
+        {showRetry ? (
+          <Pressable
+            style={styles.unknownSecondaryBtn}
+            onPress={() => setDetailRetryKey((k) => k + 1)}
+            accessibilityRole="button"
+            accessibilityLabel="Try again"
+          >
+            <Text style={styles.unknownSecondaryBtnTxt}>Try again</Text>
+          </Pressable>
+        ) : null}
       </View>
     );
   }
@@ -168,8 +202,8 @@ export default function SubscriptionDetailScreen() {
         >
           <Ionicons name="chevron-back" size={28} color={C.purple} />
         </Pressable>
-        <Text style={styles.unknownTitle}>Subscription not found</Text>
-        <Text style={styles.unknownSub}>This subscription may have been removed or is not available.</Text>
+        <Text style={styles.unknownTitle}>This subscription could not be found</Text>
+        <Text style={styles.unknownSub}>It may have been removed, or the link is invalid.</Text>
       </View>
     );
   }
@@ -712,6 +746,45 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: C.muted,
     lineHeight: 22,
+    marginBottom: 16,
+  },
+  unknownTech: {
+    fontSize: 12,
+    color: C.muted,
+    lineHeight: 18,
+    marginBottom: 16,
+    fontFamily: 'monospace',
+  },
+  unknownPrimaryBtn: {
+    alignSelf: 'flex-start',
+    backgroundColor: C.purple,
+    paddingHorizontal: 22,
+    paddingVertical: 12,
+    borderRadius: 12,
+    marginBottom: 10,
+  },
+  unknownPrimaryBtnTxt: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  unknownSecondaryBtn: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 10,
+  },
+  unknownSecondaryBtnTxt: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: C.purple,
+  },
+  loadingRoot: {
+    flex: 1,
+    backgroundColor: C.bg,
+  },
+  loadingTopBar: {
+    paddingHorizontal: 24,
+    backgroundColor: C.bg,
   },
   modalBackdrop: {
     flex: 1,
