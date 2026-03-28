@@ -26,6 +26,7 @@ export type HomeRecentActivityFirestoreItem = {
   iconBg: string;
   iconColor: string;
   serviceIconMuted?: boolean;
+  friendAvatar?: { initials: string; imageUrl?: string | null };
 };
 
 /**
@@ -70,6 +71,7 @@ export function subscribeHomeRecentActivity(
           iconBg: row.iconBg,
           iconColor: row.iconColor,
           serviceIconMuted: row.serviceIconMuted,
+          friendAvatar: row.friendAvatar,
         });
       }
       onUpdate(items);

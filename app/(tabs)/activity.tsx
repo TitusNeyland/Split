@@ -19,6 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { getFriendFilterDisplayName } from '../../lib/profile';
 import { ServiceIcon } from '../components/shared/ServiceIcon';
+import { UserAvatarCircle } from '../components/shared/UserAvatarCircle';
 import { recordManualSettlement } from '../../lib/payment/paymentsFirestore';
 import { useFirebaseUid } from '../../lib/auth/useFirebaseUid';
 import { subscribeActivityFeed } from '../../lib/activity/activityFeedFirestore';
@@ -85,7 +86,13 @@ type ActivityKind =
   | 'split_ended'
   | 'split_restarted'
   | 'split_percentage_updated'
-  | 'split_price_updated';
+  | 'split_price_updated'
+  | 'friend_connected'
+  | 'friend_invite_accepted'
+  | 'billing_cycle_complete'
+  | 'billing_cycle_partial'
+  | 'auto_charge_enabled'
+  | 'auto_charge_disabled';
 
 type ActivityBadgeVariant = 'green' | 'amber' | 'red' | 'purple' | 'gray' | 'blue';
 
@@ -208,6 +215,7 @@ type ActivityFeedItem = {
   _reminderTap?: { subscriptionId: string; memberUid: string };
   joinSubscriptionId?: string;
   serviceIconMuted?: boolean;
+  friendAvatar?: { initials: string; imageUrl?: string | null };
 };
 
 type ActivityFeedGroup = { sectionTitle: string; items: ActivityFeedItem[] };
@@ -247,7 +255,13 @@ function itemMatchesFilter(item: ActivityFeedItem, f: ActivityFilterId): boolean
         item.kind === 'split_ended' ||
         item.kind === 'split_restarted' ||
         item.kind === 'split_percentage_updated' ||
-        item.kind === 'split_price_updated'
+        item.kind === 'split_price_updated' ||
+        item.kind === 'billing_cycle_complete' ||
+        item.kind === 'billing_cycle_partial' ||
+        item.kind === 'auto_charge_enabled' ||
+        item.kind === 'auto_charge_disabled' ||
+        item.kind === 'friend_connected' ||
+        item.kind === 'friend_invite_accepted'
       );
     case 'receipts':
       return item.kind === 'receipt';
@@ -740,7 +754,15 @@ function ActivityItemRow({
           accessibilityState={hasExpandableDetail ? { expanded } : undefined}
         >
           <View style={styles.actLeft}>
-            {item.serviceMark ? (
+            {item.friendAvatar ? (
+              <View style={styles.actIcoPlain}>
+                <UserAvatarCircle
+                  size={40}
+                  initials={item.friendAvatar.initials}
+                  imageUrl={item.friendAvatar.imageUrl}
+                />
+              </View>
+            ) : item.serviceMark ? (
               <View style={styles.actIcoPlain}>
                 <ServiceIcon
                   serviceName={item.serviceMark}

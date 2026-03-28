@@ -102,6 +102,64 @@ function inferConnectedVia(data) {
   return 'direct_invite';
 }
 
+/** For activity metadata; maps user_search → search. */
+function normalizeActivityConnectedVia(v) {
+  if (v === 'user_search') return 'search';
+  if (v === 'search') return 'search';
+  if (v === 'contacts') return 'contacts';
+  if (v === 'split_invite') return 'split_invite';
+  if (v === 'direct_invite') return 'direct_invite';
+  return typeof v === 'string' && v ? v : 'unknown';
+}
+
+function initialsFromDisplayName(name) {
+  const parts = String(name || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (parts.length >= 2) {
+    const a = parts[0][0] || '';
+    const b = parts[parts.length - 1][0] || '';
+    return `${a}${b}`.toUpperCase() || '?';
+  }
+  return (parts[0] || '?').slice(0, 2).toUpperCase();
+}
+
+/**
+ * Fan-out activity to every uid in `memberUids` (deduped).
+ */
+async function appendActivityEventToMembers(db, memberUids, payload) {
+  const seen = new Set();
+  for (const uid of memberUids) {
+    if (typeof uid !== 'string' || !uid || seen.has(uid)) continue;
+    seen.add(uid);
+    try {
+      await appendActivityEvent(db, uid, payload);
+    } catch (e) {
+      console.warn('appendActivityEventToMembers: failed for', uid, e?.message || e);
+    }
+  }
+}
+
+async function writeAutoChargeActivity(db, subId, sub, enabled) {
+  const ownerUid = sub.ownerUid;
+  if (typeof ownerUid !== 'string' || !ownerUid) return;
+  const subName = subscriptionLabelFromData(sub);
+  const serviceId = slugifyServiceIdFromName(subName);
+  const actorName = await getUserDisplayName(db, ownerUid);
+  const memberUids = Array.isArray(sub.memberUids) ? sub.memberUids : [];
+  const type = enabled ? 'auto_charge_enabled' : 'auto_charge_disabled';
+  await appendActivityEventToMembers(db, memberUids, {
+    type,
+    subscriptionId: subId,
+    subscriptionName: subName,
+    serviceId,
+    actorUid: ownerUid,
+    actorName,
+    metadata: {},
+  });
+}
+
 async function mergeSplitInviteMember(db, subscriptionId, inviteId, acceptedBy) {
   const subRef = db.collection('subscriptions').doc(subscriptionId);
   const userRef = db.collection('users').doc(acceptedBy);
@@ -375,6 +433,68 @@ exports.onFriendshipCreatedNotify = onDocumentCreated('friendships/{friendshipId
 });
 
 /**
+ * Activity feed: friend_connected (non-initiator) + friend_invite_accepted (initiator on invite flows).
+ */
+exports.onFriendshipCreatedActivityFeed = onDocumentCreated('friendships/{friendshipId}', async (event) => {
+  const snap = event.data;
+  if (!snap) return;
+  const data = snap.data();
+  const users = data.users;
+  const initiatedBy = data.initiatedBy;
+  if (!Array.isArray(users) || users.length !== 2 || typeof initiatedBy !== 'string' || !initiatedBy) return;
+  const otherUid = users[0] === initiatedBy ? users[1] : users[0];
+  if (!otherUid || otherUid === initiatedBy) return;
+
+  const db = admin.firestore();
+  const initiatorDoc = await db.collection('users').doc(initiatedBy).get();
+  const otherDoc = await db.collection('users').doc(otherUid).get();
+  const id = initiatorDoc.data() || {};
+  const od = otherDoc.data() || {};
+  const initiatorName =
+    typeof id.displayName === 'string' && id.displayName.trim() ? id.displayName.trim() : 'Someone';
+  const otherName =
+    typeof od.displayName === 'string' && od.displayName.trim() ? od.displayName.trim() : 'Someone';
+  const initiatorAvatar = typeof id.avatarUrl === 'string' ? id.avatarUrl : null;
+  const otherAvatar = typeof od.avatarUrl === 'string' ? od.avatarUrl : null;
+  const emailNormInit = typeof id.emailNormalized === 'string' ? id.emailNormalized : '';
+  const unameAt = usernameFromEmailNormalized(emailNormInit);
+  const friendUsernamePlain = unameAt.startsWith('@') ? unameAt.slice(1) : unameAt;
+
+  const via = normalizeActivityConnectedVia(data.connectedVia);
+
+  try {
+    await appendActivityEvent(db, otherUid, {
+      type: 'friend_connected',
+      actorUid: initiatedBy,
+      actorName: initiatorName,
+      actorAvatarUrl: initiatorAvatar,
+      metadata: {
+        friendUid: initiatedBy,
+        friendUsername: friendUsernamePlain,
+        connectedVia: via,
+      },
+    });
+  } catch (e) {
+    console.warn('onFriendshipCreatedActivityFeed: friend_connected failed', e?.message || e);
+  }
+
+  const rawVia = data.connectedVia;
+  if (rawVia === 'direct_invite' || rawVia === 'split_invite') {
+    try {
+      await appendActivityEvent(db, initiatedBy, {
+        type: 'friend_invite_accepted',
+        actorUid: otherUid,
+        actorName: otherName,
+        actorAvatarUrl: otherAvatar,
+        metadata: { friendUid: otherUid },
+      });
+    } catch (e) {
+      console.warn('onFriendshipCreatedActivityFeed: friend_invite_accepted failed', e?.message || e);
+    }
+  }
+});
+
+/**
  * Writes split_invite in-app notifications for the given uids (caller excludes owner).
  * @param {FirebaseFirestore.Firestore} db
  * @param {string} subId
@@ -486,9 +606,17 @@ exports.onSubscriptionCreatedSplitInviteInAppNotify = onDocumentCreated(
     if (typeof ownerUid !== 'string' || !ownerUid) return;
     const subId = event.params.subscriptionId;
     const newUids = afterUids.filter((uid) => typeof uid === 'string' && uid && uid !== ownerUid);
-    if (newUids.length === 0) return;
     const db = admin.firestore();
-    await sendSplitInviteInAppNotifications(db, subId, after, newUids);
+    if (newUids.length > 0) {
+      await sendSplitInviteInAppNotifications(db, subId, after, newUids);
+    }
+    if (after.autoCharge === true) {
+      try {
+        await writeAutoChargeActivity(db, subId, after, true);
+      } catch (e) {
+        console.warn('onSubscriptionCreated: auto_charge activity', e?.message || e);
+      }
+    }
   }
 );
 
@@ -567,6 +695,25 @@ exports.onSubscriptionMemberPaymentActivity = onDocumentUpdated('subscriptions/{
         cycleMonth,
       },
     });
+  }
+});
+
+/**
+ * Auto-charge toggled → activity on every member’s feed (owner is actor).
+ */
+exports.onSubscriptionAutoChargeActivity = onDocumentUpdated('subscriptions/{subscriptionId}', async (event) => {
+  const before = event.data.before.exists ? event.data.before.data() : {};
+  const after = event.data.after.data();
+  if (!after) return;
+  const prevOn = before.autoCharge === true;
+  const nextOn = after.autoCharge === true;
+  if (prevOn === nextOn) return;
+  const subId = event.params.subscriptionId;
+  const db = admin.firestore();
+  try {
+    await writeAutoChargeActivity(db, subId, after, nextOn);
+  } catch (e) {
+    console.warn('onSubscriptionAutoChargeActivity', e?.message || e);
   }
 });
 
@@ -1268,8 +1415,29 @@ async function advanceOneCycle(db, subDoc, now) {
 
     const nextBillingAt = nextBillingTimestamp(sub.billingDayLabel, sub.billingCycle, now);
 
-    const newMemberPaymentStatus = {};
+    const beforeMps = sub.memberPaymentStatus || {};
     const shares = Array.isArray(sub.splitMemberShares) ? sub.splitMemberShares : [];
+    const cycleMembers = shares.filter((s) => s && s.role !== 'owner' && !s.invitePending);
+    let paidCount = 0;
+    let collectedCents = 0;
+    let outstandingCents = 0;
+    for (const s of cycleMembers) {
+      const st = beforeMps[s.memberId];
+      const amt = typeof s.amountCents === 'number' ? s.amountCents : 0;
+      if (st === 'paid') {
+        paidCount++;
+        collectedCents += amt;
+      } else {
+        outstandingCents += amt;
+      }
+    }
+    const totalCount = cycleMembers.length;
+    const cycleMonthLabel = formatCycleMonthLabel(now);
+    const subNameForActivity = subscriptionLabelFromData(sub);
+    const serviceIdForActivity = slugifyServiceIdFromName(subNameForActivity);
+    const ownerUidForActivity = sub.ownerUid;
+
+    const newMemberPaymentStatus = {};
     for (const share of shares) {
       if (share.role === 'owner') {
         newMemberPaymentStatus[share.memberId] = 'owner';
@@ -1305,6 +1473,44 @@ async function advanceOneCycle(db, subDoc, now) {
     });
 
     await batch.commit();
+
+    if (typeof ownerUidForActivity === 'string' && ownerUidForActivity && totalCount > 0) {
+      try {
+        if (paidCount === totalCount) {
+          await appendActivityEvent(db, ownerUidForActivity, {
+            type: 'billing_cycle_complete',
+            subscriptionId: subId,
+            subscriptionName: subNameForActivity,
+            serviceId: serviceIdForActivity,
+            amount: collectedCents,
+            metadata: {
+              cycleMonth: cycleMonthLabel,
+              memberCount: totalCount,
+            },
+          });
+        } else {
+          const totalCentsGuess =
+            typeof sub.totalCents === 'number' && Number.isFinite(sub.totalCents)
+              ? sub.totalCents
+              : collectedCents + outstandingCents;
+          await appendActivityEvent(db, ownerUidForActivity, {
+            type: 'billing_cycle_partial',
+            subscriptionId: subId,
+            subscriptionName: subNameForActivity,
+            serviceId: serviceIdForActivity,
+            amount: totalCentsGuess,
+            metadata: {
+              cycleMonth: cycleMonthLabel,
+              paidCount,
+              totalCount,
+              outstanding: outstandingCents,
+            },
+          });
+        }
+      } catch (e) {
+        console.warn('advanceOneCycle: billing cycle activity failed', e?.message || e);
+      }
+    }
 
     // Create payment_intents docs for non-owner members
     const nonOwners = shares.filter(
