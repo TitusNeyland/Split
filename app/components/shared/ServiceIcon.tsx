@@ -114,13 +114,18 @@ export type ServiceIconProps = {
   /** Outer box is `size` × `size`; default 40. */
   size?: number;
   style?: StyleProp<ViewStyle>;
+  /** Subscription detail “ended” hero: neutral tile + muted glyph. */
+  endedDimmed?: boolean;
 };
 
 const BASE_SIZE = 40;
 const BASE_FONT = 18;
 const GLYPH_RATIO = 0.58;
 
-export function ServiceIcon({ serviceName, size = BASE_SIZE, style }: ServiceIconProps) {
+const ENDED_BG = 'rgba(255,255,255,0.08)';
+const ENDED_GLYPH = 'rgba(255,255,255,0.3)';
+
+export function ServiceIcon({ serviceName, size = BASE_SIZE, style, endedDimmed }: ServiceIconProps) {
   const { glyph, fallbackLetter, backgroundColor, iconColor } = useMemo(
     () => resolveServiceIcon(serviceName),
     [serviceName],
@@ -128,6 +133,8 @@ export function ServiceIcon({ serviceName, size = BASE_SIZE, style }: ServiceIco
   const fontSize = (BASE_FONT * size) / BASE_SIZE * (fallbackLetter.length >= 2 ? 0.82 : 1);
   const borderRadius = size * 0.28;
   const glyphSize = Math.round(size * GLYPH_RATIO);
+  const tileBg = endedDimmed ? ENDED_BG : backgroundColor;
+  const glyphColor = endedDimmed ? ENDED_GLYPH : iconColor;
 
   return (
     <View
@@ -137,7 +144,7 @@ export function ServiceIcon({ serviceName, size = BASE_SIZE, style }: ServiceIco
           width: size,
           height: size,
           borderRadius,
-          backgroundColor,
+          backgroundColor: tileBg,
         },
         style,
       ]}
@@ -145,10 +152,10 @@ export function ServiceIcon({ serviceName, size = BASE_SIZE, style }: ServiceIco
       accessibilityLabel={`${serviceName.trim() || 'Subscription'} icon`}
     >
       {glyph ? (
-        <ServiceBrandGlyph kind={glyph} color={iconColor} size={glyphSize} />
+        <ServiceBrandGlyph kind={glyph} color={glyphColor} size={glyphSize} />
       ) : (
         <Text
-          style={[styles.glyph, { fontSize, color: iconColor }]}
+          style={[styles.glyph, { fontSize, color: glyphColor }]}
           numberOfLines={1}
           adjustsFontSizeToFit
           minimumFontScale={0.65}

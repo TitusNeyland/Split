@@ -352,8 +352,8 @@ export default function SubscriptionDetailScreen() {
             <View style={styles.heroTopSpacer} />
           </View>
 
-          <View style={[styles.heroIconWrap, ended && styles.heroIconDimmed]}>
-            <ServiceIcon serviceName={detail.serviceName} size={52} />
+          <View style={styles.heroIconWrap}>
+            <ServiceIcon serviceName={detail.serviceName} size={52} endedDimmed={ended} />
           </View>
           <Text style={[styles.heroTotal, ended && styles.heroTotalEnded]}>{fmtCents(detail.totalCents)}</Text>
           {ended ? (
@@ -368,7 +368,7 @@ export default function SubscriptionDetailScreen() {
           <View style={styles.heroBadges}>
             {ended ? (
               <View style={styles.readOnlyBadge}>
-                <Ionicons name="close-circle-outline" size={12} color="rgba(255,255,255,0.35)" />
+                <Ionicons name="close" size={11} color="rgba(255,255,255,0.22)" />
                 <Text style={styles.readOnlyBadgeTxt}>Split ended · read only</Text>
               </View>
             ) : (
@@ -408,11 +408,13 @@ export default function SubscriptionDetailScreen() {
               accessibilityLabel="Restart this split"
             >
               <View style={styles.restartCardIconWrap}>
-                <Ionicons name="refresh" size={18} color={C.purple} />
+                <Ionicons name="refresh" size={17} color={C.purple} />
               </View>
               <View style={styles.restartCardTextCol}>
                 <Text style={styles.restartCardTitle}>Restart this split</Text>
-                <Text style={styles.restartCardSub}>Billing resumes next cycle · settings unchanged</Text>
+                <Text style={styles.restartCardSub}>
+                  Billing resumes next cycle · unchanged settings
+                </Text>
               </View>
               <Ionicons name="chevron-forward" size={18} color={C.purple} />
             </Pressable>
@@ -422,6 +424,27 @@ export default function SubscriptionDetailScreen() {
             <Text style={styles.sectionHeader}>{ended ? 'Final breakdown' : 'Split breakdown'}</Text>
             {detail.members.map((m) => {
               if (m.invitePending) {
+                if (ended) {
+                  return (
+                    <View key={m.memberId} style={styles.splitRow}>
+                      <View style={[styles.splitPip, styles.splitPipPending, styles.splitPipEndedMuted]}>
+                        <Ionicons name="mail-outline" size={18} color={C.muted} />
+                      </View>
+                      <View style={styles.splitRowMid}>
+                        <Text style={[styles.splitName, styles.splitTextEnded]} numberOfLines={1}>
+                          {m.displayName.trim() ? m.displayName : 'Pending invite'}
+                        </Text>
+                        <Text style={[styles.splitPct, styles.splitTextEnded]}>Invite not accepted</Text>
+                      </View>
+                      <View style={styles.splitRowRight}>
+                        <Text style={[styles.splitAmt, styles.splitTextEnded]}>{fmtCents(m.amountCents)}</Text>
+                        <View style={[styles.statusBadge, { backgroundColor: '#F0EEE9' }]}>
+                          <Text style={[styles.statusBadgeTxt, { color: C.muted }]}>Ended</Text>
+                        </View>
+                      </View>
+                    </View>
+                  );
+                }
                 const days = daysLeftFromMs(m.inviteExpiresAtMs);
                 const lineName = m.displayName.trim() ? m.displayName : 'Pending invite';
                 const sub =
@@ -498,7 +521,7 @@ export default function SubscriptionDetailScreen() {
                 </View>
               );
             })}
-            {detail.isOwner
+            {!ended && detail.isOwner
               ? detail.members
                   .filter((m) => m.invitePending)
                   .map((m) => {
@@ -592,17 +615,6 @@ export default function SubscriptionDetailScreen() {
                   <Text style={[styles.actionBtnTxt, styles.actionBtnDangerTxt]}>Leave split</Text>
                 </Pressable>
               )}
-            </View>
-          ) : !detail.isOwner ? (
-            <View style={styles.actionsBlock}>
-              <Text style={styles.manageSectionLbl}>Manage</Text>
-              <Pressable
-                style={[styles.actionBtn, styles.actionBtnDanger]}
-                onPress={() => onDemoAction('Leave split')}
-                accessibilityRole="button"
-              >
-                <Text style={[styles.actionBtnTxt, styles.actionBtnDangerTxt]}>Leave split</Text>
-              </Pressable>
             </View>
           ) : null}
         </View>
@@ -740,23 +752,21 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 6,
   },
-  heroIconDimmed: {
-    opacity: 0.45,
-  },
   readOnlyBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 5,
     marginTop: 10,
-    paddingVertical: 5,
+    paddingVertical: 6,
     paddingHorizontal: 14,
     borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.07)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
     alignSelf: 'center',
+    opacity: 0.85,
   },
   readOnlyBadgeTxt: {
     fontSize: 11,
-    color: 'rgba(255,255,255,0.3)',
+    color: 'rgba(255,255,255,0.22)',
     fontWeight: '500',
   },
   restartCard: {
@@ -767,14 +777,14 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 0.5,
     borderColor: C.border,
-    paddingVertical: 13,
+    paddingVertical: 14,
     paddingHorizontal: 14,
-    marginBottom: 10,
+    marginBottom: 12,
   },
   restartCardIconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     backgroundColor: C.purpleTint,
     alignItems: 'center',
     justifyContent: 'center',
@@ -784,14 +794,18 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   restartCardTitle: {
-    fontSize: 13,
-    fontWeight: '600',
+    fontSize: 12,
+    fontWeight: '700',
     color: C.purple,
   },
   restartCardSub: {
     fontSize: 10,
     color: C.muted,
-    marginTop: 2,
+    marginTop: 3,
+    lineHeight: 14,
+  },
+  splitPipEndedMuted: {
+    opacity: 0.7,
   },
   cardEnded: {
     opacity: 0.45,
