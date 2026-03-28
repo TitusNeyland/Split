@@ -31,7 +31,7 @@ import { SubscriptionCardSkeletonList } from '../components/subscriptions/Subscr
 import { useProfileAvatarUrl } from '../hooks/useProfileAvatarUrl';
 import { useSubscriptions } from '../contexts/SubscriptionsContext';
 import { spacing } from '../../constants/theme';
-import { consumePendingEndSplitToast } from '../../lib/subscription/endSplitNavigationToast';
+import { consumePendingSubscriptionsTabToast } from '../../lib/subscription/endSplitNavigationToast';
 
 const C = {
   bg: '#F2F0EB',
@@ -75,7 +75,7 @@ export default function SubscriptionsScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      const pending = consumePendingEndSplitToast();
+      const pending = consumePendingSubscriptionsTabToast();
       if (!pending) return undefined;
       setFilter(pending.filter);
       setSplitEndedToast(pending.message);

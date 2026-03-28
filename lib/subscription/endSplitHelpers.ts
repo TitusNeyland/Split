@@ -18,3 +18,9 @@ export function formatSettingsPercentsLine(members: SubscriptionDetailMember[]):
   if (members.length === 0) return '— · members ✓';
   return `${members.map((m) => `${m.percent}%`).join(' / ')} · members ✓`;
 }
+
+/** Restart confirmation sheet: `50% / 50% · unchanged` */
+export function formatSplitPercentsUnchanged(members: SubscriptionDetailMember[]): string {
+  if (members.length === 0) return '— · unchanged';
+  return `${members.map((m) => `${m.percent}%`).join(' / ')} · unchanged`;
+}
