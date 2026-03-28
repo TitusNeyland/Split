@@ -802,3 +802,33 @@ exports.advanceBillingCycles = onSchedule('every day 02:00', async () => {
     startAfter = snap.docs[snap.docs.length - 1];
   }
 });
+
+/** Must match lib/activity/activityFeedSchema.ts ACTIVITY_FEED_MAX_EVENTS */
+const MAX_USER_ACTIVITY_EVENTS = 200;
+
+/**
+ * Keeps at most MAX_USER_ACTIVITY_EVENTS per user, deleting oldest by `createdAt` first.
+ * Runs when Cloud Functions (or admin) append to `users/{userId}/activity`.
+ */
+exports.pruneUserActivityFeed = onDocumentCreated('users/{userId}/activity/{activityId}', async (event) => {
+  const db = admin.firestore();
+  const userId = event.params.userId;
+  const colRef = db.collection('users').doc(userId).collection('activity');
+
+  while (true) {
+    const countSnap = await colRef.count().get();
+    const total = countSnap.data().count;
+    if (total <= MAX_USER_ACTIVITY_EVENTS) return;
+
+    const excess = Math.min(total - MAX_USER_ACTIVITY_EVENTS, 500);
+    const oldSnap = await colRef.orderBy('createdAt', 'asc').limit(excess).get();
+    if (oldSnap.empty) {
+      console.warn(`pruneUserActivityFeed: count=${total} but no docs to delete for user ${userId}`);
+      return;
+    }
+
+    const batch = db.batch();
+    oldSnap.docs.forEach((d) => batch.delete(d.ref));
+    await batch.commit();
+  }
+});

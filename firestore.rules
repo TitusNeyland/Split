@@ -146,6 +146,17 @@ service cloud.firestore {
         allow update: if request.auth != null && request.auth.uid == userId
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read', 'actioned']);
       }
+
+      /**
+       * Activity tab feed (server writes only). Clients read and may set `read`.
+       * Path: users/{uid}/activity/{activityId}
+       */
+      match /activity/{activityId} {
+        allow read: if request.auth != null && request.auth.uid == userId;
+        allow create, delete: if false;
+        allow update: if request.auth != null && request.auth.uid == userId
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+      }
     }
 
     // --- Rest of app (align with client modules under lib/) ---
