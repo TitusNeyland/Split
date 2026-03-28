@@ -196,7 +196,7 @@ exports.onFriendshipCreatedNotify = onDocumentCreated('friendships/{friendshipId
   if (!snap) return;
   const data = snap.data();
   const via = data.connectedVia;
-  if (via !== 'search' && via !== 'user_search') return;
+  if (via !== 'search' && via !== 'user_search' && via !== 'contacts') return;
 
   const users = data.users;
   const initiatedBy = data.initiatedBy;
@@ -269,6 +269,8 @@ exports.syncPhoneHashOnUserCreate = functions.auth.user().onCreate(async (user) 
   if (!user.phoneNumber) return;
   const phone_hash = sha256Hex(user.phoneNumber);
   await admin.auth().setCustomUserClaims(user.uid, { phone_hash });
+  const db = admin.firestore();
+  await db.collection('users').doc(user.uid).set({ phoneHash: phone_hash }, { merge: true });
 });
 
 /**
@@ -284,7 +286,71 @@ exports.refreshPhoneHashClaim = onCall(async (request) => {
   }
   const phone_hash = sha256Hex(user.phoneNumber);
   await admin.auth().setCustomUserClaims(request.auth.uid, { phone_hash });
+  const db = admin.firestore();
+  await db.collection('users').doc(request.auth.uid).set({ phoneHash: phone_hash }, { merge: true });
   return { ok: true };
+});
+
+function usernameFromEmailNormalized(emailNorm) {
+  if (!emailNorm || typeof emailNorm !== 'string') return '@user';
+  const at = emailNorm.indexOf('@');
+  if (at <= 0) return '@user';
+  const local = emailNorm.slice(0, at).replace(/\./g, '_');
+  return local ? `@${local}` : '@user';
+}
+
+/**
+ * Callable: input `{ hashes: string[] }` (SHA-256 hex of E.164). Returns mySplit users whose
+ * `users.phoneHash` matches. Never exposes raw phone numbers.
+ */
+exports.findUsersByPhoneHash = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Sign in required.');
+  }
+  const raw = request.data?.hashes;
+  if (!Array.isArray(raw)) {
+    throw new HttpsError('invalid-argument', 'Expected { hashes: string[] }.');
+  }
+  const hashes = [...new Set(raw.map((h) => String(h).toLowerCase().trim()))].filter(Boolean);
+  if (hashes.length > 2000) {
+    throw new HttpsError('invalid-argument', 'Too many hashes.');
+  }
+  if (hashes.length === 0) {
+    return { matches: [] };
+  }
+
+  const db = admin.firestore();
+  const uid = request.auth.uid;
+  const matches = [];
+  const seenUids = new Set();
+
+  for (let i = 0; i < hashes.length; i += 30) {
+    const chunk = hashes.slice(i, i + 30);
+    const snap = await db.collection('users').where('phoneHash', 'in', chunk).get();
+    snap.docs.forEach((doc) => {
+      if (doc.id === uid) return;
+      if (seenUids.has(doc.id)) return;
+      const data = doc.data() || {};
+      const ph = typeof data.phoneHash === 'string' ? data.phoneHash.toLowerCase() : '';
+      if (!ph || !chunk.includes(ph)) return;
+      seenUids.add(doc.id);
+      const displayName =
+        typeof data.displayName === 'string' && data.displayName.trim()
+          ? data.displayName.trim()
+          : 'mySplit user';
+      const avatarUrl = typeof data.avatarUrl === 'string' ? data.avatarUrl : null;
+      const emailNorm = typeof data.emailNormalized === 'string' ? data.emailNormalized : '';
+      matches.push({
+        uid: doc.id,
+        displayName,
+        avatarUrl,
+        username: usernameFromEmailNormalized(emailNorm),
+        requestHash: ph,
+      });
+    });
+  }
+
+  return { matches };
 });
 
 // ---------------------------------------------------------------------------

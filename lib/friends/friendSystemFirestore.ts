@@ -235,10 +235,14 @@ export function friendsQueryForUid(uid: string) {
 export async function createDirectFriendshipFromSearch(input: {
   currentUid: string;
   otherUid: string;
+  /** Defaults to Find People (`search`). Use `contacts` for address-book discovery. */
+  connectedVia?: Extract<FriendshipConnectedVia, 'search' | 'contacts'>;
 }): Promise<'created' | 'already'> {
   const db = getFirebaseFirestore();
   if (!db) throw new Error('Firestore is not configured.');
   if (input.currentUid === input.otherUid) throw new Error('Invalid friend.');
+
+  const via: FriendshipConnectedVia = input.connectedVia ?? 'search';
 
   const id = friendshipDocId(input.currentUid, input.otherUid);
   const existing = await getDoc(doc(db, FRIENDSHIPS_COLLECTION, id));
@@ -248,7 +252,7 @@ export async function createDirectFriendshipFromSearch(input: {
   await setDoc(doc(db, FRIENDSHIPS_COLLECTION, id), {
     users: [a, b],
     connectedAt: serverTimestamp(),
-    connectedVia: 'search' satisfies FriendshipConnectedVia,
+    connectedVia: via,
     initiatedBy: input.currentUid,
   });
   return 'created';

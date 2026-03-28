@@ -5,6 +5,7 @@ import { getFirebaseAuth, isFirebaseConfigured } from '../../../lib/firebase';
 import { getOrCreateDeviceSessionId } from '../../../lib/auth/deviceSessionIdentity';
 import { getDeviceDisplayName, getDeviceTypeCategory } from '../../../lib/auth/deviceSessionMetadata';
 import { upsertCurrentAuthSession } from '../../../lib/auth/authSessionsFirestore';
+import { ensurePhoneHashOnUserDoc } from '../../../lib/friends/phoneHashUserDoc';
 
 /**
  * Writes `users/{uid}/sessions/{deviceSessionId}` on sign-in and when the app becomes active.
@@ -22,6 +23,7 @@ async function heartbeat(): Promise<void> {
       deviceType: getDeviceTypeCategory(),
       fcmToken: null,
     });
+    await ensurePhoneHashOnUserDoc();
   } catch {
     /* ignore heartbeat errors */
   }

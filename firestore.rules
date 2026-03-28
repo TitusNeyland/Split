@@ -18,7 +18,7 @@ service cloud.firestore {
         && request.resource.data.users[0] < request.resource.data.users[1]
         && request.auth.uid in request.resource.data.users
         && request.resource.data.initiatedBy == request.auth.uid
-        && request.resource.data.connectedVia == 'search'
+        && request.resource.data.connectedVia in ['search', 'contacts']
         && request.resource.data.connectedAt == request.time
         && friendshipId == request.resource.data.users[0] + '_' + request.resource.data.users[1];
 

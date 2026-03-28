@@ -34,6 +34,8 @@ export type UserProfileDoc = {
   email?: string | null;
   /** Lowercased normalized email for exact-match search. */
   emailNormalized?: string | null;
+  /** SHA-256 hex of E.164 phone; set for contact discovery (`findUsersByPhoneHash`). */
+  phoneHash?: string | null;
   /** Denormalized from `privacySettings.discoverableByName` for optional indexing. */
   discoverableByName?: boolean | null;
   avatarUrl?: string | null;
