@@ -164,5 +164,15 @@ service cloud.firestore {
       allow read: if request.auth != null;
       allow write: if false;
     }
+
+    // Phone hash -> uid for contact discovery (owner may claim their hash).
+    match /contact_phone_index/{hash} {
+      allow read: if request.auth != null;
+      allow create, update: if request.auth != null
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.uid is string;
+      allow delete: if request.auth != null
+        && resource.data.uid == request.auth.uid;
+    }
   }
 }

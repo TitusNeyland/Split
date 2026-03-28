@@ -388,3 +388,44 @@ export function computeFriendBalances(
   });
   return rows;
 }
+
+/** Count active-like subscriptions where both users appear as members. */
+export function countSharedSubscriptionsWithFriend(
+  subs: RawSub[],
+  viewerUid: string,
+  friendUid: string
+): number {
+  let n = 0;
+  for (const sub of subs) {
+    if (!isActiveLike(sub)) continue;
+    const members = memberUidSet(sub);
+    if (members.has(viewerUid) && members.has(friendUid)) n++;
+  }
+  return n;
+}
+
+function memberUidSet(sub: Record<string, unknown>): Set<string> {
+  const s = new Set<string>();
+  const mu = sub.memberUids;
+  if (Array.isArray(mu)) {
+    for (const x of mu) {
+      if (typeof x === 'string' && x) s.add(x);
+    }
+  }
+  const mem = sub.members;
+  if (Array.isArray(mem)) {
+    for (const x of mem) {
+      if (typeof x === 'string' && x) s.add(x);
+    }
+  }
+  const shares = sub.splitMemberShares;
+  if (Array.isArray(shares)) {
+    for (const row of shares) {
+      if (row && typeof row === 'object') {
+        const mid = String((row as { memberId?: string }).memberId ?? '');
+        if (mid) s.add(mid);
+      }
+    }
+  }
+  return s;
+}

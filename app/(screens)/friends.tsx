@@ -1,5 +1,4 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-;
 import {
   View,
   Text,
@@ -17,24 +16,24 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { Swipeable } from 'react-native-gesture-handler';
-import { Timestamp } from 'firebase/firestore';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { getFirebaseAuth, isFirebaseConfigured } from '../../lib/firebase';
 import {
+  countActiveSubscriptionsForUser,
+  countFriendshipsForUser,
   createDirectFriendshipFromSearch,
+  createPendingInvite,
   deleteFriendshipBetween,
   expirePendingInvite,
+  fetchInviteById,
   fetchOutgoingPendingInvites,
   fetchOutgoingPendingInviteEmails,
-  subscribeFriendships,
   type OutgoingPendingInviteSummary,
 } from '../../lib/friends/friendSystemFirestore';
 import { searchUsersForFriendConnect, type FriendSearchUserRow } from '../../lib/friends/userSearchFirestore';
-import {
-  initialsFromName,
-  getFriendsHubFriendRows,
-  type FriendsHubFriendRow,
-} from '../../lib/profile';
+import { initialsFromName, buildFriendsHubFriendRowsFromSubscriptions, type FriendsHubFriendRow } from '../../lib/profile';
+import { useHomeFriendDirectory } from '../../lib/home/useFriendUidsFromFirestore';
+import { useSubscriptions } from '../contexts/SubscriptionsContext';
 import { getFriendAvatarColors } from '../../lib/friends/friendAvatar';
 import { formatInviteExpiresIn, formatInviteSentAgo } from '../../lib/friends/friendsTimeFormat';
 import FriendsInviteModal from '../components/invite/FriendsInviteModal';
@@ -50,15 +49,6 @@ const C = {
   sheetBg: '#F2F0EB',
   divider: '#F5F3EE',
 };
-
-const DEMO_PENDING_INVITES: OutgoingPendingInviteSummary[] = [
-  {
-    inviteId: '__demo_pending__',
-    recipientLabel: 'casey@email.com',
-    createdAt: Timestamp.fromMillis(Date.now() - 2 * 86400000),
-    expiresAt: Timestamp.fromMillis(Date.now() + 5 * 86400000),
-  },
-];
 
 function useDebouncedValue<T>(value: T, ms: number): T {
   const [debounced, setDebounced] = useState(value);
@@ -157,20 +147,28 @@ export default function FriendsScreen() {
 
   const [authReady, setAuthReady] = useState(false);
   const [user, setUser] = useState<User | null>(null);
-  const [hubFriends, setHubFriends] = useState<FriendsHubFriendRow[]>(() => getFriendsHubFriendRows());
   const [searchQuery, setSearchQuery] = useState('');
   const debouncedSearch = useDebouncedValue(searchQuery, 300);
   const [results, setResults] = useState<FriendSearchUserRow[]>([]);
   const [searching, setSearching] = useState(false);
-  const [friendUids, setFriendUids] = useState<Set<string>>(() => new Set());
   const [pendingInviteEmails, setPendingInviteEmails] = useState<Set<string>>(() => new Set());
   const [fetchedPending, setFetchedPending] = useState<OutgoingPendingInviteSummary[]>([]);
   const [pendingRefresh, setPendingRefresh] = useState(0);
-  const [dismissedDemoPending, setDismissedDemoPending] = useState(false);
   const [connectingUid, setConnectingUid] = useState<string | null>(null);
   const [inviteModalOpen, setInviteModalOpen] = useState(false);
+  const [prefilledInviteId, setPrefilledInviteId] = useState<string | null>(null);
 
   const searchReq = useRef(0);
+
+  const uid = user?.uid ?? null;
+  const { subscriptions } = useSubscriptions();
+  const { friendUids: friendUidList, displayNameByUid } = useHomeFriendDirectory(uid);
+  const friendUids = useMemo(() => new Set(friendUidList), [friendUidList]);
+
+  const hubFriends = useMemo((): FriendsHubFriendRow[] => {
+    if (!uid || !isFirebaseConfigured()) return [];
+    return buildFriendsHubFriendRowsFromSubscriptions(uid, subscriptions, friendUidList, displayNameByUid);
+  }, [uid, subscriptions, friendUidList, displayNameByUid]);
 
   useEffect(() => {
     if (!isFirebaseConfigured()) {
@@ -190,30 +188,6 @@ export default function FriendsScreen() {
     });
     return () => unsub();
   }, []);
-
-  const uid = user?.uid ?? null;
-
-  useEffect(() => {
-    if (!uid || !isFirebaseConfigured()) {
-      setFriendUids(new Set());
-      return;
-    }
-    const unsub = subscribeFriendships(
-      uid,
-      (docs) => {
-        const next = new Set<string>();
-        for (const d of docs) {
-          const { users } = d.data();
-          for (const x of users) {
-            if (x !== uid) next.add(x);
-          }
-        }
-        setFriendUids(next);
-      },
-      () => {}
-    );
-    return unsub;
-  }, [uid]);
 
   useEffect(() => {
     if (!uid || !isFirebaseConfigured()) {
@@ -269,11 +243,7 @@ export default function FriendsScreen() {
       });
   }, [debouncedSearch, uid]);
 
-  const pendingRows = useMemo(() => {
-    if (fetchedPending.length > 0) return fetchedPending;
-    if (!isFirebaseConfigured() && !dismissedDemoPending) return DEMO_PENDING_INVITES;
-    return [];
-  }, [fetchedPending, dismissedDemoPending]);
+  const pendingRows = useMemo(() => fetchedPending, [fetchedPending]);
 
   const qLower = searchQuery.trim().toLowerCase();
   const filteredFriends = useMemo(() => {
@@ -281,7 +251,10 @@ export default function FriendsScreen() {
     return hubFriends.filter((f) => f.displayName.toLowerCase().includes(qLower));
   }, [hubFriends, qLower]);
 
-  const openInvite = useCallback(() => setInviteModalOpen(true), []);
+  const openInvite = useCallback(() => {
+    setPrefilledInviteId(null);
+    setInviteModalOpen(true);
+  }, []);
   const focusSearch = useCallback(() => {
     searchInputRef.current?.focus();
   }, []);
@@ -317,7 +290,6 @@ export default function FriendsScreen() {
             text: 'Remove',
             style: 'destructive',
             onPress: () => {
-              setHubFriends((prev) => prev.filter((x) => x.id !== row.id));
               if (uid && row.remoteUid && isFirebaseConfigured()) {
                 void deleteFriendshipBetween(uid, row.remoteUid).catch(() => {
                   Alert.alert('Could not remove', 'Check your connection and try again.');
@@ -333,11 +305,7 @@ export default function FriendsScreen() {
 
   const onCancelPending = useCallback(
     async (row: OutgoingPendingInviteSummary) => {
-      if (row.inviteId === '__demo_pending__') {
-        setDismissedDemoPending(true);
-        return;
-      }
-      if (!isFirebaseConfigured()) return;
+      if (!isFirebaseConfigured() || !uid) return;
       try {
         await expirePendingInvite(row.inviteId);
         setPendingRefresh((n) => n + 1);
@@ -345,12 +313,42 @@ export default function FriendsScreen() {
         Alert.alert('Could not cancel', 'Check your connection and try again.');
       }
     },
-    []
+    [uid]
   );
 
-  const onResendPending = useCallback(() => {
-    setInviteModalOpen(true);
-  }, []);
+  const onResendPending = useCallback(
+    async (row: OutgoingPendingInviteSummary) => {
+      if (!uid || !isFirebaseConfigured()) return;
+      try {
+        const inv = await fetchInviteById(row.inviteId);
+        if (!inv) {
+          Alert.alert('Could not resend', 'Invite not found.');
+          return;
+        }
+        await expirePendingInvite(row.inviteId);
+        const [splits, friends] = await Promise.all([
+          countActiveSubscriptionsForUser(uid),
+          countFriendshipsForUser(uid),
+        ]);
+        const newId = await createPendingInvite({
+          creatorUid: uid,
+          connectedVia: inv.connectedVia ?? 'direct_invite',
+          recipientEmailRaw:
+            typeof inv.recipientEmail === 'string' && inv.recipientEmail.length > 0
+              ? inv.recipientEmail
+              : undefined,
+          senderActiveSplits: splits,
+          senderFriendCount: friends,
+        });
+        setPrefilledInviteId(newId);
+        setInviteModalOpen(true);
+        setPendingRefresh((n) => n + 1);
+      } catch (e) {
+        Alert.alert('Could not resend', e instanceof Error ? e.message : 'Try again.');
+      }
+    },
+    [uid]
+  );
 
   const showDiscoveryEmpty =
     authReady &&
@@ -633,7 +631,7 @@ export default function FriendsScreen() {
                         </View>
                         <View style={styles.pendingActions}>
                           <Pressable
-                            onPress={onResendPending}
+                            onPress={() => void onResendPending(p)}
                             style={({ pressed }) => [styles.resendBtn, pressed && styles.resendBtnPressed]}
           >
                             <Text style={styles.resendBtnTxt}>Resend</Text>
@@ -656,7 +654,14 @@ export default function FriendsScreen() {
       </ScrollView>
 
       {inviteModalOpen ? (
-        <FriendsInviteModal visible={inviteModalOpen} onClose={() => setInviteModalOpen(false)} />
+        <FriendsInviteModal
+          visible={inviteModalOpen}
+          prefilledInviteId={prefilledInviteId}
+          onClose={() => {
+            setInviteModalOpen(false);
+            setPrefilledInviteId(null);
+          }}
+        />
       ) : null}
     </View>
   );

@@ -1,3 +1,10 @@
+import {
+  computeFriendBalances,
+  countSharedSubscriptionsWithFriend,
+} from '../home/homeSubscriptionMath';
+import type { MemberSubscriptionDoc } from '../subscription/memberSubscriptionsFirestore';
+import { initialsFromName } from './profile';
+
 export type FriendBalanceKind = 'they_owe_overdue' | 'they_owe_pending' | 'settled' | 'you_owe';
 
 export type ProfileFriendBalanceRow =
@@ -119,7 +126,79 @@ function toSharedSubsLabel(subscriptionCountLabel: string): string {
   return subscriptionCountLabel.replace(/\bsubscription\b/i, 'shared subscription');
 }
 
-/** Maps demo / design-time balances into Friends hub rows. */
+/**
+ * Friends hub list rows from live subscriptions + friendships + display names.
+ * `displayNameByUid` should include an entry per friend (fallback 'Friend').
+ */
+export function buildFriendsHubFriendRowsFromSubscriptions(
+  viewerUid: string,
+  subscriptions: MemberSubscriptionDoc[],
+  friendUids: string[],
+  displayNameByUid: Record<string, string>
+): FriendsHubFriendRow[] {
+  if (!viewerUid || friendUids.length === 0) return [];
+
+  const balances = computeFriendBalances(subscriptions, viewerUid, friendUids);
+
+  return balances.map((b) => {
+    const name = displayNameByUid[b.friendUid]?.trim() || 'Friend';
+    const initials = initialsFromName(name);
+    const sharedN = countSharedSubscriptionsWithFriend(subscriptions, viewerUid, b.friendUid);
+    const sharedSubsLabel = `${sharedN} shared subscription${sharedN === 1 ? '' : 's'}`;
+
+    const they = b.theyOweMeCents / 100;
+    const owe = b.iOweThemCents / 100;
+
+    if (b.sortKey === 2) {
+      return {
+        id: b.friendUid,
+        remoteUid: b.friendUid,
+        displayName: name,
+        initials,
+        sharedSubsLabel,
+        balanceMain: `you owe $${owe.toFixed(2)}`,
+        balanceSub: 'Tap activity for details',
+        balanceTone: 'red',
+      };
+    }
+    if (b.sortKey === 0) {
+      return {
+        id: b.friendUid,
+        remoteUid: b.friendUid,
+        displayName: name,
+        initials,
+        sharedSubsLabel,
+        balanceMain: `owes $${they.toFixed(2)}`,
+        balanceSub: 'Payment overdue',
+        balanceTone: 'red',
+      };
+    }
+    if (b.sortKey === 1) {
+      return {
+        id: b.friendUid,
+        remoteUid: b.friendUid,
+        displayName: name,
+        initials,
+        sharedSubsLabel,
+        balanceMain: `owes $${they.toFixed(2)}`,
+        balanceSub: 'Payment pending',
+        balanceTone: 'green',
+      };
+    }
+    return {
+      id: b.friendUid,
+      remoteUid: b.friendUid,
+      displayName: name,
+      initials,
+      sharedSubsLabel,
+      balanceMain: 'settled',
+      balanceSub: 'all clear',
+      balanceTone: 'gray',
+    };
+  });
+}
+
+/** @deprecated Demo-only; use buildFriendsHubFriendRowsFromSubscriptions with Firestore data. */
 export function getFriendsHubFriendRows(): FriendsHubFriendRow[] {
   return PROFILE_FRIEND_BALANCES.map((row): FriendsHubFriendRow => {
     if (row.kind === 'you_owe') {
