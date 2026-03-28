@@ -28,6 +28,14 @@ function friendshipDocId(uidA, uidB) {
   return `${a}_${b}`;
 }
 
+async function incrementUnreadNotificationCount(db, uid) {
+  if (typeof uid !== 'string' || !uid) return;
+  await db.collection('users').doc(uid).set(
+    { unreadNotificationCount: admin.firestore.FieldValue.increment(1) },
+    { merge: true }
+  );
+}
+
 function inferConnectedVia(data) {
   if (data.splitId) return 'split_invite';
   const v = data.connectedVia;
@@ -233,7 +241,7 @@ exports.onInviteAccepted = onDocumentUpdated('invites/{inviteId}', async (event)
 });
 
 /**
- * Push to the non-initiator when a friendship is created from Find People (`connectedVia: search`).
+ * Push + in-app notification for the non-initiator when a friendship is created from Find People.
  */
 exports.onFriendshipCreatedNotify = onDocumentCreated('friendships/{friendshipId}', async (event) => {
   const snap = event.data;
@@ -251,13 +259,36 @@ exports.onFriendshipCreatedNotify = onDocumentCreated('friendships/{friendshipId
   if (!recipientUid || recipientUid === initiatedBy) return;
 
   const db = admin.firestore();
+  const senderDoc = await db.collection('users').doc(initiatedBy).get();
+  const sd = senderDoc.data() || {};
+  const senderName =
+    typeof sd.displayName === 'string' && sd.displayName.trim() ? sd.displayName.trim() : 'Someone';
+  const emailNorm = typeof sd.emailNormalized === 'string' ? sd.emailNormalized : '';
+  const friendUsername = usernameFromEmailNormalized(emailNorm).replace(/^@/, '');
+
+  try {
+    await db.collection('users').doc(recipientUid).collection('notifications').add({
+      type: 'friend_connected',
+      title: `${senderName} connected with you`,
+      body: 'You can now split subscriptions together',
+      read: false,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      deepLink: `/friends/${initiatedBy}`,
+      metadata: {
+        friendUid: initiatedBy,
+        friendName: senderName,
+        friendAvatarUrl: typeof sd.avatarUrl === 'string' ? sd.avatarUrl : null,
+        friendUsername,
+      },
+    });
+    await incrementUnreadNotificationCount(db, recipientUid);
+  } catch (e) {
+    console.warn('onFriendshipCreatedNotify: in-app notification failed', e?.message || e);
+  }
+
   const recipientDoc = await db.collection('users').doc(recipientUid).get();
   const prefs = recipientDoc.data()?.notificationPreferences;
   if (prefs && prefs.notificationsEnabled === false) return;
-
-  const senderDoc = await db.collection('users').doc(initiatedBy).get();
-  const dn = senderDoc.data()?.displayName;
-  const senderName = typeof dn === 'string' && dn.trim() ? dn.trim() : 'Someone';
 
   const body = `${senderName} connected with you on mySplit`;
 
@@ -282,6 +313,105 @@ exports.onFriendshipCreatedNotify = onDocumentCreated('friendships/{friendshipId
         })
     )
   );
+});
+
+/**
+ * Writes split_invite in-app notifications for the given uids (caller excludes owner).
+ * @param {FirebaseFirestore.Firestore} db
+ * @param {string} subId
+ * @param {Record<string, unknown>} after
+ * @param {string[]} newUids
+ */
+async function sendSplitInviteInAppNotifications(db, subId, after, newUids) {
+  const ownerUid = after.ownerUid;
+  if (typeof ownerUid !== 'string' || !ownerUid) return;
+  if (!newUids.length) return;
+
+  const ownerDoc = await db.collection('users').doc(ownerUid).get();
+  const od = ownerDoc.data() || {};
+  const inviterName =
+    typeof od.displayName === 'string' && od.displayName.trim() ? od.displayName.trim() : 'Someone';
+  const inviterAvatarUrl = typeof od.avatarUrl === 'string' ? od.avatarUrl : null;
+  const serviceName =
+    typeof after.serviceName === 'string' && after.serviceName.trim()
+      ? after.serviceName.trim()
+      : typeof after.planName === 'string' && after.planName.trim()
+        ? after.planName.trim()
+        : 'Subscription';
+  const serviceId =
+    typeof after.serviceId === 'string' && after.serviceId.trim()
+      ? after.serviceId.trim()
+      : serviceName;
+  const shares = Array.isArray(after.splitMemberShares) ? after.splitMemberShares : [];
+
+  for (const newUid of newUids) {
+    if (newUid === ownerUid) continue;
+    const row = shares.find((s) => s && s.memberId === newUid);
+    const userShare = row && typeof row.amountCents === 'number' ? row.amountCents : 0;
+    try {
+      await db.collection('users').doc(newUid).collection('notifications').add({
+        type: 'split_invite',
+        title: `${inviterName} invited you to ${serviceName}`,
+        body: `Your share is $${(userShare / 100).toFixed(2)}/month`,
+        read: false,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        deepLink: `/subscription/${subId}`,
+        metadata: {
+          inviterUid: ownerUid,
+          inviterName,
+          inviterAvatarUrl,
+          subscriptionId: subId,
+          subscriptionName: serviceName,
+          serviceId,
+          userShare,
+          billingCycle: typeof after.billingCycle === 'string' ? after.billingCycle : 'monthly',
+        },
+      });
+      await incrementUnreadNotificationCount(db, newUid);
+    } catch (e) {
+      console.warn('sendSplitInviteInAppNotifications: failed for', newUid, e?.message || e);
+    }
+  }
+}
+
+/**
+ * New subscription docs (wizard create) only fire `onDocumentCreated`, not `onDocumentUpdated`.
+ * Notify every non-owner member on create.
+ */
+exports.onSubscriptionCreatedSplitInviteInAppNotify = onDocumentCreated(
+  'subscriptions/{subscriptionId}',
+  async (event) => {
+    const snap = event.data;
+    if (!snap) return;
+    const after = snap.data();
+    const afterUids = Array.isArray(after.memberUids) ? after.memberUids : [];
+    const ownerUid = after.ownerUid;
+    if (typeof ownerUid !== 'string' || !ownerUid) return;
+    const subId = event.params.subscriptionId;
+    const newUids = afterUids.filter((uid) => typeof uid === 'string' && uid && uid !== ownerUid);
+    if (newUids.length === 0) return;
+    const db = admin.firestore();
+    await sendSplitInviteInAppNotifications(db, subId, after, newUids);
+  }
+);
+
+/**
+ * In-app notification when `memberUids` gains new uids after the doc already exists (later roster edits).
+ */
+exports.onSubscriptionMemberAddedInAppNotify = onDocumentUpdated('subscriptions/{subscriptionId}', async (event) => {
+  const before = event.data.before.exists ? event.data.before.data() : {};
+  const after = event.data.after.data();
+  if (!after) return;
+  const beforeUids = new Set(Array.isArray(before.memberUids) ? before.memberUids : []);
+  const afterUids = Array.isArray(after.memberUids) ? after.memberUids : [];
+  const ownerUid = after.ownerUid;
+  if (typeof ownerUid !== 'string' || !ownerUid) return;
+  const subId = event.params.subscriptionId;
+  const newUids = afterUids.filter((uid) => typeof uid === 'string' && uid && !beforeUids.has(uid));
+  if (newUids.length === 0) return;
+
+  const db = admin.firestore();
+  await sendSplitInviteInAppNotifications(db, subId, after, newUids);
 });
 
 /**
