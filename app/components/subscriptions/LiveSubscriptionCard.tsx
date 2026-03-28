@@ -7,6 +7,7 @@ import {
   buildSubscriptionCardBase,
   extractPriceBannerFields,
   lastSeenMsForSubscription,
+  normalizeSubscriptionStatus,
 } from '../../../lib/subscription/subscriptionToCardModel';
 import type { MemberSubscriptionDoc } from '../../../lib/subscription/memberSubscriptionsFirestore';
 
@@ -26,9 +27,14 @@ export function LiveSubscriptionCard({
   muted,
 }: Props) {
   const router = useRouter();
+  const splitEnded = normalizeSubscriptionStatus(doc.status) === 'ended';
   const base = useMemo(
-    () => buildSubscriptionCardBase(doc, viewerUid, viewerAvatarUrl, { muted }),
-    [doc, viewerUid, viewerAvatarUrl, muted]
+    () =>
+      buildSubscriptionCardBase(doc, viewerUid, viewerAvatarUrl, {
+        muted: muted || splitEnded,
+        splitEnded,
+      }),
+    [doc, viewerUid, viewerAvatarUrl, muted, splitEnded]
   );
 
   const priceFields = useMemo(() => extractPriceBannerFields(doc), [doc]);
@@ -51,11 +57,26 @@ export function LiveSubscriptionCard({
 
   const goDetail = () => router.push(`/subscription/${doc.id}`);
 
+  const onRestartSplit = () =>
+    Alert.alert('Restart split', 'This will be available when subscription management is connected.');
+  const onDeleteSplit = () =>
+    Alert.alert('Delete', 'This will be available when subscription management is connected.');
+
   return (
     <SubscriptionCard
       {...base}
+      faded={splitEnded}
+      hideEditSplit={splitEnded}
+      splitEndedActions={
+        splitEnded
+          ? {
+              onRestart: onRestartSplit,
+              onDelete: onDeleteSplit,
+            }
+          : undefined
+      }
       priceChange={
-        priceBannerVisible && priceBannerMessage
+        !splitEnded && priceBannerVisible && priceBannerMessage
           ? {
               message: priceBannerMessage,
               onDismiss: onDismissPriceBanner,

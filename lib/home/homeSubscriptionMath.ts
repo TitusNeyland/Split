@@ -52,8 +52,7 @@ function isPendingOrOverdue(st: string): boolean {
 }
 
 export function isActiveLike(sub: Record<string, unknown>): boolean {
-  const st = normalizeSubscriptionStatus(sub.status);
-  return st === 'active' || st === 'paused';
+  return normalizeSubscriptionStatus(sub.status) === 'active';
 }
 
 export function centsToDollars(cents: number): number {

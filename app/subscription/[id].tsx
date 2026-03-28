@@ -5,6 +5,7 @@ import {
   StyleSheet,
   ScrollView,
   Pressable,
+  TouchableOpacity,
   Modal,
   Image,
   Alert,
@@ -111,6 +112,14 @@ export default function SubscriptionDetailScreen() {
 
   const onDemoAction = (title: string) => {
     Alert.alert(title, 'This action will be available when subscription management is connected.');
+  };
+
+  const handleEndSplit = () => {
+    Alert.alert('End split', 'This action will be available when subscription management is connected.');
+  };
+
+  const handleRestartSplit = () => {
+    Alert.alert('Restart split', 'This action will be available when subscription management is connected.');
   };
 
   const onResendSplitInvite = useCallback(
@@ -250,6 +259,8 @@ export default function SubscriptionDetailScreen() {
   const pctCollected =
     detail.totalCents > 0 ? Math.min(100, Math.round((100 * detail.collectedCents) / detail.totalCents)) : 0;
 
+  const ended = (detail.lifecycleStatus ?? 'active') === 'ended';
+
   return (
     <View style={styles.root}>
       <StatusBar style="light" />
@@ -258,7 +269,9 @@ export default function SubscriptionDetailScreen() {
         showsVerticalScrollIndicator={false}
       >
         <LinearGradient
-          colors={['#6B3FA0', '#4A1570', '#2D0D45']}
+          colors={
+            ended ? (['#2C2C2A', '#1A1A18', '#111110'] as const) : (['#6B3FA0', '#4A1570', '#2D0D45'] as const)
+          }
           locations={[0, 0.55, 1]}
           start={{ x: 0, y: 0 }}
           end={{ x: 0.5, y: 1 }}
@@ -271,49 +284,82 @@ export default function SubscriptionDetailScreen() {
               accessibilityRole="button"
               accessibilityLabel="Back to subscriptions"
             >
-              <Ionicons name="chevron-back" size={26} color="#fff" />
+              <Ionicons name="chevron-back" size={26} color={ended ? 'rgba(255,255,255,0.4)' : '#fff'} />
             </Pressable>
-            <Text style={styles.heroTitle} numberOfLines={2}>
+            <Text style={[styles.heroTitle, ended && styles.heroTitleEnded]} numberOfLines={2}>
               {detail.displayName}
             </Text>
             <View style={styles.heroTopSpacer} />
           </View>
 
-          <View style={styles.heroIconWrap}>
+          <View style={[styles.heroIconWrap, ended && styles.heroIconDimmed]}>
             <ServiceIcon serviceName={detail.serviceName} size={52} />
           </View>
-          <Text style={styles.heroTotal}>{fmtCents(detail.totalCents)}</Text>
-          <Text style={styles.heroCycle}>{detail.billingCycleLabel} billing</Text>
-          <Text style={styles.heroNext}>Next billing · {detail.nextBillingLabel}</Text>
+          <Text style={[styles.heroTotal, ended && styles.heroTotalEnded]}>{fmtCents(detail.totalCents)}</Text>
+          {ended ? (
+            <Text style={styles.heroEndedLine}>Ended · billing stopped</Text>
+          ) : (
+            <>
+              <Text style={styles.heroCycle}>{detail.billingCycleLabel} billing</Text>
+              <Text style={styles.heroNext}>Next billing · {detail.nextBillingLabel}</Text>
+            </>
+          )}
 
           <View style={styles.heroBadges}>
-            {detail.isOwner ? (
-              <View style={styles.ownerBadge}>
-                <Ionicons name="person-outline" size={12} color="#C4B5FD" />
-                <Text style={styles.ownerBadgeTxt}>You pay</Text>
+            {ended ? (
+              <View style={styles.readOnlyBadge}>
+                <Ionicons name="close-circle-outline" size={12} color="rgba(255,255,255,0.35)" />
+                <Text style={styles.readOnlyBadgeTxt}>Split ended · read only</Text>
               </View>
             ) : (
-              <View style={styles.ownerBadge}>
-                <Ionicons name="person-outline" size={12} color="#C4B5FD" />
-                <Text style={styles.ownerBadgeTxt}>{detail.payerName ?? 'Owner'} pays</Text>
-              </View>
-            )}
-            {detail.autoCharge === 'on' ? (
-              <View style={styles.autoOnBadge}>
-                <Ionicons name="checkmark" size={12} color={C.greenDark} />
-                <Text style={styles.autoOnBadgeTxt}>Auto-on</Text>
-              </View>
-            ) : (
-              <View style={styles.autoOffBadge}>
-                <Text style={styles.autoOffBadgeTxt}>Auto-off</Text>
-              </View>
+              <>
+                {detail.isOwner ? (
+                  <View style={styles.ownerBadge}>
+                    <Ionicons name="person-outline" size={12} color="#C4B5FD" />
+                    <Text style={styles.ownerBadgeTxt}>You pay</Text>
+                  </View>
+                ) : (
+                  <View style={styles.ownerBadge}>
+                    <Ionicons name="person-outline" size={12} color="#C4B5FD" />
+                    <Text style={styles.ownerBadgeTxt}>{detail.payerName ?? 'Owner'} pays</Text>
+                  </View>
+                )}
+                {detail.autoCharge === 'on' ? (
+                  <View style={styles.autoOnBadge}>
+                    <Ionicons name="checkmark" size={12} color={C.greenDark} />
+                    <Text style={styles.autoOnBadgeTxt}>Auto-on</Text>
+                  </View>
+                ) : (
+                  <View style={styles.autoOffBadge}>
+                    <Text style={styles.autoOffBadgeTxt}>Auto-off</Text>
+                  </View>
+                )}
+              </>
             )}
           </View>
         </LinearGradient>
 
         <View style={styles.body}>
-          <View style={styles.card}>
-            <Text style={styles.sectionHeader}>Split breakdown</Text>
+          {ended && detail.isOwner ? (
+            <Pressable
+              style={styles.restartCard}
+              onPress={handleRestartSplit}
+              accessibilityRole="button"
+              accessibilityLabel="Restart this split"
+            >
+              <View style={styles.restartCardIconWrap}>
+                <Ionicons name="refresh" size={18} color={C.purple} />
+              </View>
+              <View style={styles.restartCardTextCol}>
+                <Text style={styles.restartCardTitle}>Restart this split</Text>
+                <Text style={styles.restartCardSub}>Billing resumes next cycle · settings unchanged</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={C.purple} />
+            </Pressable>
+          ) : null}
+
+          <View style={[styles.card, ended && styles.cardEnded]}>
+            <Text style={styles.sectionHeader}>{ended ? 'Final breakdown' : 'Split breakdown'}</Text>
             {detail.members.map((m) => {
               if (m.invitePending) {
                 const days = daysLeftFromMs(m.inviteExpiresAtMs);
@@ -352,11 +398,13 @@ export default function SubscriptionDetailScreen() {
                   </View>
                 );
               }
-              const st = statusMeta(m.cycleStatus);
+              const st = ended
+                ? { label: 'Ended', bg: '#F0EEE9', fg: C.muted }
+                : statusMeta(m.cycleStatus);
               return (
                 <View key={m.memberId} style={styles.splitRow}>
                   {m.avatarUrl ? (
-                    <View style={[styles.splitPip, styles.splitPipPhoto]}>
+                    <View style={[styles.splitPip, styles.splitPipPhoto, ended && styles.splitPipEnded]}>
                       <Image
                         source={{ uri: m.avatarUrl }}
                         style={styles.splitPipImg}
@@ -364,18 +412,25 @@ export default function SubscriptionDetailScreen() {
                       />
                     </View>
                   ) : (
-                    <View style={[styles.splitPip, { backgroundColor: m.avatarBg }]}>
-                      <Text style={[styles.splitPipTxt, { color: m.avatarColor }]}>{m.initials}</Text>
+                    <View
+                      style={[
+                        styles.splitPip,
+                        { backgroundColor: ended ? '#F0EEE9' : m.avatarBg },
+                      ]}
+                    >
+                      <Text style={[styles.splitPipTxt, { color: ended ? C.muted : m.avatarColor }]}>
+                        {m.initials}
+                      </Text>
                     </View>
                   )}
                   <View style={styles.splitRowMid}>
-                    <Text style={styles.splitName} numberOfLines={1}>
+                    <Text style={[styles.splitName, ended && styles.splitTextEnded]} numberOfLines={1}>
                       {m.displayName}
                     </Text>
-                    <Text style={styles.splitPct}>{m.percent}%</Text>
+                    <Text style={[styles.splitPct, ended && styles.splitTextEnded]}>{m.percent}%</Text>
                   </View>
                   <View style={styles.splitRowRight}>
-                    <Text style={styles.splitAmt}>{fmtCents(m.amountCents)}</Text>
+                    <Text style={[styles.splitAmt, ended && styles.splitTextEnded]}>{fmtCents(m.amountCents)}</Text>
                     <View style={[styles.statusBadge, { backgroundColor: st.bg }]}>
                       <Text style={[styles.statusBadgeTxt, { color: st.fg }]}>{st.label}</Text>
                     </View>
@@ -398,14 +453,18 @@ export default function SubscriptionDetailScreen() {
                     );
                   })
               : null}
-            <View style={styles.progTrack}>
-              <View style={[styles.progFill, { width: `${pctCollected}%` }]} />
-            </View>
-            <Text style={styles.progCaption}>
-              {detail.paidMemberCount} of {detail.members.length} members paid · {fmtCents(detail.collectedCents)}{' '}
-              collected of {fmtCents(detail.totalCents)} total
-            </Text>
-            {!editorOpen ? (
+            {!ended ? (
+              <>
+                <View style={styles.progTrack}>
+                  <View style={[styles.progFill, { width: `${pctCollected}%` }]} />
+                </View>
+                <Text style={styles.progCaption}>
+                  {detail.paidMemberCount} of {detail.members.length} members paid ·{' '}
+                  {fmtCents(detail.collectedCents)} collected of {fmtCents(detail.totalCents)} total
+                </Text>
+              </>
+            ) : null}
+            {!ended && !editorOpen ? (
               <Pressable
                 style={({ pressed }) => [styles.editLinkRow, pressed && styles.editLinkRowPressed]}
                 onPress={openEditor}
@@ -416,7 +475,8 @@ export default function SubscriptionDetailScreen() {
                 <Ionicons name="create-outline" size={14} color={C.editLink} />
                 <Text style={styles.editLinkTxt}>Edit split</Text>
               </Pressable>
-            ) : (
+            ) : null}
+            {!ended && editorOpen ? (
               <SubscriptionSplitEditor
                 subscriptionId={detail.id}
                 totalCents={detail.totalCents}
@@ -426,7 +486,7 @@ export default function SubscriptionDetailScreen() {
                 onCancel={closeEditor}
                 onSaved={closeEditor}
               />
-            )}
+            ) : null}
           </View>
 
           <View style={styles.card}>
@@ -456,22 +516,26 @@ export default function SubscriptionDetailScreen() {
             ))}
           </View>
 
-          <View style={styles.actionsBlock}>
-            <Pressable
-              style={styles.actionBtn}
-              onPress={() => onDemoAction('Pause subscription')}
-              accessibilityRole="button"
-            >
-              <Text style={styles.actionBtnTxt}>Pause subscription</Text>
-            </Pressable>
-            <Pressable
-              style={styles.actionBtn}
-              onPress={() => onDemoAction('Archive subscription')}
-              accessibilityRole="button"
-            >
-              <Text style={styles.actionBtnTxt}>Archive subscription</Text>
-            </Pressable>
-            {!detail.isOwner ? (
+          {!ended ? (
+            <View style={styles.actionsBlock}>
+              <Text style={styles.manageSectionLbl}>Manage</Text>
+              {detail.isOwner ? (
+                <TouchableOpacity onPress={handleEndSplit} style={styles.actionCard} activeOpacity={0.75}>
+                  <Text style={styles.actionTextDanger}>End split</Text>
+                </TouchableOpacity>
+              ) : (
+                <Pressable
+                  style={[styles.actionBtn, styles.actionBtnDanger]}
+                  onPress={() => onDemoAction('Leave split')}
+                  accessibilityRole="button"
+                >
+                  <Text style={[styles.actionBtnTxt, styles.actionBtnDangerTxt]}>Leave split</Text>
+                </Pressable>
+              )}
+            </View>
+          ) : !detail.isOwner ? (
+            <View style={styles.actionsBlock}>
+              <Text style={styles.manageSectionLbl}>Manage</Text>
               <Pressable
                 style={[styles.actionBtn, styles.actionBtnDanger]}
                 onPress={() => onDemoAction('Leave split')}
@@ -479,8 +543,8 @@ export default function SubscriptionDetailScreen() {
               >
                 <Text style={[styles.actionBtnTxt, styles.actionBtnDangerTxt]}>Leave split</Text>
               </Pressable>
-            ) : null}
-          </View>
+            </View>
+          ) : null}
         </View>
       </ScrollView>
 
@@ -588,6 +652,80 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.55)',
     textAlign: 'center',
     marginTop: 8,
+  },
+  heroTitleEnded: {
+    color: 'rgba(255,255,255,0.4)',
+  },
+  heroTotalEnded: {
+    color: 'rgba(255,255,255,0.3)',
+  },
+  heroEndedLine: {
+    fontSize: 15,
+    color: 'rgba(255,255,255,0.25)',
+    textAlign: 'center',
+    marginTop: 6,
+  },
+  heroIconDimmed: {
+    opacity: 0.45,
+  },
+  readOnlyBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 10,
+    paddingVertical: 5,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    alignSelf: 'center',
+  },
+  readOnlyBadgeTxt: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.3)',
+    fontWeight: '500',
+  },
+  restartCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    borderWidth: 0.5,
+    borderColor: C.border,
+    paddingVertical: 13,
+    paddingHorizontal: 14,
+    marginBottom: 10,
+  },
+  restartCardIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: C.purpleTint,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  restartCardTextCol: {
+    flex: 1,
+    minWidth: 0,
+  },
+  restartCardTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: C.purple,
+  },
+  restartCardSub: {
+    fontSize: 10,
+    color: C.muted,
+    marginTop: 2,
+  },
+  cardEnded: {
+    opacity: 0.45,
+  },
+  splitTextEnded: {
+    color: C.muted,
+  },
+  splitPipEnded: {
+    opacity: 0.85,
   },
   heroBadges: {
     flexDirection: 'row',
@@ -834,6 +972,27 @@ const styles = StyleSheet.create({
     gap: 10,
     marginTop: 4,
     marginBottom: 8,
+  },
+  manageSectionLbl: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: C.muted,
+    letterSpacing: 0.7,
+    textTransform: 'uppercase',
+    marginBottom: 2,
+  },
+  actionCard: {
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    borderWidth: 0.5,
+    borderColor: 'rgba(226,75,74,0.2)',
+    paddingVertical: 15,
+    alignItems: 'center',
+  },
+  actionTextDanger: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: C.red,
   },
   actionBtn: {
     backgroundColor: '#fff',

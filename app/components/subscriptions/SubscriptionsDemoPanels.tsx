@@ -1,5 +1,4 @@
 import React, { useMemo } from 'react';
-;
 import { View, Text, StyleSheet, Pressable, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -28,7 +27,7 @@ const C = {
   divider: '#F0EEE9',
 };
 
-type FilterId = 'active' | 'overdue' | 'paused' | 'archived';
+type FilterId = 'active' | 'overdue' | 'ended';
 
 function Pip({ initials, bg, color }: { initials: string; bg: string; color: string }) {
   return (
@@ -275,48 +274,46 @@ function HuluOverdueCard() {
   );
 }
 
-function XboxPausedCard() {
+function XboxEndedCard({ userAvatarUrl }: { userAvatarUrl: string | null }) {
   const router = useRouter();
+  const goDetail = () => router.push('/subscription/demo-xbox-ended');
   return (
-    <Pressable
-      style={[styles.subCard, styles.subCardPaused]}
-      onPress={() => router.push('/subscription/demo-xbox-paused')}
-      accessibilityRole="button"
-      accessibilityLabel="Open Xbox Game Pass subscription details"
-    >
-      <View style={styles.pausedBanner}>
-        <Ionicons name="pause" size={12} color="#5F5E5A" />
-        <Text style={styles.pausedBannerTxt}>Paused · skipping billing cycles</Text>
-        <Pressable hitSlop={6} accessibilityRole="button" accessibilityLabel="Resume subscription">
-          <Text style={styles.resumeTxt}>Resume</Text>
-        </Pressable>
-      </View>
-      <View style={styles.subMain}>
-        <View style={styles.subTop}>
-          <ServiceIcon serviceName="Xbox Game Pass" size={40} style={styles.serviceIconTile} />
-          <View style={styles.subInfo}>
-            <Text style={[styles.subName, { color: C.muted }]}>Xbox Game Pass</Text>
-            <View style={styles.subMetaRow}>
-              <Text style={styles.subCycle}>Monthly · was Apr 1</Text>
-            </View>
-          </View>
-          <View>
-            <Text style={[styles.subTotal, { color: C.muted }]}>$14.99</Text>
-            <Text style={styles.subPer}>$7.50/person</Text>
-          </View>
-        </View>
-        <View style={styles.memberRow}>
-          <View style={styles.pips}>
-            <Pip initials="JD" bg="#F0EEE9" color={C.muted} />
-            <Pip initials="TR" bg="#F0EEE9" color={C.muted} />
-          </View>
-          <View style={[styles.statusPill, { backgroundColor: '#F0EEE9' }]}>
-            <View style={[styles.statusDot, { backgroundColor: C.muted }]} />
-            <Text style={[styles.statusTxt, { color: '#5F5E5A' }]}>Paused</Text>
-          </View>
-        </View>
-      </View>
-    </Pressable>
+    <SubscriptionCard
+      serviceName="Xbox Game Pass"
+      name="Xbox Game Pass"
+      nameColor={C.muted}
+      cycleLine="Ended · 2 members"
+      totalAmount="$19.99"
+      totalAmountColor={C.muted}
+      perPersonAmount="$9.99/person"
+      members={[
+        { id: '1', initials: 'TN', backgroundColor: '#F0EEE9', color: C.muted, avatarUrl: userAvatarUrl },
+        { id: '2', initials: 'TN', backgroundColor: '#F0EEE9', color: C.muted },
+      ]}
+      statusPill={{
+        backgroundColor: '#F0EEE9',
+        dotColor: C.muted,
+        label: 'Ended',
+        textColor: C.muted,
+      }}
+      progress={{
+        percentCollected: 50,
+        collectedLabel: '$9.99 collected',
+        rightLabel: '$19.99',
+        rightLabelColor: C.muted,
+        barColor: C.muted,
+      }}
+      faded
+      hideEditSplit
+      splitEndedActions={{
+        onRestart: () =>
+          Alert.alert('Restart split', 'This will be available when subscription management is connected.'),
+        onDelete: () =>
+          Alert.alert('Delete', 'This will be available when subscription management is connected.'),
+      }}
+      onCardPress={goDetail}
+      onEditSplitPress={goDetail}
+    />
   );
 }
 
@@ -346,27 +343,17 @@ export function SubscriptionsDemoPanel({ filter }: { filter: FilterId }) {
       </View>
     );
   }
-  if (filter === 'paused') {
+  if (filter === 'ended') {
     return (
       <View style={styles.panel}>
         <View style={styles.sh}>
-          <Text style={styles.shTitle}>Paused</Text>
+          <Text style={styles.shTitle}>Ended splits</Text>
         </View>
-        <XboxPausedCard />
+        <XboxEndedCard userAvatarUrl={userAvatarUrl} />
       </View>
     );
   }
-  return (
-    <View style={styles.panel}>
-      <View style={styles.empty}>
-        <View style={styles.emptyIcon}>
-          <Ionicons name="file-tray-stacked-outline" size={28} color={C.muted} />
-        </View>
-        <Text style={styles.emptyTitle}>No archived subscriptions</Text>
-        <Text style={styles.emptySub}>Cancelled subscriptions{'\n'}will appear here</Text>
-      </View>
-    </View>
-  );
+  return null;
 }
 
 const styles = StyleSheet.create({
@@ -454,10 +441,6 @@ const styles = StyleSheet.create({
   subCardOverdue: {
     borderColor: '#F09595',
   },
-  subCardPaused: {
-    borderColor: '#D3D1C7',
-    opacity: 0.95,
-  },
   overdueBanner: {
     backgroundColor: '#FCEBEB',
     paddingVertical: 8,
@@ -482,25 +465,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '500',
     color: '#fff',
-  },
-  pausedBanner: {
-    backgroundColor: '#F5F3EE',
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 7,
-  },
-  pausedBannerTxt: {
-    flex: 1,
-    fontSize: 11,
-    fontWeight: '500',
-    color: '#5F5E5A',
-  },
-  resumeTxt: {
-    fontSize: 11,
-    fontWeight: '500',
-    color: C.purple,
   },
   subMain: {
     paddingVertical: 13,

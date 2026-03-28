@@ -39,13 +39,12 @@ const C = {
   muted: '#888780',
 };
 
-type FilterId = 'active' | 'overdue' | 'paused' | 'archived';
+type FilterId = 'active' | 'overdue' | 'ended';
 
-const FILTERS: { id: FilterId; label: string; badge?: 'overdue' | 'paused' }[] = [
+const FILTERS: { id: FilterId; label: string; badge?: 'overdue' }[] = [
   { id: 'active', label: 'Active' },
   { id: 'overdue', label: 'Overdue', badge: 'overdue' },
-  { id: 'paused', label: 'Paused', badge: 'paused' },
-  { id: 'archived', label: 'Archived' },
+  { id: 'ended', label: 'Ended' },
 ];
 
 function formatBadgeCount(n: number): string {
@@ -93,19 +92,15 @@ export default function SubscriptionsScreen() {
 
   const uid = user?.uid ?? '';
 
-  const { activeSubs, overdueSubs, pausedSubs, archivedSubs } = useMemo(() => {
+  const { activeSubs, overdueSubs, endedSubs } = useMemo(() => {
     const active: MemberSubscriptionDoc[] = [];
     const overdue: MemberSubscriptionDoc[] = [];
-    const paused: MemberSubscriptionDoc[] = [];
-    const archived: MemberSubscriptionDoc[] = [];
+    const ended: MemberSubscriptionDoc[] = [];
     for (const s of memberSubscriptions) {
       const st = normalizeSubscriptionStatus(s.status);
-      if (st === 'archived' || st === 'cancelled') {
-        archived.push(s);
+      if (st === 'ended') {
+        ended.push(s);
         continue;
-      }
-      if (st === 'paused') {
-        paused.push(s);
       }
       if (st === 'active') {
         active.push(s);
@@ -114,7 +109,7 @@ export default function SubscriptionsScreen() {
         }
       }
     }
-    return { activeSubs: active, overdueSubs: overdue, pausedSubs: paused, archivedSubs: archived };
+    return { activeSubs: active, overdueSubs: overdue, endedSubs: ended };
   }, [memberSubscriptions, uid]);
 
   const monthlyTotalCents = useMemo(
@@ -130,7 +125,6 @@ export default function SubscriptionsScreen() {
   const activeCount = activeSubs.length;
 
   const overdueBadge = SUBSCRIPTIONS_DEMO_MODE ? DEMO_TAB_BADGES.overdue : overdueSubs.length;
-  const pausedBadge = SUBSCRIPTIONS_DEMO_MODE ? DEMO_TAB_BADGES.paused : pausedSubs.length;
 
   return (
     <View style={styles.root}>
@@ -191,12 +185,7 @@ export default function SubscriptionsScreen() {
           <View style={styles.seg} accessibilityRole="tablist" accessibilityLabel="Subscription filters">
             {FILTERS.map((f) => {
               const selected = filter === f.id;
-              const badgeCount =
-                f.badge === 'overdue'
-                  ? overdueBadge
-                  : f.badge === 'paused'
-                    ? pausedBadge
-                    : 0;
+              const badgeCount = f.badge === 'overdue' ? overdueBadge : 0;
               return (
                 <Pressable
                   key={f.id}
@@ -216,7 +205,7 @@ export default function SubscriptionsScreen() {
                         style={[
                           styles.segBtnTxt,
                           selected && styles.segBtnTxtOn,
-                          f.id === 'archived' && styles.segBtnTxtArchived,
+                          f.id === 'ended' && styles.segBtnTxtEnded,
                         ]}
                         numberOfLines={1}
                       >
@@ -226,7 +215,7 @@ export default function SubscriptionsScreen() {
                         <View
                           style={[
                             styles.countPill,
-                            f.badge === 'overdue' ? styles.countPillOverdue : styles.countPillPaused,
+                            styles.countPillOverdue,
                           ]}
                         >
                           <Text style={styles.countPillTxt}>{formatBadgeCount(badgeCount)}</Text>
@@ -316,54 +305,35 @@ export default function SubscriptionsScreen() {
                 </View>
               ) : null}
 
-              {filter === 'paused' ? (
+              {filter === 'ended' ? (
                 <View style={styles.panel}>
                   <View style={styles.sh}>
-                    <Text style={styles.shTitle}>Paused</Text>
+                    <Text style={styles.shTitle}>Ended splits</Text>
                   </View>
                   {subscriptionsLoading && uid ? (
                     <SubscriptionCardSkeletonList count={2} />
                   ) : !uid ? (
-                    <Text style={styles.panelHint}>Sign in to see paused subscriptions.</Text>
-                  ) : pausedSubs.length === 0 ? (
-                    <Text style={styles.panelHint}>
-                      No paused subscriptions. Paused splits will appear here.
-                    </Text>
+                    <Text style={styles.panelHint}>Sign in to see ended subscription splits.</Text>
+                  ) : endedSubs.length === 0 ? (
+                    <View style={styles.empty}>
+                      <View style={styles.emptyIcon}>
+                        <Ionicons name="file-tray-stacked-outline" size={30} color={C.muted} />
+                      </View>
+                      <Text style={styles.emptyTitle}>No ended subscriptions</Text>
+                      <Text style={styles.emptySub}>
+                        When you end a split, it will appear here. You can restart or delete anytime.
+                      </Text>
+                    </View>
                   ) : (
-                    pausedSubs.map((doc) => (
+                    endedSubs.map((doc) => (
                       <LiveSubscriptionCard
                         key={doc.id}
                         doc={doc}
                         viewerUid={uid}
                         viewerAvatarUrl={userAvatarUrl}
                         lastSeenPriceMap={lastSeenPriceMap}
-                        muted
                       />
                     ))
-                  )}
-                </View>
-              ) : null}
-
-              {filter === 'archived' ? (
-                <View style={styles.panel}>
-                  {archivedSubs.length === 0 ? (
-                    <View style={styles.empty}>
-                      <View style={styles.emptyIcon}>
-                        <Ionicons name="archive-outline" size={30} color={C.muted} />
-                      </View>
-                      <Text style={styles.emptyTitle}>No archived subscriptions</Text>
-                      <Text style={styles.emptySub}>Cancelled subscriptions{'\n'}will appear here</Text>
-                    </View>
-                  ) : (
-                    <>
-                      <View style={styles.sh}>
-                        <Text style={styles.shTitle}>Archived</Text>
-                      </View>
-                      <Text style={styles.panelHint}>
-                        {archivedSubs.length} archived subscription{archivedSubs.length === 1 ? '' : 's'} — list
-                        coming soon.
-                      </Text>
-                    </>
                   )}
                 </View>
               ) : null}
@@ -490,7 +460,7 @@ const styles = StyleSheet.create({
   segBtnTxtOn: {
     color: C.purple,
   },
-  segBtnTxtArchived: {
+  segBtnTxtEnded: {
     fontSize: 11.5,
     letterSpacing: -0.15,
   },
@@ -504,9 +474,6 @@ const styles = StyleSheet.create({
   },
   countPillOverdue: {
     backgroundColor: C.red,
-  },
-  countPillPaused: {
-    backgroundColor: '#8A8984',
   },
   countPillTxt: {
     fontSize: 9,
