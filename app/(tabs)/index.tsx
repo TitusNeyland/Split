@@ -20,21 +20,25 @@ import { getFirebaseAuth, isFirebaseConfigured } from '../../lib/firebase';
 import { initialsFromName } from '../../lib/profile';
 import { useProfileAvatarUrl } from '../hooks/useProfileAvatarUrl';
 import { UserAvatarCircle } from '../components/shared/UserAvatarCircle';
-import {
-  subscribeHomeFinancialPosition,
-  type HomeFinancialPosition,
-} from '../../lib/home/homeFinancialPositionFirestore';
+import type { HomeFinancialPosition } from '../../lib/home/homeFinancialPositionFirestore';
 import {
   formatMemberTenureMonths,
   subscribeHomeSavings,
   type HomeSavingsSnapshot,
 } from '../../lib/home/homeSavingsFirestore';
+import { buildCalendarStripDays, pickNextBillPreview } from '../../lib/home/homeWeekCalendar';
 import {
-  buildCalendarStripDays,
-  getHomeDemoBills,
-  pickNextBillPreview,
-} from '../../lib/home/homeWeekCalendar';
+  computeFriendBalances,
+  computeHomeFinancialFromSubscriptions,
+  computeHomeFloatCard,
+  computeUpcomingSplits,
+  subscriptionsToHomeCalendarBills,
+} from '../../lib/home/homeSubscriptionMath';
+import { subscribeHomeRecentActivity, type HomeRecentActivityFirestoreItem } from '../../lib/home/homeRecentActivityFirestore';
+import { useHomeFriendDirectory } from '../../lib/home/useFriendUidsFromFirestore';
+import { useSubscriptions } from '../contexts/SubscriptionsContext';
 import { HomeDonutChart, HOME_DONUT_SIZE } from '../components/home/HomeDonutChart';
+import { HomeFloatCard } from '../components/home/HomeFloatCard';
 import { HomeHeroDonutLegend } from '../components/home/HomeHeroDonutLegend';
 import { HomeSavingsPill } from '../components/home/HomeSavingsPill';
 import { HomeQuickActionsRow } from '../components/home/HomeQuickActionsRow';
@@ -43,9 +47,6 @@ import {
   type ReminderPickCandidate,
 } from '../components/home/HomeReminderPickerModal';
 import { ServiceIcon } from '../components/shared/ServiceIcon';
-
-/** Toggle to `'empty'` to preview the new-user home (zeros + setup CTAs). */
-const HOME_PREVIEW: 'filled' | 'empty' = 'filled';
 
 const C = {
   bg: '#F2F0EB',
@@ -63,13 +64,6 @@ const C = {
 /** Rounded square corners for 38×38 tiles; matches `ServiceIcon` (`size * 0.28`). */
 const SERVICE_TILE_RADIUS = Math.round(38 * 0.28);
 
-function initialHomeFinancialPosition(): HomeFinancialPosition {
-  if (HOME_PREVIEW === 'empty') {
-    return { youOwe: 0, owedToYou: 0, overdue: 0, loading: false };
-  }
-  return { youOwe: 12, owedToYou: 47.5, overdue: 5.33, loading: false };
-}
-
 type FriendRow = {
   id: string;
   initials: string;
@@ -79,45 +73,6 @@ type FriendRow = {
   balanceColor: string;
   actionLabel: string;
 };
-
-const friendBalancesFilled: FriendRow[] = [
-  {
-    id: 'sam',
-    initials: 'SM',
-    name: 'Sam M.',
-    subLine: 'Netflix · 3 days overdue',
-    balanceLabel: 'owes $5.33',
-    balanceColor: C.red,
-    actionLabel: 'send reminder',
-  },
-  {
-    id: 'alex',
-    initials: 'AL',
-    name: 'Alex L.',
-    subLine: 'Spotify · pending',
-    balanceLabel: 'owes $3.40',
-    balanceColor: C.orange,
-    actionLabel: 'due in 7 days',
-  },
-  {
-    id: 'casey',
-    initials: 'CP',
-    name: 'Casey P.',
-    subLine: 'Dinner · split pending',
-    balanceLabel: 'you owe $7.00',
-    balanceColor: C.purple,
-    actionLabel: 'settle up',
-  },
-  {
-    id: 'taylor',
-    initials: 'TR',
-    name: 'Taylor R.',
-    subLine: 'Xbox · paid up',
-    balanceLabel: 'settled',
-    balanceColor: C.green,
-    actionLabel: 'all clear',
-  },
-];
 
 type SplitRow = {
   id: string;
@@ -129,85 +84,49 @@ type SplitRow = {
   serviceName: string;
 };
 
-const upcomingSplitsFilled: SplitRow[] = [
-  {
-    id: 'netflix',
-    name: 'Netflix Premium',
-    meta: '3 members · bills today',
-    total: 22.99,
-    status: 'you owe $12',
-    statusColor: C.red,
-    serviceName: 'Netflix Premium',
-  },
-  {
-    id: 'spotify',
-    name: 'Spotify Family',
-    meta: '5 members · in 7 days',
-    total: 16.99,
-    status: 'owed $13.60',
-    statusColor: C.green,
-    serviceName: 'Spotify Family',
-  },
-];
-
 type HomeRecentActivityItem = {
   id: string;
-  kind: 'payment' | 'reminder';
+  kind: 'payment' | 'reminder' | 'system';
   title: string;
   timestamp: string;
   amount: string;
-  /** Received / paid → green; reminder / pending tone → amber. */
   amountColor: string;
   serviceMark?: string;
-  /** Current user avatar for “You …” rows. */
   viewerAvatarUrl?: string | null;
 };
-
-/** `id` matches `ActivityFeedItem.id` on the Activity tab for deep links. */
-const recentActivityFilled: HomeRecentActivityItem[] = [
-  {
-    id: 't1',
-    kind: 'payment',
-    title: 'Alex paid Spotify',
-    timestamp: '2 min ago',
-    amount: '+$3.40',
-    amountColor: C.green,
-    serviceMark: 'Spotify',
-  },
-  {
-    id: 't-audit-remind',
-    kind: 'reminder',
-    title: 'Reminder sent to Sam',
-    timestamp: '1 hr ago',
-    amount: '$5.33',
-    amountColor: C.orange,
-  },
-  {
-    id: 'y1',
-    kind: 'payment',
-    title: 'Taylor paid Xbox',
-    timestamp: 'Yesterday',
-    amount: '+$7.50',
-    amountColor: C.green,
-    serviceMark: 'Xbox',
-  },
-];
 
 export default function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const [user, setUser] = useState<User | null>(null);
+  const { subscriptions, loading: subscriptionsLoading } = useSubscriptions();
+  const { friendUids, displayNameByUid } = useHomeFriendDirectory(user?.uid ?? null);
   const { avatarUrl: homeAvatarUrl, displayName: homeDisplayName, profileLoading: homeProfileLoading } =
     useProfileAvatarUrl();
-  const [user, setUser] = useState<User | null>(null);
   const [reminderPickerOpen, setReminderPickerOpen] = useState(false);
-  const [position, setPosition] = useState<HomeFinancialPosition>(initialHomeFinancialPosition);
-  const [savings, setSavings] = useState<HomeSavingsSnapshot>(() => ({
-    lifetimeSaved: HOME_PREVIEW === 'empty' ? 0 : 318.4,
-    joinedAt: null,
-  }));
-  const isEmpty = HOME_PREVIEW === 'empty';
+  const [savings, setSavings] = useState<HomeSavingsSnapshot>({ lifetimeSaved: 0, joinedAt: null });
+  const [recentActivityItems, setRecentActivityItems] = useState<HomeRecentActivityItem[]>([]);
 
-  const notifCount = isEmpty ? 0 : 3;
+  const uid = user?.uid ?? '';
+  const hasSubscriptions = subscriptions.length > 0;
+  const isEmpty = Boolean(uid) && !subscriptionsLoading && !hasSubscriptions;
+
+  const financial = useMemo(() => {
+    if (!uid) return { youOwe: 0, owedToYou: 0, overdue: 0 };
+    return computeHomeFinancialFromSubscriptions(subscriptions, uid);
+  }, [subscriptions, uid]);
+
+  const position: HomeFinancialPosition = useMemo(
+    () => ({
+      ...financial,
+      loading: Boolean(uid && subscriptionsLoading),
+    }),
+    [financial, uid, subscriptionsLoading]
+  );
+
+  const floatModel = useMemo(() => computeHomeFloatCard(subscriptions, uid), [subscriptions, uid]);
+
+  const notifCount = recentActivityItems.length > 0 ? Math.min(9, recentActivityItems.length) : 0;
   const setupStep = isEmpty ? 0 : 2;
   const setupTotal = 7;
   const setupPct = isEmpty ? 0 : (setupStep / setupTotal) * 100;
@@ -222,39 +141,40 @@ export default function HomeScreen() {
   }, []);
 
   useEffect(() => {
-    const uid = user?.uid;
-    if (!uid) {
-      if (HOME_PREVIEW === 'filled') {
-        setPosition({ youOwe: 12, owedToYou: 47.5, overdue: 5.33, loading: false });
-      } else {
-        setPosition({ youOwe: 0, owedToYou: 0, overdue: 0, loading: false });
-      }
+    const u = user?.uid;
+    if (!u) {
+      setSavings({ lifetimeSaved: 0, joinedAt: null });
       return;
     }
-    setPosition((prev) => ({ ...prev, loading: true }));
-    return subscribeHomeFinancialPosition(uid, setPosition);
-  }, [user?.uid]);
+    return subscribeHomeSavings(u, user, setSavings);
+  }, [user?.uid, user]);
 
   useEffect(() => {
-    const uid = user?.uid;
     if (!uid) {
-      if (isEmpty) {
-        setSavings({ lifetimeSaved: 0, joinedAt: null });
-      } else {
-        setSavings({ lifetimeSaved: 318.4, joinedAt: null });
-      }
+      setRecentActivityItems([]);
       return;
     }
-    return subscribeHomeSavings(uid, user, setSavings);
-  }, [user?.uid, user, isEmpty]);
+    return subscribeHomeRecentActivity(uid, (items: HomeRecentActivityFirestoreItem[]) => {
+      setRecentActivityItems(
+        items.map((x) => ({
+          id: x.id,
+          kind: x.kind,
+          title: x.title,
+          timestamp: x.timestamp,
+          amount: x.amount,
+          amountColor: x.amountColor,
+          serviceMark: x.serviceMark,
+        }))
+      );
+    });
+  }, [uid]);
 
-  const savingsMonthsLabel = useMemo(() => {
-    if (isEmpty) return '—';
-    if (!user?.uid && HOME_PREVIEW === 'filled') return '6 months';
-    return formatMemberTenureMonths(savings.joinedAt);
-  }, [isEmpty, user?.uid, savings.joinedAt]);
+  const savingsMonthsLabel = useMemo(() => formatMemberTenureMonths(savings.joinedAt), [savings.joinedAt]);
 
-  const homeCalendarBills = useMemo(() => getHomeDemoBills(isEmpty), [isEmpty]);
+  const homeCalendarBills = useMemo(
+    () => subscriptionsToHomeCalendarBills(subscriptions),
+    [subscriptions]
+  );
 
   const calendarDays = useMemo(
     () => buildCalendarStripDays(new Date(), homeCalendarBills, 21),
@@ -266,45 +186,67 @@ export default function HomeScreen() {
     [homeCalendarBills]
   );
 
-  const upcomingSplits = isEmpty ? [] : upcomingSplitsFilled;
-  const friendBalances = isEmpty ? [] : friendBalancesFilled;
-  const recentActivity = useMemo((): HomeRecentActivityItem[] => {
-    if (isEmpty) return [];
-    const base = recentActivityFilled.slice(0, 3);
-    if (!isFirebaseConfigured() || !homeAvatarUrl) return base;
-    const youRow: HomeRecentActivityItem = {
-      id: 't-you-netflix',
-      kind: 'payment',
-      title: 'You paid Netflix',
-      timestamp: 'Just now',
-      amount: '$12.00',
-      amountColor: C.red,
-      viewerAvatarUrl: homeAvatarUrl,
-    };
-    return [youRow, ...base.slice(0, 2)];
-  }, [isEmpty, homeAvatarUrl]);
+  const upcomingSplits = useMemo(() => (uid ? computeUpcomingSplits(subscriptions, uid, 3) : []), [
+    subscriptions,
+    uid,
+  ]);
+
+  const friendBalances = useMemo((): FriendRow[] => {
+    if (!uid) return [];
+    const rows = computeFriendBalances(subscriptions, uid, friendUids);
+    return rows.slice(0, 4).map((r) => {
+      const name = displayNameByUid[r.friendUid] ?? 'Friend';
+      const initials = initialsFromName(name);
+      const they = r.theyOweMeCents / 100;
+      const owe = r.iOweThemCents / 100;
+      let balanceLabel: string;
+      let balanceColor: string;
+      let actionLabel: string;
+      let subLine: string;
+      if (r.theyOweMeCents > 0) {
+        balanceLabel = `owes $${they.toFixed(2)}`;
+        balanceColor = C.red;
+        actionLabel = 'send reminder';
+        subLine = 'Subscription split';
+      } else if (r.iOweThemCents > 0) {
+        balanceLabel = `you owe $${owe.toFixed(2)}`;
+        balanceColor = C.purple;
+        actionLabel = 'settle up';
+        subLine = 'Subscription split';
+      } else {
+        balanceLabel = 'settled';
+        balanceColor = C.green;
+        actionLabel = 'all clear';
+        subLine = 'No pending splits';
+      }
+      return {
+        id: r.friendUid,
+        initials,
+        name,
+        subLine,
+        balanceLabel,
+        balanceColor,
+        actionLabel,
+      };
+    });
+  }, [subscriptions, uid, friendUids, displayNameByUid]);
+
+  const recentActivity = recentActivityItems;
 
   const greetingName = useMemo(() => {
-    if (isEmpty) return 'there';
     if (isFirebaseConfigured() && homeDisplayName) {
       const first = homeDisplayName.split(/\s+/)[0];
       return first && first.length > 0 ? first : 'there';
     }
-    return 'Titus';
-  }, [isEmpty, homeDisplayName]);
+    return 'there';
+  }, [homeDisplayName]);
 
   const homeHeaderInitials = useMemo(() => {
     const n = homeDisplayName ?? user?.displayName ?? 'Me';
     return initialsFromName(n);
   }, [homeDisplayName, user?.displayName]);
 
-  const reminderCandidates = useMemo((): ReminderPickCandidate[] => {
-    if (isEmpty) return [];
-    return [
-      { id: 'sam', name: 'Sam M.', detail: 'Netflix · 3 days overdue', overdue: true },
-      { id: 'alex', name: 'Alex L.', detail: 'Spotify · pending', overdue: false },
-    ];
-  }, [isEmpty]);
+  const reminderCandidates = useMemo((): ReminderPickCandidate[] => [], []);
 
   const onInviteFriend = useCallback(() => {
     router.push('/invite-share');
@@ -426,10 +368,9 @@ export default function HomeScreen() {
               overdue={isEmpty ? 0 : position.overdue}
             />
           </View>
-          <HomeSavingsPill
-            savedDollars={isEmpty ? 0 : savings.lifetimeSaved}
-            monthsLabel={savingsMonthsLabel}
-          />
+          {!isEmpty && savings.lifetimeSaved > 0.005 ? (
+            <HomeSavingsPill savedDollars={savings.lifetimeSaved} monthsLabel={savingsMonthsLabel} />
+          ) : null}
           {isEmpty ? (
             <View style={styles.heroBadgeRow}>
               <View style={styles.heroBadge}>
@@ -438,6 +379,12 @@ export default function HomeScreen() {
             </View>
           ) : null}
         </LinearGradient>
+
+        <HomeFloatCard
+          model={floatModel}
+          hasSubscriptions={hasSubscriptions}
+          loading={Boolean(uid && subscriptionsLoading)}
+        />
 
         <View style={styles.quickActionsBelowFloat}>
           <HomeQuickActionsRow actions={homeQuickActions} />
@@ -567,8 +514,8 @@ export default function HomeScreen() {
             <Pressable style={styles.emptyFriends}>
               <Ionicons name="people-outline" size={22} color={C.purple} />
               <View style={{ flex: 1, marginLeft: 10 }}>
-                <Text style={styles.emptyFriendsTitle}>No friend balances yet</Text>
-                <Text style={styles.emptyFriendsSub}>Invite someone to split a subscription</Text>
+                <Text style={styles.emptyFriendsTitle}>No balances yet</Text>
+                <Text style={styles.emptyFriendsSub}>Invite a friend to split with</Text>
               </View>
               <Ionicons name="chevron-forward" size={18} color={C.muted} />
             </Pressable>
@@ -601,13 +548,13 @@ export default function HomeScreen() {
               ))}
             </View>
           ) : (
-            <Pressable style={styles.emptySplitCard}>
+            <Pressable style={styles.emptySplitCard} onPress={() => router.push('/add-subscription')}>
               <View style={styles.emptySplitIcon}>
                 <Ionicons name="add-circle-outline" size={24} color={C.purple} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.emptySplitTitle}>Add your first subscription</Text>
-                <Text style={styles.emptySplitSub}>Track shared bills and who owes what</Text>
+                <Text style={styles.emptySplitTitle}>No upcoming splits</Text>
+                <Text style={styles.emptySplitSub}>Tap Add sub to get started</Text>
               </View>
               <Ionicons name="arrow-forward" size={20} color={C.purple} />
             </Pressable>
@@ -668,7 +615,7 @@ export default function HomeScreen() {
             </View>
           ) : (
             <View style={styles.emptyActivity}>
-              <Text style={styles.emptyActivityTxt}>No activity yet — payments and reminders show up here.</Text>
+              <Text style={styles.emptyActivityTxt}>No activity yet</Text>
             </View>
           )}
 

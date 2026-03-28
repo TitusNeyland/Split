@@ -91,6 +91,12 @@ service cloud.firestore {
         allow read, create, update, delete: if request.auth != null
           && request.auth.uid == userId;
       }
+
+      /** Feed items for home “Recent activity” (client read; server/CF writes). */
+      match /notifications/{notificationId} {
+        allow read: if request.auth != null && request.auth.uid == userId;
+        allow create, update, delete: if false;
+      }
     }
 
     // --- Rest of app (align with client modules under lib/) ---

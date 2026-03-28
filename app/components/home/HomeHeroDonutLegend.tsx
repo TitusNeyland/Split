@@ -1,5 +1,4 @@
 import React from 'react';
-;
 import { View, Text, StyleSheet } from 'react-native';
 
 /** Same hex as `HomeDonutChart` ring segments (dots + amounts). */
