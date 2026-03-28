@@ -11,14 +11,16 @@ import {
   Alert,
   KeyboardAvoidingView,
 } from 'react-native';
+import { FirebaseRecaptchaVerifierModal } from 'expo-firebase-recaptcha';
 import type { ApplicationVerifier, Auth, User } from 'firebase/auth';
 import { RecaptchaVerifier } from 'firebase/auth';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   completePhoneMfaEnrollment,
+  reauthenticateWithEmailPassword,
   startPhoneMfaEnrollment,
+  userHasPasswordProvider,
 } from '../../../lib/auth/phoneMfa';
-import { useFirebaseRecaptchaRef } from '../../contexts/FirebaseRecaptchaContext';
 import type { FirebaseOptions } from 'firebase/app';
 
 type Props = {
@@ -72,10 +74,11 @@ export default function MfaPhoneEnrollmentModal({
   onEnrolled,
 }: Props) {
   const insets = useSafeAreaInsets();
-  const recaptchaRef = useFirebaseRecaptchaRef();
+  const localRecaptchaRef = useRef<React.ElementRef<typeof FirebaseRecaptchaVerifierModal>>(null);
   const [step, setStep] = useState<'phone' | 'code'>('phone');
   const [phone, setPhone] = useState('+1 ');
   const [code, setCode] = useState('');
+  const [accountPassword, setAccountPassword] = useState('');
   const [verificationId, setVerificationId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [webHostReady, setWebHostReady] = useState(false);
@@ -86,6 +89,7 @@ export default function MfaPhoneEnrollmentModal({
       setStep('phone');
       setPhone('+1 ');
       setCode('');
+      setAccountPassword('');
       setVerificationId(null);
       setBusy(false);
       setWebHostReady(false);
@@ -141,7 +145,7 @@ export default function MfaPhoneEnrollmentModal({
         setVerificationId(vid);
         setStep('code');
       } else {
-        const modal = recaptchaRef?.current;
+        const modal = localRecaptchaRef.current;
         if (!modal) {
           throw new Error('reCAPTCHA is not ready. Restart the app and try again.');
         }
@@ -160,25 +164,46 @@ export default function MfaPhoneEnrollmentModal({
     } finally {
       setBusy(false);
     }
-  }, [auth, user, phone, recaptchaRef, webHostReady]);
+  }, [auth, user, phone, webHostReady]);
 
   const verifyAndEnroll = useCallback(async () => {
     if (!verificationId || !code.trim()) {
       Alert.alert('Code required', 'Enter the code from your SMS.');
       return;
     }
+    const needsPassword = userHasPasswordProvider(user);
+    if (needsPassword && !user.email) {
+      Alert.alert('Email missing', 'Add an email to your account before enabling two-factor authentication.');
+      return;
+    }
+    if (needsPassword && !accountPassword.trim()) {
+      Alert.alert('Password required', 'Enter your account password to confirm enabling two-factor authentication.');
+      return;
+    }
     setBusy(true);
     try {
+      if (needsPassword && user.email) {
+        await reauthenticateWithEmailPassword(user, user.email, accountPassword);
+      }
       await completePhoneMfaEnrollment(user, verificationId, code.trim());
       onEnrolled();
       onClose();
     } catch (e) {
+      const authCode =
+        typeof e === 'object' && e !== null && 'code' in e ? String((e as { code: string }).code) : '';
+      if (authCode === 'auth/requires-recent-login') {
+        Alert.alert(
+          'Session expired',
+          'Sign out, sign back in, then try enabling two-factor authentication again.'
+        );
+        return;
+      }
       const msg = e instanceof Error ? e.message : 'Invalid code or enrollment failed.';
       Alert.alert('Could not enable 2FA', msg);
     } finally {
       setBusy(false);
     }
-  }, [verificationId, code, user, onEnrolled, onClose]);
+  }, [verificationId, code, accountPassword, user, onEnrolled, onClose]);
 
   return (
     <>
@@ -235,6 +260,23 @@ export default function MfaPhoneEnrollmentModal({
                   onChangeText={setCode}
                   editable={!busy}
                 />
+                {userHasPasswordProvider(user) ? (
+                  <>
+                    <Text style={styles.reauthHint}>
+                      Enter your account password to confirm it is really you.
+                    </Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Account password"
+                      placeholderTextColor="#aaa"
+                      secureTextEntry
+                      value={accountPassword}
+                      onChangeText={setAccountPassword}
+                      editable={!busy}
+                      autoCapitalize="none"
+                    />
+                  </>
+                ) : null}
                 <Pressable
                   style={[styles.primaryBtn, busy && styles.btnDisabled]}
                   onPress={() => void verifyAndEnroll()}
@@ -246,7 +288,14 @@ export default function MfaPhoneEnrollmentModal({
                     <Text style={styles.primaryBtnTxt}>Verify & enable</Text>
                   )}
                 </Pressable>
-                <Pressable style={styles.linkBtn} onPress={() => setStep('phone')} disabled={busy}>
+                <Pressable
+                  style={styles.linkBtn}
+                  onPress={() => {
+                    setStep('phone');
+                    setAccountPassword('');
+                  }}
+                  disabled={busy}
+                >
                   <Text style={styles.linkTxt}>Change phone number</Text>
                 </Pressable>
               </>
@@ -257,6 +306,20 @@ export default function MfaPhoneEnrollmentModal({
             </Pressable>
           </View>
         </KeyboardAvoidingView>
+        {/*
+          Root _layout verifier sits under this RN Modal; invisible WebView often never completes.
+          Same-layer verifier + top-left slot as DisableMfaModal.
+        */}
+        {Platform.OS !== 'web' ? (
+          <View style={styles.recaptchaCorner} pointerEvents="box-none">
+            <FirebaseRecaptchaVerifierModal
+              ref={localRecaptchaRef}
+              firebaseConfig={firebaseConfig}
+              attemptInvisibleVerification
+              title="Verify phone"
+            />
+          </View>
+        ) : null}
       </Modal>
     </>
   );
@@ -266,6 +329,15 @@ const styles = StyleSheet.create({
   overlay: {
     flex: 1,
     justifyContent: 'flex-end',
+  },
+  recaptchaCorner: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: 300,
+    height: 300,
+    zIndex: 5,
+    elevation: 5,
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
@@ -289,6 +361,12 @@ const styles = StyleSheet.create({
     color: '#888780',
     marginBottom: 16,
     lineHeight: 20,
+  },
+  reauthHint: {
+    fontSize: 13,
+    color: '#888780',
+    marginBottom: 8,
+    lineHeight: 18,
   },
   input: {
     backgroundColor: '#fff',
