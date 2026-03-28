@@ -1,5 +1,4 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-;
 import {
   View,
   Text,
@@ -31,11 +30,36 @@ type Props = {
   onEnrolled: () => void;
 };
 
+/** US +1 NANP: display as "+1 601-954-9253"; submit as E.164. */
+function formatUsMfaPhoneFromInput(text: string): string {
+  let d = text.replace(/\D/g, '');
+  if (d.length > 11 && d.startsWith('1')) d = d.slice(0, 11);
+  if (d.length > 10 && !d.startsWith('1')) d = d.slice(0, 10);
+
+  if (d.length === 0 || d === '1') return '+1 ';
+
+  let national = '';
+  if (d.startsWith('1') && d.length > 1) national = d.slice(1, 11);
+  else if (d.length <= 10 && d[0] !== '1') national = d.slice(0, 10);
+  else if (d.length === 11 && d[0] === '1') national = d.slice(1);
+  else national = d.slice(0, 10);
+
+  national = national.slice(0, 10);
+  if (national.length === 0) return '+1 ';
+
+  let out = '+1 ';
+  if (national.length <= 3) out += national;
+  else if (national.length <= 6) out += `${national.slice(0, 3)}-${national.slice(3)}`;
+  else out += `${national.slice(0, 3)}-${national.slice(3, 6)}-${national.slice(6)}`;
+  return out;
+}
+
 function normalizeE164(raw: string): string | null {
-  const t = raw.trim().replace(/[\s()-]/g, '');
-  if (!t) return null;
-  if (t.startsWith('+')) return t;
-  if (/^\d{10,15}$/.test(t)) return `+${t}`;
+  const d = raw.replace(/\D/g, '');
+  if (!d) return null;
+  if (d.length === 11 && d.startsWith('1')) return `+${d}`;
+  if (d.length === 10) return `+1${d}`;
+  if (d.length >= 10 && d.length <= 15) return `+${d}`;
   return null;
 }
 
@@ -50,7 +74,7 @@ export default function MfaPhoneEnrollmentModal({
   const insets = useSafeAreaInsets();
   const recaptchaRef = useFirebaseRecaptchaRef();
   const [step, setStep] = useState<'phone' | 'code'>('phone');
-  const [phone, setPhone] = useState('');
+  const [phone, setPhone] = useState('+1 ');
   const [code, setCode] = useState('');
   const [verificationId, setVerificationId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -60,7 +84,7 @@ export default function MfaPhoneEnrollmentModal({
   useEffect(() => {
     if (!visible) {
       setStep('phone');
-      setPhone('');
+      setPhone('+1 ');
       setCode('');
       setVerificationId(null);
       setBusy(false);
@@ -101,7 +125,7 @@ export default function MfaPhoneEnrollmentModal({
   const sendCode = useCallback(async () => {
     const e164 = normalizeE164(phone);
     if (!e164) {
-      Alert.alert('Phone number', 'Enter a valid number with country code (e.g. +15551234567).');
+      Alert.alert('Phone number', 'Enter a valid US number (e.g. +1 601-954-9253).');
       return;
     }
     setBusy(true);
@@ -176,13 +200,14 @@ export default function MfaPhoneEnrollmentModal({
               <>
                 <TextInput
                   style={styles.input}
-                  placeholder="+1 555 123 4567"
+                  placeholder="+1 601-954-9253"
                   placeholderTextColor="#aaa"
                   keyboardType="phone-pad"
                   autoComplete="tel"
                   value={phone}
-                  onChangeText={setPhone}
+                  onChangeText={(t) => setPhone(formatUsMfaPhoneFromInput(t))}
                   editable={!busy}
+                  maxLength={17}
                 />
                 <Pressable
                   style={[

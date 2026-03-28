@@ -1,32 +1,15 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-;
-import {
-  View,
-  Text,
-  StyleSheet,
-  Pressable,
-  Alert,
-  Modal,
-  TextInput,
-  Platform,
-  KeyboardAvoidingView,
-  ActivityIndicator,
-} from 'react-native';
+import { View, Text, StyleSheet, Pressable, Alert, Platform } from 'react-native';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { Ionicons } from '@expo/vector-icons';
-import { onAuthStateChanged } from 'firebase/auth';
+import { onAuthStateChanged, reload, sendEmailVerification } from 'firebase/auth';
 import type { User } from 'firebase/auth';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ProfilePurpleToggleVisual } from './ProfilePurpleToggleVisual';
 import MfaPhoneEnrollmentModal from '../auth/MfaPhoneEnrollmentModal';
+import DisableMfaModal from '../auth/DisableMfaModal';
 import { useSecurityPrefs } from '../../contexts/SecurityPrefsContext';
 import { getFirebaseAuth, getFirebaseWebOptions, isFirebaseConfigured } from '../../../lib/firebase';
-import {
-  isPhoneMfaEnrolled,
-  reauthenticateWithEmailPassword,
-  unenrollPhoneMfa,
-  userHasPasswordProvider,
-} from '../../../lib/auth/phoneMfa';
+import { isPhoneMfaEnrolled, userHasPasswordProvider } from '../../../lib/auth/phoneMfa';
 
 const C = {
   text: '#1a1a18',
@@ -42,13 +25,10 @@ type Props = {
 };
 
 export default function ProfileSecurityCard({ user }: Props) {
-  const insets = useSafeAreaInsets();
   const { biometricLockEnabled, setBiometricLockEnabled } = useSecurityPrefs();
   const [bioHardware, setBioHardware] = useState(Platform.OS !== 'web');
   const [mfaOpen, setMfaOpen] = useState(false);
   const [disableMfaOpen, setDisableMfaOpen] = useState(false);
-  const [password, setPassword] = useState('');
-  const [disableBusy, setDisableBusy] = useState(false);
   const [authUser, setAuthUser] = useState<User | null>(user);
 
   useEffect(() => {
@@ -116,6 +96,36 @@ export default function ProfileSecurityCard({ user }: Props) {
     }
   }, [bioHardware, biometricLockEnabled, setBiometricLockEnabled]);
 
+  const sendVerificationEmailForMfa = useCallback(async () => {
+    if (!authUser?.email) return;
+    try {
+      await sendEmailVerification(authUser);
+      Alert.alert(
+        'Check your email',
+        "Open the verification link, then tap I've verified on the next screen or try enabling 2FA again."
+      );
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Could not send verification email.';
+      Alert.alert('Could not send email', msg);
+    }
+  }, [authUser]);
+
+  const refreshAuthUserAfterVerify = useCallback(async () => {
+    if (!authInstance?.currentUser) return;
+    try {
+      await reload(authInstance.currentUser);
+      setAuthUser(authInstance.currentUser);
+      if (authInstance.currentUser.emailVerified) {
+        Alert.alert('Email verified', 'You can enable two-factor authentication now.');
+      } else {
+        Alert.alert('Not verified yet', 'Open the link in your email, then try again.');
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Could not refresh your account.';
+      Alert.alert('Refresh failed', msg);
+    }
+  }, [authInstance]);
+
   const onMfaToggle = useCallback(() => {
     if (!canUseMfa || !authInstance || !authUser || !firebaseOpts) {
       Alert.alert(
@@ -136,37 +146,42 @@ export default function ProfileSecurityCard({ user }: Props) {
         Alert.alert('Email missing', 'Add an email address to your account before disabling 2FA.');
         return;
       }
-      setPassword('');
       setDisableMfaOpen(true);
       return;
     }
-    setMfaOpen(true);
-  }, [canUseMfa, authInstance, authUser, firebaseOpts, mfaEnrolled]);
-
-  const confirmDisableMfa = useCallback(async () => {
-    if (!authUser?.email || !password.trim()) {
-      Alert.alert('Password required', 'Enter your current password to disable two-factor authentication.');
+    if (!authUser.email) {
+      Alert.alert('Email required', 'Add an email to your account before enabling two-factor authentication.');
       return;
     }
-    setDisableBusy(true);
-    try {
-      await reauthenticateWithEmailPassword(authUser, authUser.email, password);
-      await unenrollPhoneMfa(authUser);
-      setDisableMfaOpen(false);
-      setPassword('');
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Could not disable 2FA.';
-      Alert.alert('Could not disable', msg);
-    } finally {
-      setDisableBusy(false);
+    if (!authUser.emailVerified) {
+      Alert.alert(
+        'Verify your email first',
+        'Firebase requires a verified email before SMS two-factor can be enabled.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Send verification email', onPress: () => void sendVerificationEmailForMfa() },
+          { text: "I've verified", onPress: () => void refreshAuthUserAfterVerify() },
+        ]
+      );
+      return;
     }
-  }, [authUser, password]);
+    setMfaOpen(true);
+  }, [
+    canUseMfa,
+    authInstance,
+    authUser,
+    firebaseOpts,
+    mfaEnrolled,
+    sendVerificationEmailForMfa,
+    refreshAuthUserAfterVerify,
+  ]);
 
   const mfaSub = useMemo(() => {
     if (!canUseMfa) return 'Sign in to enable two-factor authentication';
     if (mfaEnrolled) return 'Enabled via SMS';
+    if (authUser?.email && !authUser.emailVerified) return 'Verify your email to enable';
     return 'Extra login security';
-  }, [canUseMfa, mfaEnrolled]);
+  }, [canUseMfa, mfaEnrolled, authUser?.email, authUser?.emailVerified]);
 
   const bioSub = useMemo(() => {
     if (Platform.OS === 'web') return 'Available on iOS and Android';
@@ -229,51 +244,16 @@ export default function ProfileSecurityCard({ user }: Props) {
         />
       ) : null}
 
-      <Modal
-        visible={disableMfaOpen}
-        animationType="slide"
-        transparent
-        onRequestClose={() => !disableBusy && setDisableMfaOpen(false)}
-      >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={styles.mfaOverlay}
-        >
-          <Pressable style={styles.mfaBackdrop} onPress={() => !disableBusy && setDisableMfaOpen(false)} />
-          <View style={[styles.mfaSheet, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-            <Text style={styles.mfaTitle}>Disable two-factor authentication</Text>
-            <Text style={styles.mfaSub}>Enter your current password to confirm.</Text>
-            <TextInput
-              style={styles.mfaInput}
-              placeholder="Password"
-              placeholderTextColor="#aaa"
-              secureTextEntry
-              value={password}
-              onChangeText={setPassword}
-              editable={!disableBusy}
-              autoCapitalize="none"
-            />
-            <Pressable
-              style={[styles.mfaPrimary, disableBusy && { opacity: 0.7 }]}
-              onPress={() => void confirmDisableMfa()}
-              disabled={disableBusy}
-            >
-              {disableBusy ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.mfaPrimaryTxt}>Turn off 2FA</Text>
-              )}
-            </Pressable>
-            <Pressable
-              style={styles.mfaCancel}
-              onPress={() => !disableBusy && setDisableMfaOpen(false)}
-              disabled={disableBusy}
-            >
-              <Text style={styles.mfaCancelTxt}>Cancel</Text>
-            </Pressable>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+      {canUseMfa && authInstance && authUser && firebaseOpts ? (
+        <DisableMfaModal
+          visible={disableMfaOpen}
+          auth={authInstance}
+          user={authUser}
+          firebaseConfig={firebaseOpts}
+          onClose={() => setDisableMfaOpen(false)}
+          onDisabled={() => setDisableMfaOpen(false)}
+        />
+      ) : null}
     </View>
   );
 }
@@ -325,62 +305,5 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: C.muted,
     marginTop: 2,
-  },
-  mfaOverlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  mfaBackdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-  },
-  mfaSheet: {
-    backgroundColor: '#F2F0EB',
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    paddingHorizontal: 20,
-    paddingTop: 20,
-  },
-  mfaTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: C.text,
-    marginBottom: 8,
-  },
-  mfaSub: {
-    fontSize: 14,
-    color: C.muted,
-    marginBottom: 14,
-  },
-  mfaInput: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(0,0,0,0.08)',
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    fontSize: 16,
-    marginBottom: 14,
-  },
-  mfaPrimary: {
-    backgroundColor: '#534AB7',
-    borderRadius: 14,
-    paddingVertical: 14,
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  mfaPrimaryTxt: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  mfaCancel: {
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  mfaCancelTxt: {
-    color: C.muted,
-    fontSize: 16,
-    fontWeight: '600',
   },
 });
