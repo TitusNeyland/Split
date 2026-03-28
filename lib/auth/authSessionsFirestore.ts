@@ -75,16 +75,15 @@ export async function upsertCurrentAuthSession(
 ): Promise<void> {
   const db = getFirebaseFirestore();
   if (!db) return;
-  await setDoc(
-    doc(db, 'users', uid, 'sessions', sessionId),
-    {
-      deviceName: opts.deviceName,
-      deviceType: opts.deviceType,
-      lastActive: serverTimestamp(),
-      fcmToken: opts.fcmToken ?? null,
-    },
-    { merge: true }
-  );
+  const payload: Record<string, unknown> = {
+    deviceName: opts.deviceName,
+    deviceType: opts.deviceType,
+    lastActive: serverTimestamp(),
+  };
+  if ('fcmToken' in opts) {
+    payload.fcmToken = opts.fcmToken;
+  }
+  await setDoc(doc(db, 'users', uid, 'sessions', sessionId), payload, { merge: true });
 }
 
 export async function deleteAuthSessionDoc(uid: string, sessionId: string): Promise<void> {

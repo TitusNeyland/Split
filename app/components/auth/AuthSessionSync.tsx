@@ -6,12 +6,32 @@ import { getOrCreateDeviceSessionId } from '../../../lib/auth/deviceSessionIdent
 import { getDeviceDisplayName, getDeviceTypeCategory } from '../../../lib/auth/deviceSessionMetadata';
 import { upsertCurrentAuthSession } from '../../../lib/auth/authSessionsFirestore';
 import { ensurePhoneHashOnUserDoc } from '../../../lib/friends/phoneHashUserDoc';
+import { addFcmTokenRefreshListener, requestFcmToken } from '../../../lib/fcmToken';
 
 /**
- * Writes `users/{uid}/sessions/{deviceSessionId}` on sign-in and when the app becomes active.
- * Set `fcmToken` when you wire push so revoke can signal remote sign-out.
+ * Writes `users/{uid}/sessions/{deviceSessionId}` on sign-in and when the app becomes active,
+ * including `fcmToken` when push permission is granted (native + web with VAPID).
  */
 async function heartbeat(): Promise<void> {
+  if (!isFirebaseConfigured()) return;
+  const auth = getFirebaseAuth();
+  const u = auth?.currentUser;
+  if (!u) return;
+  try {
+    const sessionId = await getOrCreateDeviceSessionId();
+    const token = await requestFcmToken();
+    await upsertCurrentAuthSession(u.uid, sessionId, {
+      deviceName: getDeviceDisplayName(),
+      deviceType: getDeviceTypeCategory(),
+      ...(token ? { fcmToken: token } : {}),
+    });
+    await ensurePhoneHashOnUserDoc();
+  } catch {
+    /* ignore heartbeat errors */
+  }
+}
+
+async function writeSessionFcmToken(token: string): Promise<void> {
   if (!isFirebaseConfigured()) return;
   const auth = getFirebaseAuth();
   const u = auth?.currentUser;
@@ -21,11 +41,10 @@ async function heartbeat(): Promise<void> {
     await upsertCurrentAuthSession(u.uid, sessionId, {
       deviceName: getDeviceDisplayName(),
       deviceType: getDeviceTypeCategory(),
-      fcmToken: null,
+      fcmToken: token,
     });
-    await ensurePhoneHashOnUserDoc();
   } catch {
-    /* ignore heartbeat errors */
+    /* ignore */
   }
 }
 
@@ -43,11 +62,16 @@ export default function AuthSessionSync() {
       if (state === 'active') void heartbeat();
     });
 
+    const unsubTokenRefresh = addFcmTokenRefreshListener((token) => {
+      void writeSessionFcmToken(token);
+    });
+
     void heartbeat();
 
     return () => {
       unsubAuth();
       sub.remove();
+      unsubTokenRefresh();
     };
   }, []);
 

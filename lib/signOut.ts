@@ -1,8 +1,8 @@
 import { signOut } from 'firebase/auth';
 import { getFirebaseAuth } from './firebase';
-import { getOrCreateDeviceSessionId } from './deviceSessionIdentity';
-import { getDeviceDisplayName, getDeviceTypeCategory } from './deviceSessionMetadata';
-import { upsertCurrentAuthSession } from './authSessionsFirestore';
+import { getOrCreateDeviceSessionId } from './auth/deviceSessionIdentity';
+import { getDeviceDisplayName, getDeviceTypeCategory } from './auth/deviceSessionMetadata';
+import { upsertCurrentAuthSession } from './auth/authSessionsFirestore';
 
 /**
  * Clears the FCM token from the current session doc then calls Firebase signOut.
