@@ -1,4 +1,4 @@
-import { doc, onSnapshot, type Unsubscribe } from 'firebase/firestore';
+import { doc, onSnapshot, Timestamp, type Unsubscribe } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import { getFirebaseFirestore } from '../firebase';
 import { parseFirestoreBillingCycle, subscriptionDisplayName } from './billingCalendarModel';
@@ -26,6 +26,9 @@ type ShareRow = {
   avatarBg?: string;
   avatarColor?: string;
   invitePending?: boolean;
+  inviteId?: string;
+  pendingInviteEmail?: string;
+  inviteExpiresAt?: Timestamp | { toMillis?: () => number };
 };
 
 function effectiveBillingDayLabel(data: Record<string, unknown>): string {
@@ -56,7 +59,17 @@ function toCycleStatus(raw: string | undefined): CyclePaymentStatus {
   const s = String(raw ?? '').toLowerCase();
   if (s === 'paid' || s === 'owner') return 'paid';
   if (s === 'overdue') return 'overdue';
+  if (s === 'invited_pending') return 'pending';
   return 'pending';
+}
+
+function inviteExpiresAtMsFromRow(row: ShareRow): number | null {
+  const ex = row.inviteExpiresAt;
+  if (ex instanceof Timestamp) return ex.toMillis();
+  if (ex && typeof ex === 'object' && typeof ex.toMillis === 'function') {
+    return ex.toMillis();
+  }
+  return null;
 }
 
 /**
@@ -109,6 +122,11 @@ export function mapFirestoreSubscriptionToDetailModel(
     } else if (totalCents > 0) {
       percent = Math.round((100 * amountCents) / totalCents);
     }
+    const invitePending = Boolean(row.invitePending);
+    const pendingInviteEmail =
+      typeof row.pendingInviteEmail === 'string' && row.pendingInviteEmail.trim()
+        ? row.pendingInviteEmail.trim().toLowerCase()
+        : null;
     return {
       memberId,
       displayName: String(row.displayName ?? 'Member'),
@@ -119,6 +137,10 @@ export function mapFirestoreSubscriptionToDetailModel(
       percent,
       amountCents,
       cycleStatus,
+      invitePending,
+      inviteId: typeof row.inviteId === 'string' && row.inviteId ? row.inviteId : undefined,
+      pendingInviteEmail,
+      inviteExpiresAtMs: invitePending ? inviteExpiresAtMsFromRow(row) : null,
     };
   });
 

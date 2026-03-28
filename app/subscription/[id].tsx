@@ -8,6 +8,7 @@ import {
   Modal,
   Image,
   Alert,
+  Share,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -22,8 +23,11 @@ import { SUBSCRIPTIONS_DEMO_MODE } from '../../lib/subscription/subscriptionsScr
 import {
   getDemoSubscriptionDetail,
   type CyclePaymentStatus,
+  type SubscriptionDetailMember,
   type SubscriptionHistoryCycle,
 } from '../../lib/subscription/subscriptionDetailDemo';
+import { resendSplitInvite } from '../../lib/subscription/resendSplitInvite';
+import { buildSplitInviteShareMessage } from '../../lib/friends/inviteLinks';
 import { useSubscriptionDetailFromFirestore } from '../../lib/subscription/subscriptionDetailFromFirestore';
 import { fmtCents } from '../../lib/subscription/addSubscriptionSplitMath';
 import { useFirebaseUid } from '../../lib/auth/useFirebaseUid';
@@ -32,6 +36,7 @@ import { useProfileAvatarUrl } from '../hooks/useProfileAvatarUrl';
 const C = {
   bg: '#F2F0EB',
   purple: '#534AB7',
+  purpleTint: '#EEEDFE',
   editLink: '#6F6699',
   text: '#1a1a18',
   muted: '#888780',
@@ -61,6 +66,11 @@ function useNextBillingCycleStart() {
   }, []);
 }
 
+function daysLeftFromMs(ms: number | null | undefined): number {
+  if (!ms || !Number.isFinite(ms)) return 0;
+  return Math.max(0, Math.ceil((ms - Date.now()) / (24 * 60 * 60 * 1000)));
+}
+
 export default function SubscriptionDetailScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -73,6 +83,7 @@ export default function SubscriptionDetailScreen() {
   const [editorOpen, setEditorOpen] = useState(false);
   const [historyModalCycle, setHistoryModalCycle] = useState<SubscriptionHistoryCycle | null>(null);
   const [detailRetryKey, setDetailRetryKey] = useState(0);
+  const [resendBusyId, setResendBusyId] = useState<string | null>(null);
 
   const demoDetail = useMemo(() => {
     if (!SUBSCRIPTIONS_DEMO_MODE || !subscriptionId) return null;
@@ -101,6 +112,34 @@ export default function SubscriptionDetailScreen() {
   const onDemoAction = (title: string) => {
     Alert.alert(title, 'This action will be available when subscription management is connected.');
   };
+
+  const onResendSplitInvite = useCallback(
+    async (m: SubscriptionDetailMember) => {
+      if (!firebaseUid || SUBSCRIPTIONS_DEMO_MODE || !m.inviteId || !detail?.isOwner) return;
+      setResendBusyId(m.memberId);
+      try {
+        const newId = await resendSplitInvite({
+          subscriptionId: subscriptionId.trim(),
+          ownerUid: firebaseUid,
+          oldInviteId: m.inviteId,
+          memberId: m.memberId,
+          recipientEmailRaw: m.pendingInviteEmail,
+        });
+        const msg = buildSplitInviteShareMessage(detail.displayName, newId);
+        try {
+          await Share.share({ message: msg });
+        } catch {
+          /* user dismissed share sheet */
+        }
+        setDetailRetryKey((k) => k + 1);
+      } catch (e) {
+        Alert.alert('Could not resend', e instanceof Error ? e.message : 'Try again.');
+      } finally {
+        setResendBusyId(null);
+      }
+    },
+    [firebaseUid, detail, subscriptionId],
+  );
 
   if (!SUBSCRIPTIONS_DEMO_MODE && subscriptionId.trim() && firebaseUid && liveLoading) {
     return (
@@ -276,6 +315,43 @@ export default function SubscriptionDetailScreen() {
           <View style={styles.card}>
             <Text style={styles.sectionHeader}>Split breakdown</Text>
             {detail.members.map((m) => {
+              if (m.invitePending) {
+                const days = daysLeftFromMs(m.inviteExpiresAtMs);
+                const lineName = m.displayName.trim() ? m.displayName : 'Pending invite';
+                const sub =
+                  days > 0
+                    ? `Invite pending · expires in ${days} ${days === 1 ? 'day' : 'days'}`
+                    : 'Invite pending';
+                return (
+                  <View key={m.memberId} style={styles.splitRow}>
+                    <View style={[styles.splitPip, styles.splitPipPending]}>
+                      <Ionicons name="mail-outline" size={18} color={C.muted} />
+                    </View>
+                    <View style={styles.splitRowMid}>
+                      <Text style={styles.splitName} numberOfLines={1}>
+                        {lineName}
+                      </Text>
+                      <Text style={styles.splitPct}>{sub}</Text>
+                    </View>
+                    <View style={styles.splitRowRight}>
+                      <Text style={styles.splitAmt}>{fmtCents(m.amountCents)}</Text>
+                      {detail.isOwner && m.inviteId && !SUBSCRIPTIONS_DEMO_MODE ? (
+                        <Pressable
+                          onPress={() => void onResendSplitInvite(m)}
+                          disabled={resendBusyId === m.memberId}
+                          style={({ pressed }) => [styles.resendBtn, pressed && styles.resendBtnPressed]}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Resend invite to ${lineName}`}
+                        >
+                          <Text style={styles.resendBtnTxt}>
+                            {resendBusyId === m.memberId ? '…' : 'Resend'}
+                          </Text>
+                        </Pressable>
+                      ) : null}
+                    </View>
+                  </View>
+                );
+              }
               const st = statusMeta(m.cycleStatus);
               return (
                 <View key={m.memberId} style={styles.splitRow}>
@@ -307,6 +383,21 @@ export default function SubscriptionDetailScreen() {
                 </View>
               );
             })}
+            {detail.isOwner
+              ? detail.members
+                  .filter((m) => m.invitePending)
+                  .map((m) => {
+                    const label = m.pendingInviteEmail ?? m.displayName;
+                    return (
+                      <View key={`invite-banner-${m.memberId}`} style={styles.pendingInviteBanner}>
+                        <Ionicons name="information-circle-outline" size={18} color="#B45309" />
+                        <Text style={styles.pendingInviteBannerTxt}>
+                          {label} hasn&apos;t joined yet. Their share will be charged once they accept.
+                        </Text>
+                      </View>
+                    );
+                  })
+              : null}
             <View style={styles.progTrack}>
               <View style={[styles.progFill, { width: `${pctCollected}%` }]} />
             </View>
@@ -593,6 +684,12 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
   },
+  splitPipPending: {
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: '#C4C2BC',
+    backgroundColor: '#FAFAF8',
+  },
   splitRowMid: {
     flex: 1,
     minWidth: 0,
@@ -610,6 +707,37 @@ const styles = StyleSheet.create({
   splitRowRight: {
     alignItems: 'flex-end',
     gap: 6,
+  },
+  resendBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    backgroundColor: C.purpleTint,
+  },
+  resendBtnPressed: {
+    opacity: 0.75,
+  },
+  resendBtnTxt: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: C.purple,
+  },
+  pendingInviteBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    backgroundColor: C.amberBg,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    marginTop: 10,
+  },
+  pendingInviteBannerTxt: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '500',
+    color: C.amber,
+    lineHeight: 19,
   },
   splitAmt: {
     fontSize: 16,

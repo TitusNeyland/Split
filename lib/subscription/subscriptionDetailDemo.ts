@@ -22,6 +22,11 @@ export type SubscriptionDetailMember = {
   percent: number;
   amountCents: number;
   cycleStatus: CyclePaymentStatus;
+  /** Not on app yet — split-specific invite outstanding */
+  invitePending?: boolean;
+  inviteId?: string;
+  pendingInviteEmail?: string | null;
+  inviteExpiresAtMs?: number | null;
 };
 
 export type SubscriptionHistoryCycle = {

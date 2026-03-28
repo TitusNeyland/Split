@@ -15,6 +15,8 @@ export type WizardMemberRow = {
   amountCents: number;
   /** Invited by link / not on app yet — charged after they join and add payment. */
   invitePending?: boolean;
+  /** When invite is email-targeted; stored on split share rows for resend + rules. */
+  pendingInviteEmail?: string;
 };
 
 export type CreateSubscriptionWizardInput = {
@@ -48,7 +50,7 @@ export async function runSubscriptionWizardSideEffects(
  * `members` / `memberUids` list every split participant so subscription tab queries resolve.
  */
 /** Wizard UI uses a placeholder (e.g. `owner-self`); Firestore rules require the real uid in `members`. */
-function persistMemberId(m: WizardMemberRow, actorUid: string): string {
+export function persistMemberId(m: WizardMemberRow, actorUid: string): string {
   if (m.role === 'owner') return actorUid;
   return m.memberId;
 }
@@ -61,7 +63,7 @@ export async function createSubscriptionFromWizard(
 
   const splitMemberShares = input.members.map((m) => {
     const id = persistMemberId(m, input.actorUid);
-    return {
+    const row: Record<string, unknown> = {
       memberId: id,
       displayName: m.displayName,
       role: m.role,
@@ -72,6 +74,10 @@ export async function createSubscriptionFromWizard(
       avatarColor: m.avatarColor,
       invitePending: Boolean(m.invitePending),
     };
+    if (m.invitePending && typeof m.pendingInviteEmail === 'string' && m.pendingInviteEmail.trim()) {
+      row.pendingInviteEmail = m.pendingInviteEmail.trim().toLowerCase();
+    }
+    return row;
   });
 
   const memberPaymentStatus: Record<string, string> = {};

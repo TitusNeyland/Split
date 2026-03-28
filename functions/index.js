@@ -35,6 +35,101 @@ function inferConnectedVia(data) {
   return 'direct_invite';
 }
 
+async function mergeSplitInviteMember(db, subscriptionId, inviteId, acceptedBy) {
+  const subRef = db.collection('subscriptions').doc(subscriptionId);
+  const userRef = db.collection('users').doc(acceptedBy);
+  await db.runTransaction(async (tx) => {
+    const subSnap = await tx.get(subRef);
+    if (!subSnap.exists) return;
+    const userSnap = await tx.get(userRef);
+    const data = subSnap.data();
+    const shares = Array.isArray(data.splitMemberShares) ? [...data.splitMemberShares] : [];
+    const idx = shares.findIndex((s) => s && s.inviteId === inviteId);
+    if (idx < 0) return;
+
+    const oldShare = shares[idx];
+    const oldMemberId = oldShare.memberId;
+    const ud = userSnap.data() || {};
+    const dn =
+      typeof ud.displayName === 'string' && ud.displayName.trim() ? ud.displayName.trim() : 'Member';
+    const parts = dn.replace(/\s+/g, ' ').trim().split(/\s+/).filter(Boolean);
+    const init =
+      parts.length >= 2
+        ? `${parts[0][0] || ''}${parts[parts.length - 1][0] || ''}`.toUpperCase()
+        : (parts[0] || '?').slice(0, 2).toUpperCase();
+
+    shares[idx] = {
+      ...oldShare,
+      memberId: acceptedBy,
+      displayName: dn,
+      initials: init,
+      invitePending: false,
+      inviteId: admin.firestore.FieldValue.delete(),
+      inviteExpiresAt: admin.firestore.FieldValue.delete(),
+      pendingInviteEmail: admin.firestore.FieldValue.delete(),
+    };
+
+    const memberUids = (data.memberUids || []).map((u) => (u === oldMemberId ? acceptedBy : u));
+    const members = (data.members || []).map((u) => (u === oldMemberId ? acceptedBy : u));
+    const mps = { ...(data.memberPaymentStatus || {}) };
+    if (mps[oldMemberId] === 'invited_pending') {
+      delete mps[oldMemberId];
+      mps[acceptedBy] = 'pending';
+    }
+
+    tx.update(subRef, {
+      splitMemberShares: shares,
+      memberUids,
+      members,
+      memberPaymentStatus: mps,
+      splitUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  });
+}
+
+async function sendSplitInviteAcceptedNotification(db, recipientUid, subscriptionId, createdBy) {
+  const subSnap = await db.collection('subscriptions').doc(subscriptionId).get();
+  const serviceName =
+    typeof subSnap.data()?.serviceName === 'string' && subSnap.data().serviceName.trim()
+      ? subSnap.data().serviceName.trim()
+      : 'a split';
+  const creatorDoc = await db.collection('users').doc(createdBy).get();
+  const dn = creatorDoc.data()?.displayName;
+  const senderName = typeof dn === 'string' && dn.trim() ? dn.trim() : 'Someone';
+
+  const recipientDoc = await db.collection('users').doc(recipientUid).get();
+  const prefs = recipientDoc.data()?.notificationPreferences;
+  if (prefs && prefs.notificationsEnabled === false) return;
+
+  const body = `${senderName} added you to ${serviceName}`;
+
+  const sessionsSnap = await db.collection('users').doc(recipientUid).collection('sessions').get();
+  const tokens = new Set();
+  sessionsSnap.docs.forEach((d) => {
+    const t = d.data().fcmToken;
+    if (typeof t === 'string' && t.trim()) tokens.add(t.trim());
+  });
+
+  await Promise.all(
+    [...tokens].map((token) =>
+      admin
+        .messaging()
+        .send({
+          token,
+          notification: { title: 'mySplit', body },
+          data: {
+            type: 'split_invite_accepted',
+            subscriptionId,
+            inviterUid: createdBy,
+          },
+        })
+        .catch((e) => {
+          console.warn('sendSplitInviteAcceptedNotification: FCM send failed', e?.message || e);
+        })
+    )
+  );
+}
+
 /**
  * When an invite moves to `accepted`, create `friendships/{uidSmall_uidLarge}` (Admin SDK; clients cannot write friendships).
  */
@@ -74,6 +169,23 @@ exports.onInviteAccepted = onDocumentUpdated('invites/{inviteId}', async (event)
     if (cur.exists) return;
     tx.set(ref, payload);
   });
+
+  const db = admin.firestore();
+  const inviteId = event.params.inviteId;
+  const splitId = typeof after.splitId === 'string' && after.splitId.length > 0 ? after.splitId : null;
+
+  if (splitId) {
+    try {
+      await mergeSplitInviteMember(db, splitId, inviteId, acceptedBy);
+    } catch (e) {
+      console.warn('onInviteAccepted: mergeSplitInviteMember failed', e?.message || e);
+    }
+    try {
+      await sendSplitInviteAcceptedNotification(db, acceptedBy, splitId, createdBy);
+    } catch (e) {
+      console.warn('onInviteAccepted: sendSplitInviteAcceptedNotification failed', e?.message || e);
+    }
+  }
 });
 
 /**
