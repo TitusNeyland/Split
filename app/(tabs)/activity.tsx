@@ -22,9 +22,14 @@ import { ServiceIcon } from '../components/shared/ServiceIcon';
 import { UserAvatarCircle } from '../components/shared/UserAvatarCircle';
 import { recordManualSettlement } from '../../lib/payment/paymentsFirestore';
 import { useFirebaseUid } from '../../lib/auth/useFirebaseUid';
-import { subscribeActivityFeed } from '../../lib/activity/activityFeedFirestore';
-import type { ActivityEvent } from '../../lib/activity/activityFeedSchema';
+import { markActivityDocumentRead, subscribeActivityFeed } from '../../lib/activity/activityFeedFirestore';
+import type { ActivityEvent, ActivityEventType } from '../../lib/activity/activityFeedSchema';
 import { activityEventToFeedRow } from '../../lib/activity/activityEventToFeedItem';
+import {
+  activityEventMatchesFilter,
+  type ActivityFilterTabId,
+} from '../../lib/activity/activityFilters';
+import { resolveActivityRoute } from '../../lib/activity/activityNavigation';
 import { sendPaymentReminderCallable } from '../../lib/activity/sendPaymentReminderCallable';
 
 type IonIconName = React.ComponentProps<typeof Ionicons>['name'];
@@ -47,7 +52,7 @@ const C = {
   red: '#E24B4A',
 };
 
-type ActivityFilterId = 'all' | 'received' | 'pending' | 'failed' | 'audit' | 'receipts';
+type ActivityFilterId = ActivityFilterTabId;
 
 const FILTER_PILLS: {
   id: ActivityFilterId;
@@ -55,11 +60,9 @@ const FILTER_PILLS: {
   dotColor: string | null;
 }[] = [
   { id: 'all', label: 'All', dotColor: null },
-  { id: 'received', label: 'Received', dotColor: '#4ade80' },
-  { id: 'pending', label: 'Pending', dotColor: '#fbbf24' },
-  { id: 'failed', label: 'Failed', dotColor: '#f87171' },
-  { id: 'audit', label: 'Changes', dotColor: '#a78bfa' },
-  { id: 'receipts', label: 'Receipts', dotColor: '#93c5fd' },
+  { id: 'payments', label: 'Payments', dotColor: '#4ade80' },
+  { id: 'splits', label: 'Splits', dotColor: '#a78bfa' },
+  { id: 'friends', label: 'Friends', dotColor: '#93c5fd' },
 ];
 
 type ActivityKind =
@@ -108,7 +111,7 @@ type ActivityDetailAction = {
   id: string;
   label: string;
   variant: 'ghost' | 'primary' | 'danger';
-  /** Shows ↗ after label (e.g. open member activity). */
+  /** Shows â†— after label (e.g. open member activity). */
   external?: boolean;
   /** Opens inline mark-as-paid row below the drawer. */
   opensMarkPaid?: boolean;
@@ -145,6 +148,7 @@ function applyManualPaidToItem(
         : item.amount;
   return {
     ...item,
+    activityType: item.activityType,
     kind: 'received',
     icon: 'checkmark',
     iconBg: '#E1F5EE',
@@ -179,14 +183,14 @@ function applyManualPaidToItem(
 
 /**
  * Activity list row; aligns with `payments` (or ledger) docs:
- * - `status` ↔ kind (e.g. partial, overdue, received)
- * - `partial_amount` ↔ partial.paid (amount received toward total)
- * - `amount` / total owed ↔ partial.total when partial
- * - `note` ↔ payerNote (optional message from payer)
+ * - `status` maps to kind (e.g. partial, overdue, received)
+ * - `partial_amount` maps to partial.paid (amount received toward total)
+ * - `amount` / total owed maps to partial.total when partial
+ * - `note` maps to payerNote (optional message from payer)
  */
 type ActivityFeedItem = {
   id: string;
-  /** Profile → Activity: filter feed to items involving this friend id */
+  /** Profile -> Activity: filter feed to items involving this friend id */
   friendLinkIds?: string[];
   kind: ActivityKind;
   /** Letter-mark icon for subscription or receipt merchant; when set, overrides `icon`. */
@@ -204,7 +208,7 @@ type ActivityFeedItem = {
   amountColor: string;
   badge: string;
   badgeVariant: ActivityBadgeVariant;
-  /** Partial settlement: paid ↔ partial_amount, total ↔ amount due. */
+  /** Partial settlement: paid <-> partial_amount, total <-> amount due. */
   partial?: { paid: number; total: number };
   detail?: {
     rows: ActivityDetailRow[];
@@ -216,6 +220,11 @@ type ActivityFeedItem = {
   joinSubscriptionId?: string;
   serviceIconMuted?: boolean;
   friendAvatar?: { initials: string; imageUrl?: string | null };
+  /** Raw Firestore event type — drives filter tabs. */
+  activityType: ActivityEventType;
+  /** Server + optimistic client read state */
+  read?: boolean;
+  subscriptionId?: string;
 };
 
 type ActivityFeedGroup = { sectionTitle: string; items: ActivityFeedItem[] };
@@ -227,436 +236,67 @@ function itemMatchesFriend(item: ActivityFeedItem, friendId: string | null): boo
 }
 
 function itemMatchesFilter(item: ActivityFeedItem, f: ActivityFilterId): boolean {
-  if (f === 'all') return true;
-  switch (f) {
-    case 'received':
-      return item.kind === 'received';
-    case 'pending':
-      return (
-        item.kind === 'overdue' ||
-        item.kind === 'partial' ||
-        item.kind === 'reminder_received'
-      );
-    case 'failed':
-      return item.kind === 'failed';
-    case 'audit':
-      return (
-        item.kind === 'audit' ||
-        item.kind === 'updated' ||
-        item.kind === 'audit_join' ||
-        item.kind === 'audit_reminder' ||
-        item.kind === 'audit_ended' ||
-        item.kind === 'split_invite_received' ||
-        item.kind === 'split_invite_sent' ||
-        item.kind === 'split_invite_accepted' ||
-        item.kind === 'split_invite_declined' ||
-        item.kind === 'split_member_joined' ||
-        item.kind === 'split_member_removed' ||
-        item.kind === 'split_ended' ||
-        item.kind === 'split_restarted' ||
-        item.kind === 'split_percentage_updated' ||
-        item.kind === 'split_price_updated' ||
-        item.kind === 'billing_cycle_complete' ||
-        item.kind === 'billing_cycle_partial' ||
-        item.kind === 'auto_charge_enabled' ||
-        item.kind === 'auto_charge_disabled' ||
-        item.kind === 'friend_connected' ||
-        item.kind === 'friend_invite_accepted'
-      );
-    case 'receipts':
-      return item.kind === 'receipt';
-    default:
-      return true;
-  }
+  return activityEventMatchesFilter(f, item.activityType);
 }
 
-const MOCK_ACTIVITY_GROUPS: ActivityFeedGroup[] = [
-  {
-    sectionTitle: 'Today',
-    items: [
-      {
-        id: 't-you-netflix',
-        kind: 'received',
-        serviceMark: 'Netflix Premium',
-        icon: 'checkmark',
-        iconBg: '#E1F5EE',
-        iconColor: '#1D9E75',
-        title: 'You paid Netflix Premium',
-        sub: 'Mar cycle · your share',
-        time: 'Just now',
-        amount: '$12.00',
-        amountColor: '#1D9E75',
-        badge: 'Paid',
-        badgeVariant: 'green',
-        detail: {
-          rows: [
-            { label: 'Subscription', value: 'Netflix Premium' },
-            { label: 'Your share', value: '$12.00' },
-            { label: 'Method', value: 'Charged to your card on file' },
-          ],
-        },
-      },
-      {
-        id: 't1',
-        friendLinkIds: ['alex'],
-        kind: 'received',
-        serviceMark: 'Spotify Family',
-        icon: 'checkmark',
-        iconBg: '#E1F5EE',
-        iconColor: '#1D9E75',
-        title: 'Alex paid Spotify Family',
-        sub: 'Mar cycle · Visa ···· 4242',
-        time: '2 min ago',
-        amount: '+$3.40',
-        amountColor: '#1D9E75',
-        badge: 'Received',
-        badgeVariant: 'green',
-        detail: {
-          rows: [
-            { label: 'From', value: 'Alex L. · Visa ···· 4242' },
-            { label: 'For', value: 'Spotify Family — March' },
-            { label: 'Method', value: 'Auto-charged via Stripe' },
-            { label: 'Stripe reference', value: 'pi_3Nx8aB···', link: true },
-          ],
-          actions: [
-            { id: 't1-receipt', label: 'View receipt', variant: 'ghost' },
-            { id: 't1-alex', label: 'All from Alex', variant: 'primary', external: true },
-          ],
-        },
-      },
-      {
-        id: 't2',
-        friendLinkIds: ['sam'],
-        kind: 'overdue',
-        serviceMark: 'Netflix Premium',
-        icon: 'time-outline',
-        iconBg: '#FAEEDA',
-        iconColor: '#854F0B',
-        title: 'Sam · Netflix overdue',
-        sub: '$5.33 · 3 days past due · 2 reminders sent',
-        time: 'Due Mar 15',
-        amount: '$5.33',
-        amountColor: '#EF9F27',
-        badge: 'Overdue',
-        badgeVariant: 'amber',
-        detail: {
-          rows: [
-            { label: 'Status', value: '3 days overdue' },
-            { label: 'Reminders', value: '2 sent · last sent Mar 16' },
-            { label: 'Subscription', value: 'Netflix Premium' },
-          ],
-          actions: [
-            { id: 't2-mark', label: 'Mark paid manually', variant: 'ghost', opensMarkPaid: true },
-            { id: 't2-remind', label: 'Send reminder', variant: 'primary' },
-          ],
-        },
-      },
-      {
-        id: 't3',
-        friendLinkIds: ['taylor'],
-        kind: 'partial',
-        serviceMark: 'iCloud',
-        icon: 'checkmark-done-outline',
-        iconBg: '#FAEEDA',
-        iconColor: '#854F0B',
-        title: 'Taylor paid partial · iCloud',
-        sub: 'Paid $1.25 of $2.50 · balance remaining',
-        payerNote: 'Will send the rest Friday',
-        time: '1 hr ago',
-        amount: '+$1.25',
-        amountColor: '#EF9F27',
-        badge: 'Partial',
-        badgeVariant: 'amber',
-        partial: { paid: 1.25, total: 2.5 },
-        detail: {
-          rows: [
-            { label: 'Paid so far', value: '$1.25' },
-            { label: 'Remaining', value: '$1.25', valueAccent: 'amber' },
-            { label: 'Note from payer', value: '"Will send the rest Friday"' },
-          ],
-          actions: [
-            { id: 't3-remind', label: 'Remind for rest', variant: 'ghost' },
-            { id: 't3-mark', label: 'Mark remainder paid', variant: 'primary', opensMarkPaid: true },
-          ],
-        },
-      },
-      {
-        id: 't4',
-        friendLinkIds: ['alex', 'sam'],
-        kind: 'audit',
-        serviceMark: 'Netflix Premium',
-        icon: 'create-outline',
-        iconBg: '#EEEDFE',
-        iconColor: '#534AB7',
-        title: 'Split percentages updated',
-        sub: 'Netflix · changed by Titus · effective next cycle',
-        time: '3 hrs ago',
-        badge: 'Audit',
-        badgeVariant: 'purple',
-        amountColor: C.text,
-        detail: {
-          rows: [
-            { label: 'Changed by', value: 'Titus (you)' },
-            { label: 'Subscription', value: 'Netflix Premium' },
-            { label: 'Titus', value: '33% → 40%' },
-            { label: 'Alex', value: '33% → 30%' },
-            { label: 'Sam', value: '34% → 30%' },
-            { label: 'Effective date', value: 'Next cycle · Apr 18' },
-          ],
-        },
-      },
-      {
-        id: 't-audit-remind',
-        friendLinkIds: ['sam'],
-        kind: 'audit_reminder',
-        serviceMark: 'Netflix Premium',
-        icon: 'notifications-outline',
-        iconBg: '#FAEEDA',
-        iconColor: '#854F0B',
-        title: 'Auto-reminder sent to Sam',
-        sub: 'Netflix · $5.33 overdue · system-triggered',
-        time: 'Today · 9:00 AM',
-        amount: '$5.33',
-        amountColor: '#EF9F27',
-        badge: 'Reminder',
-        badgeVariant: 'amber',
-        detail: {
-          rows: [
-            { label: 'Subscription', value: 'Netflix Premium' },
-            { label: 'Amount', value: '$5.33 owed' },
-            { label: 'Trigger', value: 'System · overdue threshold' },
-            { label: 'Channel', value: 'Push notification' },
-          ],
-        },
-      },
-    ],
-  },
-  {
-    sectionTitle: 'Yesterday',
-    items: [
-      {
-        id: 'y1',
-        friendLinkIds: ['taylor'],
-        kind: 'received',
-        serviceMark: 'Xbox Game Pass',
-        icon: 'checkmark',
-        iconBg: '#E1F5EE',
-        iconColor: '#1D9E75',
-        title: 'Taylor paid Xbox Game Pass',
-        sub: 'Mar cycle · marked manually',
-        payerNote: 'Sent via Venmo @taylor_r',
-        time: 'Mar 15 · 4:22 PM',
-        amount: '+$7.50',
-        amountColor: '#1D9E75',
-        badge: 'Received',
-        badgeVariant: 'green',
-        detail: {
-          rows: [
-            { label: 'From', value: 'Taylor R. · manual payment' },
-            { label: 'For', value: 'Xbox Game Pass — March' },
-            { label: 'Method', value: 'Marked paid manually' },
-          ],
-          actions: [
-            { id: 'y1-receipt', label: 'View receipt', variant: 'ghost' },
-            { id: 'y1-taylor', label: 'All from Taylor', variant: 'primary', external: true },
-          ],
-        },
-      },
-      {
-        id: 'y2',
-        friendLinkIds: ['sam'],
-        kind: 'failed',
-        serviceMark: 'Hulu',
-        icon: 'alert-circle-outline',
-        iconBg: '#FCEBEB',
-        iconColor: '#A32D2D',
-        title: "Sam's payment failed — Hulu",
-        sub: 'Card declined · Stripe retrying · attempt 2 of 4',
-        time: 'Mar 15 · 9:01 AM',
-        amount: '$4.00',
-        amountColor: '#E24B4A',
-        badge: 'Failed',
-        badgeVariant: 'red',
-        detail: {
-          rows: [
-            { label: 'Failure reason', value: 'Card declined' },
-            { label: 'Retry', value: 'Attempt 2 of 4 · next retry in 2 days' },
-            { label: 'Stripe error reference', value: 'pi_err_3Nx···', link: true },
-          ],
-          actions: [
-            { id: 'y2-msg', label: 'Message Sam', variant: 'ghost' },
-            { id: 'y2-retry', label: 'Retry now', variant: 'danger' },
-          ],
-        },
-      },
-      {
-        id: 'y3',
-        friendLinkIds: ['alex', 'sam', 'taylor'],
-        kind: 'updated',
-        serviceMark: 'Netflix',
-        icon: 'information-circle-outline',
-        iconBg: '#E6F1FB',
-        iconColor: '#185FA5',
-        title: 'Netflix price updated',
-        sub: '$19.99 → $22.99 · updated by Titus · group notified',
-        time: 'Mar 15 · 8:00 AM',
-        badge: 'Updated',
-        badgeVariant: 'gray',
-        amountColor: C.text,
-        detail: {
-          rows: [
-            { label: 'Updated by', value: 'Titus (you)' },
-            { label: 'Old price', value: '$19.99/month' },
-            { label: 'New price', value: '$22.99/month' },
-            { label: 'Effective', value: 'Next cycle only' },
-            { label: 'Group notified', value: '3 members via push' },
-          ],
-        },
-      },
-    ],
-  },
-  {
-    sectionTitle: 'Mar 14',
-    items: [
-      {
-        id: 'm-ended',
-        kind: 'audit_ended',
-        serviceMark: 'Hulu',
-        icon: 'close-circle-outline',
-        iconBg: '#F0EEE9',
-        iconColor: '#5F5E5A',
-        title: 'Hulu split ended',
-        sub: 'Ended by Titus · billing stopped · history saved',
-        time: 'Mar 14 · 8:00 AM',
-        badge: 'Ended',
-        badgeVariant: 'gray',
-        amountColor: C.text,
-        detail: {
-          rows: [
-            { label: 'Subscription', value: 'Hulu (ad-free)' },
-            { label: 'Ended by', value: 'Titus (you)' },
-            { label: 'History', value: 'Retained · read-only audit trail' },
-          ],
-        },
-      },
-      {
-        id: 'm-join',
-        friendLinkIds: ['sam'],
-        kind: 'audit_join',
-        serviceMark: 'Netflix Premium',
-        icon: 'person-add-outline',
-        iconBg: '#E1F5EE',
-        iconColor: '#0F6E56',
-        title: 'Sam joined Netflix split',
-        sub: 'Invited by Titus · payment method added',
-        time: 'Mar 14 · 10:12 AM',
-        badge: 'Joined',
-        badgeVariant: 'green',
-        amountColor: C.text,
-        detail: {
-          rows: [
-            { label: 'Member', value: 'Sam M.' },
-            { label: 'Invited by', value: 'Titus (you)' },
-            { label: 'Payment method', value: 'Visa ···· 4242' },
-          ],
-        },
-      },
-      {
-        id: 'm1',
-        friendLinkIds: ['alex', 'casey'],
-        kind: 'receipt',
-        serviceMark: 'Olive Garden',
-        icon: 'receipt-outline',
-        iconBg: '#EEEDFE',
-        iconColor: '#534AB7',
-        title: 'Olive Garden',
-        sub: '3 people · 7 items · 1 pending payment',
-        time: 'Mar 14',
-        amount: '$49.52',
-        amountColor: C.text,
-        badge: '1 pending',
-        badgeVariant: 'amber',
-        detail: {
-          rows: [
-            { label: 'Total', value: '$49.52' },
-            { label: 'Your share', value: '$16.51' },
-          ],
-          actions: [{ id: 'm1-open', label: 'Open receipt', variant: 'primary' }],
-        },
-      },
-      {
-        id: 'm2',
-        kind: 'receipt',
-        serviceMark: 'Chipotle',
-        icon: 'receipt-outline',
-        iconBg: '#EEEDFE',
-        iconColor: '#534AB7',
-        title: 'Chipotle',
-        sub: '2 people · 4 items · Settled',
-        time: 'Mar 14',
-        amount: '$24.80',
-        amountColor: C.text,
-        badge: 'Settled',
-        badgeVariant: 'green',
-      },
-    ],
-  },
-];
 
 function startOfDayLocal(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
 }
 
+function dayBucketKey(d: Date): string {
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+}
+
+function sectionTitleForDayKey(key: string, d: Date): string {
+  if (key === '__today__') return 'Today';
+  if (key === '__yesterday__') return 'Yesterday';
+  return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+}
+
+/** Groups by calendar day (items must be newest-first). */
 function groupLiveItemsBySection(items: ActivityFeedItem[]): ActivityFeedGroup[] {
-  const today = startOfDayLocal(new Date()).getTime();
+  const todayStart = startOfDayLocal(new Date()).getTime();
   const y = new Date();
   y.setDate(y.getDate() - 1);
-  const yesterday = startOfDayLocal(y).getTime();
+  const yesterdayStart = startOfDayLocal(y).getTime();
 
-  const todayItems: ActivityFeedItem[] = [];
-  const yesterdayItems: ActivityFeedItem[] = [];
-  const older = new Map<string, ActivityFeedItem[]>();
+  const order: string[] = [];
+  const buckets = new Map<string, ActivityFeedItem[]>();
 
   for (const item of items) {
     const ms = item._activityCreatedAtMs;
     if (ms == null) continue;
     const d = new Date(ms);
     const ds = startOfDayLocal(d).getTime();
-    if (ds === today) todayItems.push(item);
-    else if (ds === yesterday) yesterdayItems.push(item);
-    else {
-      const label = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-      const arr = older.get(label) ?? [];
-      arr.push(item);
-      older.set(label, arr);
+    let key: string;
+    if (ds === todayStart) key = '__today__';
+    else if (ds === yesterdayStart) key = '__yesterday__';
+    else key = dayBucketKey(d);
+
+    if (!buckets.has(key)) {
+      buckets.set(key, []);
+      order.push(key);
     }
+    buckets.get(key)!.push(item);
   }
 
-  const groups: ActivityFeedGroup[] = [];
-  if (todayItems.length) groups.push({ sectionTitle: 'Today', items: todayItems });
-  if (yesterdayItems.length) groups.push({ sectionTitle: 'Yesterday', items: yesterdayItems });
-  const olderSorted = Array.from(older.entries()).sort((a, b) => {
-    const ma = a[1][0]?._activityCreatedAtMs ?? 0;
-    const mb = b[1][0]?._activityCreatedAtMs ?? 0;
-    return mb - ma;
+  return order.map((key) => {
+    const first = buckets.get(key)![0];
+    const ms = first._activityCreatedAtMs ?? 0;
+    const d = new Date(ms);
+    return {
+      sectionTitle: sectionTitleForDayKey(key, d),
+      items: buckets.get(key)!,
+    };
   });
-  for (const [title, its] of olderSorted) {
-    groups.push({ sectionTitle: title, items: its });
-  }
-  return groups;
 }
 
 function findBaseActivityItem(
   itemId: string,
   liveItems: ActivityFeedItem[],
 ): ActivityFeedItem | undefined {
-  const live = liveItems.find((i) => i.id === itemId);
-  if (live) return live;
-  for (const g of MOCK_ACTIVITY_GROUPS) {
-    const found = g.items.find((i) => i.id === itemId);
-    if (found) return found;
-  }
-  return undefined;
+  return liveItems.find((i) => i.id === itemId);
 }
 
 function shouldShowMarkPaidInline(
@@ -669,7 +309,7 @@ function shouldShowMarkPaidInline(
   if (paidMap[itemId]) return false;
   const base = findBaseActivityItem(itemId, liveItems);
   if (!base || !itemEligibleForMarkPaid(base)) return false;
-  if (f === 'pending') return true;
+  if (f === 'all' || f === 'payments') return true;
   return drawerOpenId === itemId;
 }
 
@@ -711,6 +351,8 @@ type ActivityItemRowProps = {
   onReceiptPress: () => void;
   /** Split invite row: open subscription to join. */
   onJoinSplitPress?: (subscriptionId: string) => void;
+  /** Primary row tap: mark read + navigate (or expand detail when no route). */
+  onActivityPress?: () => void;
 };
 
 function ActivityItemRow({
@@ -726,6 +368,7 @@ function ActivityItemRow({
   receiptNavigateMode,
   onReceiptPress,
   onJoinSplitPress,
+  onActivityPress,
 }: ActivityItemRowProps) {
   const b = badgeStyles(item.badgeVariant);
   const receiptTapOpensDetail = receiptNavigateMode && item.kind === 'receipt';
@@ -736,22 +379,31 @@ function ActivityItemRow({
   );
 
   const onMainPress = () => {
+    if (onActivityPress) {
+      onActivityPress();
+      return;
+    }
     if (receiptTapOpensDetail) onReceiptPress();
     else if (hasExpandableDetail) onToggle();
   };
 
-  const rowPressable =
-    receiptTapOpensDetail || hasExpandableDetail ? onMainPress : undefined;
+  const rowPressable = onActivityPress
+    ? onMainPress
+    : receiptTapOpensDetail || hasExpandableDetail
+      ? onMainPress
+      : undefined;
 
   return (
-    <View style={styles.actItem}>
+    <View style={[styles.actItem, item.read !== true && styles.actItemUnread]}>
       <View style={styles.actMain}>
         <Pressable
           onPress={rowPressable}
           style={styles.actMainPressable}
-          accessibilityRole={receiptTapOpensDetail || hasExpandableDetail ? 'button' : 'none'}
+          accessibilityRole={onActivityPress || receiptTapOpensDetail || hasExpandableDetail ? 'button' : 'none'}
           accessibilityLabel={receiptTapOpensDetail ? `Open receipt ${item.title}` : undefined}
-          accessibilityState={hasExpandableDetail ? { expanded } : undefined}
+          accessibilityState={
+            onActivityPress || hasExpandableDetail ? { expanded } : undefined
+          }
         >
           <View style={styles.actLeft}>
             {item.friendAvatar ? (
@@ -963,16 +615,17 @@ export default function ActivityScreen() {
     }
     const raw = params.filter;
     const f = Array.isArray(raw) ? raw[0] : raw;
-    if (f === 'receipts') {
+    const next: ActivityFilterId | null =
+      f === 'payments' || f === 'splits' || f === 'friends' || f === 'all'
+        ? f
+        : f === 'receipts'
+          ? 'all'
+          : null;
+    if (next) {
       LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
       setExpandedId(null);
       setMarkPaidDrawerOpenForId(null);
-      setFilter('receipts');
-    } else if (f === 'all') {
-      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-      setExpandedId(null);
-      setMarkPaidDrawerOpenForId(null);
-      setFilter('all');
+      setFilter(next);
     }
   }, [params.filter, friendIdFilter]);
 
@@ -996,7 +649,13 @@ export default function ActivityScreen() {
       const rows: ActivityFeedItem[] = [];
       for (const e of events) {
         const row = activityEventToFeedRow(e as ActivityEvent, uid);
-        if (row) rows.push(row as ActivityFeedItem);
+        if (!row) continue;
+        rows.push({
+          ...row,
+          activityType: e.type,
+          read: e.read === true,
+          subscriptionId: e.subscriptionId,
+        } as ActivityFeedItem);
       }
       setLiveFeedItems(rows);
     });
@@ -1009,46 +668,13 @@ export default function ActivityScreen() {
   const pendingBreakdown = '1 overdue · 1 partial';
 
   const filteredGroups = useMemo(() => {
-    /** Receipts filter still uses demo rows until receipt splits write to `users/{uid}/activity`. */
-    const useMockOnly = filter === 'receipts';
-
-    if (useMockOnly) {
-      const groups = MOCK_ACTIVITY_GROUPS.map((g) => ({
-        ...g,
-        items: g.items
-          .map((i) =>
-            manualPaidByItemId[i.id]
-              ? applyManualPaidToItem(i, manualPaidByItemId[i.id]!)
-              : i,
-          )
-          .filter((i) => itemMatchesFilter(i, filter) && itemMatchesFriend(i, friendIdFilter)),
-      })).filter((g) => g.items.length > 0);
-
-      if (filter === 'receipts' && groups.length > 0) {
-        return [
-          {
-            sectionTitle: 'Receipt splits',
-            items: groups.flatMap((g) => g.items),
-          },
-        ];
-      }
-
-      return groups;
-    }
-
-    const liveFiltered = liveFeedItems.filter(
+    const mapped = liveFeedItems.map((i) =>
+      manualPaidByItemId[i.id] ? applyManualPaidToItem(i, manualPaidByItemId[i.id]!) : i,
+    );
+    const liveFiltered = mapped.filter(
       (i) => itemMatchesFilter(i, filter) && itemMatchesFriend(i, friendIdFilter),
     );
-    const grouped = groupLiveItemsBySection(liveFiltered);
-    if (filter === 'audit' && grouped.length > 0) {
-      return [
-        {
-          sectionTitle: 'All changes',
-          items: grouped.flatMap((g) => g.items),
-        },
-      ];
-    }
-    return grouped;
+    return groupLiveItemsBySection(liveFiltered);
   }, [filter, manualPaidByItemId, friendIdFilter, liveFeedItems]);
 
   const toggleExpanded = useCallback((id: string) => {
@@ -1091,6 +717,36 @@ export default function ActivityScreen() {
     setMarkPaidDrawerOpenForId(null);
     setFilter(id);
   }, []);
+
+  const handleActivityRowPress = useCallback(
+    (item: ActivityFeedItem) => {
+      if (uid) {
+        void markActivityDocumentRead(uid, item.id).catch(() => {});
+        setLiveFeedItems((prev) =>
+          prev.map((i) => (i.id === item.id ? { ...i, read: true } : i)),
+        );
+      }
+      const path = resolveActivityRoute({
+        activityType: item.activityType,
+        subscriptionId: item.subscriptionId,
+        joinSubscriptionId: item.joinSubscriptionId,
+        friendLinkIds: item.friendLinkIds,
+      });
+      if (path) {
+        router.push(path as never);
+        return;
+      }
+      const hasDetail = Boolean(
+        item.detail &&
+          (item.detail.rows.length > 0 || (item.detail.actions?.length ?? 0) > 0),
+      );
+      if (hasDetail) {
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+        setExpandedId((prev) => (prev === item.id ? null : item.id));
+      }
+    },
+    [uid, router],
+  );
 
   return (
     <View style={styles.root}>
@@ -1182,34 +838,25 @@ export default function ActivityScreen() {
 
         <View style={styles.body}>
           {filteredGroups.length === 0 ? (
-            filter === 'receipts' ? (
-              <View style={styles.receiptsEmpty}>
-                <Ionicons name="receipt-outline" size={40} color={C.muted} style={styles.receiptsEmptyIcon} />
-                <Text style={styles.receiptsEmptyTitle}>No receipts yet · Scan your first receipt</Text>
-                <Pressable
-                  style={styles.receiptsEmptyCta}
-                  onPress={() => router.push('/scan')}
-                  accessibilityRole="button"
-                  accessibilityLabel="Go to Scan tab"
-                >
-                  <Ionicons name="scan-outline" size={20} color="#fff" />
-                  <Text style={styles.receiptsEmptyCtaText}>Scan receipt</Text>
-                </Pressable>
-              </View>
-            ) : (
-              <View style={styles.feedEmpty}>
-                <Text style={styles.feedEmptyText}>
-                  {friendIdFilter
-                    ? `No activity with ${getFriendFilterDisplayName(friendIdFilter)} yet.`
-                    : filter === 'audit'
-                      ? 'No subscription changes or audit events yet.'
-                      : 'No activity for this filter.'}
-                </Text>
-              </View>
-            )
+            <View style={styles.feedEmpty}>
+              <Text style={styles.feedEmptyText}>
+                {friendIdFilter
+                  ? `No activity with ${getFriendFilterDisplayName(friendIdFilter)} yet.`
+                  : filter === 'payments'
+                    ? 'No payment activity yet.'
+                    : filter === 'splits'
+                      ? 'No split or billing activity yet.'
+                      : filter === 'friends'
+                        ? 'No friend activity yet.'
+                        : 'No activity yet.'}
+              </Text>
+            </View>
           ) : (
             filteredGroups.map((group, gi) => (
-              <View key={group.sectionTitle} style={gi > 0 ? styles.feedSection : styles.feedSectionFirst}>
+              <View
+                key={`${group.sectionTitle}-${gi}`}
+                style={gi > 0 ? styles.feedSection : styles.feedSectionFirst}
+              >
                 <View style={styles.sh}>
                   <Text style={styles.shTitle}>{group.sectionTitle}</Text>
                 </View>
@@ -1220,6 +867,7 @@ export default function ActivityScreen() {
                     showTimelineLine={ii < group.items.length - 1}
                     expanded={expandedId === item.id}
                     onToggle={() => toggleExpanded(item.id)}
+                    onActivityPress={() => handleActivityRowPress(item)}
                     showMarkPaidRow={shouldShowMarkPaidInline(
                       item.id,
                       filter,
@@ -1245,11 +893,17 @@ export default function ActivityScreen() {
                         setExpandedId(item.id);
                       }
                     }}
-                    receiptNavigateMode={filter === 'receipts'}
+                    receiptNavigateMode={false}
                     onReceiptPress={() => router.push(`/receipt/${item.id}`)}
-                    onJoinSplitPress={(subscriptionId) =>
-                      router.push({ pathname: '/subscription/[id]', params: { id: subscriptionId } })
-                    }
+                    onJoinSplitPress={(subscriptionId) => {
+                      if (uid) {
+                        void markActivityDocumentRead(uid, item.id).catch(() => {});
+                        setLiveFeedItems((prev) =>
+                          prev.map((i) => (i.id === item.id ? { ...i, read: true } : i)),
+                        );
+                      }
+                      router.push({ pathname: '/subscription/[id]', params: { id: subscriptionId } });
+                    }}
                   />
                 ))}
               </View>
@@ -1472,6 +1126,11 @@ const styles = StyleSheet.create({
     borderWidth: 0.5,
     borderColor: C.border,
     overflow: 'hidden',
+  },
+  actItemUnread: {
+    borderLeftWidth: 3,
+    borderLeftColor: C.purple,
+    paddingLeft: 0,
   },
   actMain: {
     flexDirection: 'row',

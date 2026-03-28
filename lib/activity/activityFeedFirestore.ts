@@ -1,10 +1,12 @@
 import {
   collection,
+  doc,
   limit,
   onSnapshot,
   orderBy,
   query,
   startAfter,
+  updateDoc,
   type Firestore,
   type QueryDocumentSnapshot,
   type Unsubscribe,
@@ -56,6 +58,13 @@ export function parseActivityEventDoc(d: QueryDocumentSnapshot): ActivityEvent |
  * Live listener for the first page of the activity feed (newest first).
  * Matches: `orderBy('createdAt', 'desc'), limit(50)`.
  */
+/** Mark a single activity doc as read (allowed by Firestore rules). */
+export async function markActivityDocumentRead(uid: string, activityId: string): Promise<void> {
+  const db = getFirebaseFirestore();
+  if (!db) return;
+  await updateDoc(doc(db, 'users', uid, 'activity', activityId), { read: true });
+}
+
 export function subscribeActivityFeed(
   uid: string,
   onUpdate: (events: ActivityEvent[]) => void,
