@@ -145,9 +145,11 @@ export default function FriendsContactsScreen() {
     if (!user?.uid) return;
     setConnectingUid(row.uid);
     try {
-      await createDirectFriendshipFromSearch({ currentUid: user.uid, otherUid: row.uid });
+      const outcome = await createDirectFriendshipFromSearch({ currentUid: user.uid, otherUid: row.uid });
       setMatches((prev) => prev.filter((x) => x.uid !== row.uid));
-      Alert.alert('Connected', `You and ${row.displayName} are now friends.`);
+      if (outcome === 'created') {
+        Alert.alert('Connected', `You and ${row.displayName} are now friends.`);
+      }
     } catch (e) {
       Alert.alert('Could not connect', e instanceof Error ? e.message : 'Try again.');
     } finally {

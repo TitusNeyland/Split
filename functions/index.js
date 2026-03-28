@@ -1,6 +1,6 @@
 const crypto = require('crypto');
 const admin = require('firebase-admin');
-const { onDocumentUpdated } = require('firebase-functions/v2/firestore');
+const { onDocumentCreated, onDocumentUpdated } = require('firebase-functions/v2/firestore');
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { setGlobalOptions } = require('firebase-functions/v2');
@@ -74,6 +74,58 @@ exports.onInviteAccepted = onDocumentUpdated('invites/{inviteId}', async (event)
     if (cur.exists) return;
     tx.set(ref, payload);
   });
+});
+
+/**
+ * Push to the non-initiator when a friendship is created from Find People (`connectedVia: search`).
+ */
+exports.onFriendshipCreatedNotify = onDocumentCreated('friendships/{friendshipId}', async (event) => {
+  const snap = event.data;
+  if (!snap) return;
+  const data = snap.data();
+  const via = data.connectedVia;
+  if (via !== 'search' && via !== 'user_search') return;
+
+  const users = data.users;
+  const initiatedBy = data.initiatedBy;
+  if (!Array.isArray(users) || users.length !== 2) return;
+  if (typeof initiatedBy !== 'string') return;
+
+  const recipientUid = users[0] === initiatedBy ? users[1] : users[0];
+  if (!recipientUid || recipientUid === initiatedBy) return;
+
+  const db = admin.firestore();
+  const recipientDoc = await db.collection('users').doc(recipientUid).get();
+  const prefs = recipientDoc.data()?.notificationPreferences;
+  if (prefs && prefs.notificationsEnabled === false) return;
+
+  const senderDoc = await db.collection('users').doc(initiatedBy).get();
+  const dn = senderDoc.data()?.displayName;
+  const senderName = typeof dn === 'string' && dn.trim() ? dn.trim() : 'Someone';
+
+  const body = `${senderName} connected with you on mySplit`;
+
+  const sessionsSnap = await db.collection('users').doc(recipientUid).collection('sessions').get();
+  const tokens = new Set();
+  sessionsSnap.docs.forEach((d) => {
+    const t = d.data().fcmToken;
+    if (typeof t === 'string' && t.trim()) tokens.add(t.trim());
+  });
+
+  await Promise.all(
+    [...tokens].map((token) =>
+      admin
+        .messaging()
+        .send({
+          token,
+          notification: { title: 'mySplit', body },
+          data: { type: 'friend_connected', initiatorUid: initiatedBy },
+        })
+        .catch((e) => {
+          console.warn('onFriendshipCreatedNotify: FCM send failed', e?.message || e);
+        })
+    )
+  );
 });
 
 /**
