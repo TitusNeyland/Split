@@ -1,5 +1,4 @@
-import React, { useCallback, useState } from 'react';
-;
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -29,6 +28,8 @@ export type InviteShareSheetPanelProps = {
   subtitle?: string | null;
   onClose: () => void;
   containerStyle?: ViewStyle;
+  /** Opens the native share sheet once when the invite URL is ready (RN Share API). */
+  autoShareOnMount?: boolean;
 };
 
 export function InviteShareSheetPanel({
@@ -37,10 +38,24 @@ export function InviteShareSheetPanel({
   subtitle,
   onClose,
   containerStyle,
+  autoShareOnMount = false,
 }: InviteShareSheetPanelProps) {
   const [copied, setCopied] = useState(false);
+  const lastAutoSharedUrl = useRef<string | null>(null);
 
   const shortUrlDisplay = inviteUrl.replace(/^https?:\/\//i, '');
+
+  useEffect(() => {
+    if (!autoShareOnMount || !shareMessage || !inviteUrl) return;
+    if (lastAutoSharedUrl.current === inviteUrl) return;
+    lastAutoSharedUrl.current = inviteUrl;
+    void Share.share({
+      message: Platform.OS === 'ios' ? shareMessage : `${shareMessage}`,
+      ...(Platform.OS === 'ios' ? { url: inviteUrl } : {}),
+    }).catch(() => {
+      /* dismissed */
+    });
+  }, [autoShareOnMount, shareMessage, inviteUrl]);
 
   const onCopy = useCallback(async () => {
     await Clipboard.setStringAsync(inviteUrl);
@@ -76,10 +91,7 @@ export function InviteShareSheetPanel({
 
   const openMessages = useCallback(() => {
     const body = encodeURIComponent(shareMessage);
-    const url =
-      Platform.OS === 'ios'
-        ? `sms:&body=${body}`
-        : `sms:?body=${body}`;
+    const url = Platform.OS === 'ios' ? `sms:&body=${body}` : `sms:?body=${body}`;
     void openOrShare(() => url, 'Messages');
   }, [openOrShare, shareMessage]);
 
@@ -108,8 +120,19 @@ export function InviteShareSheetPanel({
   return (
     <View style={[styles.sheet, containerStyle]}>
       <View style={styles.handle} />
-      <Text style={styles.sheetTitle}>Invite a friend to mySplit</Text>
-      {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+      <Text style={styles.sheetTitle}>Invite a friend</Text>
+      <Text style={styles.sheetSub}>Share this link — it expires in 7 days.</Text>
+      {subtitle ? <Text style={styles.contextLine}>{subtitle}</Text> : null}
+
+      <View style={styles.copyRow}>
+        <Ionicons name="link-outline" size={14} color={C.muted} />
+        <Text style={styles.copyUrl} numberOfLines={1}>
+          {shortUrlDisplay}
+        </Text>
+        <Pressable onPress={onCopy} style={styles.copyBtn} accessibilityRole="button" accessibilityLabel="Copy invite link">
+          <Text style={styles.copyBtnTxt}>{copied ? 'Copied' : 'Copy'}</Text>
+        </Pressable>
+      </View>
 
       <View style={styles.shareGrid}>
         <Pressable style={styles.shareApp} onPress={openMessages} accessibilityRole="button" accessibilityLabel="Share via Messages">
@@ -138,17 +161,7 @@ export function InviteShareSheetPanel({
         </Pressable>
       </View>
 
-      <View style={styles.copyRow}>
-        <Ionicons name="link-outline" size={14} color={C.muted} />
-        <Text style={styles.copyUrl} numberOfLines={1}>
-          {shortUrlDisplay}
-        </Text>
-        <Pressable onPress={onCopy} style={styles.copyBtn} accessibilityRole="button" accessibilityLabel="Copy invite link">
-          <Text style={styles.copyBtnTxt}>{copied ? 'Copied' : 'Copy'}</Text>
-        </Pressable>
-      </View>
-
-      <Text style={styles.expiryNote}>Link expires in 7 days</Text>
+      <Text style={styles.expiryNote}>7 days until expiry</Text>
 
       <Pressable
         onPress={onClose}
@@ -180,13 +193,20 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   sheetTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: C.text,
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  sheetSub: {
     fontSize: 11,
     color: C.muted,
     textAlign: 'center',
-    marginBottom: 9,
-    fontWeight: '500',
+    marginBottom: 10,
+    lineHeight: 16,
   },
-  subtitle: {
+  contextLine: {
     fontSize: 12,
     color: C.text,
     textAlign: 'center',
@@ -226,7 +246,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginBottom: 8,
+    marginBottom: 10,
     borderWidth: 0.5,
     borderColor: C.border,
   },
@@ -253,16 +273,14 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   sheetCancel: {
-    backgroundColor: '#fff',
+    backgroundColor: '#F0EEE9',
     borderRadius: 12,
     paddingVertical: 12,
     alignItems: 'center',
-    borderWidth: 0.5,
-    borderColor: C.border,
   },
   sheetCancelTxt: {
     fontSize: 13,
     fontWeight: '600',
-    color: C.text,
+    color: '#5F5E5A',
   },
 });
