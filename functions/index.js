@@ -36,6 +36,65 @@ async function incrementUnreadNotificationCount(db, uid) {
   );
 }
 
+// --- Activity feed: users/{uid}/activity (server writes only) ---
+
+async function getUserDisplayName(db, uid) {
+  if (typeof uid !== 'string' || !uid) return 'Someone';
+  const snap = await db.collection('users').doc(uid).get();
+  const dn = snap.data()?.displayName;
+  return typeof dn === 'string' && dn.trim() ? dn.trim() : 'Someone';
+}
+
+function slugifyServiceIdFromName(name) {
+  if (!name || typeof name !== 'string') return 'unknown';
+  const s = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  return s || 'unknown';
+}
+
+function subscriptionLabelFromData(sub) {
+  const sn =
+    typeof sub.serviceName === 'string' && sub.serviceName.trim()
+      ? sub.serviceName.trim()
+      : typeof sub.planName === 'string' && sub.planName.trim()
+        ? sub.planName.trim()
+        : 'Subscription';
+  return sn;
+}
+
+function shortBrandName(fullName) {
+  const t = (fullName || '').trim();
+  if (!t) return 'Subscription';
+  return t.split(/\s+/)[0] || t;
+}
+
+function formatCycleMonthLabel(ts) {
+  const d = ts.toDate();
+  const months = [
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
+  ];
+  return `${months[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+}
+
+async function appendActivityEvent(db, uid, data) {
+  if (typeof uid !== 'string' || !uid) return;
+  await db.collection('users').doc(uid).collection('activity').add({
+    read: false,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    ...data,
+  });
+}
+
 function inferConnectedVia(data) {
   if (data.splitId) return 'split_invite';
   const v = data.connectedVia;
@@ -371,6 +430,42 @@ async function sendSplitInviteInAppNotifications(db, subId, after, newUids) {
     } catch (e) {
       console.warn('sendSplitInviteInAppNotifications: failed for', newUid, e?.message || e);
     }
+
+    try {
+      const slugId = slugifyServiceIdFromName(serviceName);
+      await appendActivityEvent(db, newUid, {
+        type: 'split_invite_received',
+        subscriptionId: subId,
+        subscriptionName: serviceName,
+        serviceId: slugId,
+        actorUid: ownerUid,
+        actorName: inviterName,
+        actorAvatarUrl: inviterAvatarUrl,
+        metadata: {
+          userShareCents: userShare,
+          billingCycle: typeof after.billingCycle === 'string' ? after.billingCycle : 'monthly',
+        },
+      });
+    } catch (e) {
+      console.warn('sendSplitInviteInAppNotifications: activity split_invite_received failed', newUid, e?.message || e);
+    }
+
+    const inviteeName =
+      row && typeof row.displayName === 'string' && row.displayName.trim()
+        ? row.displayName.trim()
+        : await getUserDisplayName(db, newUid);
+    try {
+      const slugId = slugifyServiceIdFromName(serviceName);
+      await appendActivityEvent(db, ownerUid, {
+        type: 'split_invite_sent',
+        subscriptionId: subId,
+        subscriptionName: serviceName,
+        serviceId: slugId,
+        metadata: { inviteeUid: newUid, inviteeName, userShareCents: userShare },
+      });
+    } catch (e) {
+      console.warn('sendSplitInviteInAppNotifications: activity split_invite_sent failed', ownerUid, e?.message || e);
+    }
   }
 }
 
@@ -412,6 +507,235 @@ exports.onSubscriptionMemberAddedInAppNotify = onDocumentUpdated('subscriptions/
 
   const db = admin.firestore();
   await sendSplitInviteInAppNotifications(db, subId, after, newUids);
+});
+
+/**
+ * Payment activity: pending → paid on `memberPaymentStatus` writes `payment_received` (owner) and
+ * `payment_sent` (member who paid).
+ */
+exports.onSubscriptionMemberPaymentActivity = onDocumentUpdated('subscriptions/{subscriptionId}', async (event) => {
+  const before = event.data.before.exists ? event.data.before.data() : {};
+  const after = event.data.after.data();
+  if (!after) return;
+  const beforeMps = before.memberPaymentStatus || {};
+  const afterMps = after.memberPaymentStatus || {};
+  const ownerUid = after.ownerUid;
+  if (typeof ownerUid !== 'string' || !ownerUid) return;
+  const subId = event.params.subscriptionId;
+  const shares = Array.isArray(after.splitMemberShares) ? after.splitMemberShares : [];
+  const subName = subscriptionLabelFromData(after);
+  const serviceId = slugifyServiceIdFromName(subName);
+  const cycleMonth = formatCycleMonthLabel(admin.firestore.Timestamp.now());
+
+  const db = admin.firestore();
+  const memberIds = new Set([...Object.keys(beforeMps), ...Object.keys(afterMps)]);
+  for (const memberUid of memberIds) {
+    const prev = beforeMps[memberUid];
+    const next = afterMps[memberUid];
+    if (prev === next) continue;
+    if (next !== 'paid') continue;
+    if (prev !== 'pending') continue;
+
+    const share = shares.find((s) => s && s.memberId === memberUid);
+    const amountCents = share && typeof share.amountCents === 'number' ? share.amountCents : 0;
+    const actorName = await getUserDisplayName(db, memberUid);
+
+    if (memberUid !== ownerUid) {
+      await appendActivityEvent(db, ownerUid, {
+        type: 'payment_received',
+        subscriptionId: subId,
+        subscriptionName: subName,
+        serviceId,
+        actorUid: memberUid,
+        actorName,
+        amount: amountCents,
+        metadata: { memberUid, cycleMonth },
+      });
+    }
+
+    await appendActivityEvent(db, memberUid, {
+      type: 'payment_sent',
+      subscriptionId: subId,
+      subscriptionName: subName,
+      serviceId,
+      amount: amountCents,
+      metadata: {
+        ownerUid,
+        ownerName: await getUserDisplayName(db, ownerUid),
+        cycleMonth,
+      },
+    });
+  }
+});
+
+/**
+ * When a split is ended (`status` → `ended`), write `split_ended` to every member’s activity feed.
+ */
+exports.onSubscriptionEndedActivity = onDocumentUpdated('subscriptions/{subscriptionId}', async (event) => {
+  const before = event.data.before.exists ? event.data.before.data() : {};
+  const after = event.data.after.data();
+  if (!after) return;
+  const prev = before.status;
+  const next = after.status;
+  if (next !== 'ended' || prev === 'ended') return;
+
+  const endedBy = after.endedBy;
+  if (typeof endedBy !== 'string' || !endedBy) return;
+
+  const subId = event.params.subscriptionId;
+  const subName = subscriptionLabelFromData(after);
+  const serviceId = slugifyServiceIdFromName(subName);
+
+  const ownerUid = after.ownerUid;
+  const memberUids = Array.isArray(after.memberUids) ? after.memberUids : [];
+  const uids = new Set(
+    [...memberUids, typeof ownerUid === 'string' ? ownerUid : null].filter(
+      (u) => typeof u === 'string' && u
+    )
+  );
+
+  const db = admin.firestore();
+  const actorName = await getUserDisplayName(db, endedBy);
+  for (const uid of uids) {
+    try {
+      await appendActivityEvent(db, uid, {
+        type: 'split_ended',
+        subscriptionId: subId,
+        subscriptionName: subName,
+        serviceId,
+        actorUid: endedBy,
+        actorName,
+        metadata: { subscriptionId: subId },
+      });
+    } catch (e) {
+      console.warn('onSubscriptionEndedActivity: failed for', uid, e?.message || e);
+    }
+  }
+});
+
+/**
+ * Pending payment_intents past due_date (UTC): `payment_overdue` on the subscription owner's feed.
+ */
+exports.scanOverduePaymentIntents = onSchedule('every day 04:00', async () => {
+  const db = admin.firestore();
+  const now = new Date();
+  const todayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const todayStartTs = admin.firestore.Timestamp.fromDate(todayStart);
+
+  const snap = await db
+    .collection('payment_intents')
+    .where('status', '==', 'pending')
+    .where('due_date', '<', todayStartTs)
+    .limit(500)
+    .get();
+
+  for (const doc of snap.docs) {
+    const d = doc.data();
+    const subscriptionId = d.subscriptionId;
+    const payer = d.payer;
+    const recipient = d.recipient;
+    const amountCents = typeof d.amountCents === 'number' ? d.amountCents : 0;
+    if (typeof subscriptionId !== 'string' || typeof payer !== 'string' || typeof recipient !== 'string') continue;
+
+    const docId = `overdue_${doc.id}`;
+    const ref = db.collection('users').doc(recipient).collection('activity').doc(docId);
+    const existing = await ref.get();
+    if (existing.exists) continue;
+
+    const subSnap = await db.collection('subscriptions').doc(subscriptionId).get();
+    if (!subSnap.exists) continue;
+    const sub = subSnap.data();
+    const subName = subscriptionLabelFromData(sub);
+    const serviceId = slugifyServiceIdFromName(subName);
+    const due = d.due_date;
+    let daysOverdue = 1;
+    if (due && typeof due.toDate === 'function') {
+      const ms = todayStart.getTime() - due.toDate().getTime();
+      daysOverdue = Math.max(1, Math.floor(ms / 86400000));
+    }
+
+    const actorName = await getUserDisplayName(db, payer);
+    await ref.set({
+      type: 'payment_overdue',
+      subscriptionId,
+      subscriptionName: subName,
+      serviceId,
+      actorUid: payer,
+      actorName,
+      amount: amountCents,
+      read: false,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      metadata: { daysOverdue, paymentIntentId: doc.id },
+    });
+  }
+});
+
+/**
+ * Owner sends a payment reminder to a member: `reminder_sent` (owner) + `reminder_received` (member).
+ *
+ * Input: `{ subscriptionId: string, memberUid: string }`
+ */
+exports.sendPaymentReminder = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Sign in required.');
+  }
+  const senderUid = request.auth.uid;
+  const subscriptionId = request.data?.subscriptionId;
+  const memberUid = request.data?.memberUid;
+  if (typeof subscriptionId !== 'string' || !subscriptionId.trim()) {
+    throw new HttpsError('invalid-argument', 'subscriptionId required.');
+  }
+  if (typeof memberUid !== 'string' || !memberUid.trim()) {
+    throw new HttpsError('invalid-argument', 'memberUid required.');
+  }
+
+  const db = admin.firestore();
+  const subSnap = await db.collection('subscriptions').doc(subscriptionId.trim()).get();
+  if (!subSnap.exists) {
+    throw new HttpsError('not-found', 'Subscription not found.');
+  }
+  const sub = subSnap.data();
+  const ownerUid = sub.ownerUid;
+  if (senderUid !== ownerUid) {
+    throw new HttpsError('permission-denied', 'Only the split owner can send reminders.');
+  }
+  if (memberUid === ownerUid) {
+    throw new HttpsError('invalid-argument', 'Invalid member.');
+  }
+  const memberUids = Array.isArray(sub.memberUids) ? sub.memberUids : [];
+  if (!memberUids.includes(memberUid)) {
+    throw new HttpsError('invalid-argument', 'Member is not on this split.');
+  }
+
+  const shares = Array.isArray(sub.splitMemberShares) ? sub.splitMemberShares : [];
+  const share = shares.find((s) => s && s.memberId === memberUid);
+  const amountCents = share && typeof share.amountCents === 'number' ? share.amountCents : 0;
+  const subName = subscriptionLabelFromData(sub);
+  const serviceId = slugifyServiceIdFromName(subName);
+  const targetName = await getUserDisplayName(db, memberUid);
+  const senderName = await getUserDisplayName(db, senderUid);
+
+  await appendActivityEvent(db, senderUid, {
+    type: 'reminder_sent',
+    subscriptionId: subscriptionId.trim(),
+    subscriptionName: subName,
+    serviceId,
+    actorUid: memberUid,
+    actorName: targetName,
+    amount: amountCents,
+  });
+
+  await appendActivityEvent(db, memberUid, {
+    type: 'reminder_received',
+    subscriptionId: subscriptionId.trim(),
+    subscriptionName: subName,
+    serviceId,
+    actorUid: senderUid,
+    actorName: senderName,
+    amount: amountCents,
+  });
+
+  return { ok: true };
 });
 
 /**

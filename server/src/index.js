@@ -5,12 +5,17 @@ import multer from 'multer';
 import OpenAI from 'openai';
 import { postProcessLineItems } from './postProcess.js';
 import { createStripeRouter } from './stripeRoutes.js';
+import { stripeWebhookHandler } from './stripeWebhookHandler.js';
 import { createSessionRouter } from './sessionRoutes.js';
 import { createSupportRouter } from './supportRoutes.js';
 
 const PORT = Number(process.env.PORT) || 8787;
 const app = express();
 app.use(cors());
+
+/** Stripe webhooks require the raw body for signature verification (must run before express.json). */
+app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), stripeWebhookHandler);
+
 app.use(express.json({ limit: '12mb' }));
 
 const upload = multer({
