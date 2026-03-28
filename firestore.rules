@@ -91,6 +91,15 @@ service cloud.firestore {
             && request.resource.data.diff(resource.data).affectedKeys()
               .hasOnly(['status', 'acceptedBy', 'acceptedAt'])
           )
+          || (
+            request.resource.data.status == 'declined'
+            && request.resource.data.declinedBy == request.auth.uid
+            && request.resource.data.declinedAt is timestamp
+            && request.auth.uid != resource.data.createdBy
+            && resource.data.expiresAt > request.time
+            && request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['status', 'declinedBy', 'declinedAt'])
+          )
         );
 
       allow delete: if request.auth != null

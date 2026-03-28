@@ -149,7 +149,12 @@ export default function FriendsInviteModal({ visible, onClose, prefilledInviteId
             </Pressable>
           </View>
         ) : inviteId ? (
-          <InviteShareSheetPanel inviteUrl={inviteUrl} shareMessage={shareMessage} onClose={onClose} />
+          <InviteShareSheetPanel
+            inviteUrl={inviteUrl}
+            shareMessage={shareMessage}
+            onClose={onClose}
+            autoShareOnMount
+          />
         ) : null}
         </View>
       </View>

@@ -1,11 +1,19 @@
 import { useEffect, useRef } from 'react';
+import { Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { onAuthStateChanged } from 'firebase/auth';
 import { getFirebaseAuth, isFirebaseConfigured } from '../../../lib/firebase';
+import {
+  acceptPendingInvite,
+  fetchInviteById,
+  fetchUserProfileForInvite,
+} from '../../../lib/friends/friendSystemFirestore';
+import { inviteIsExpired } from '../../../lib/friends/inviteHelpers';
 import { getPendingInviteId, setPendingInviteId } from '../../../lib/friends/pendingInviteStorage';
 
 /**
- * After sign-up / sign-in, if an invite id was stored (link opened while logged out), open the accept screen.
+ * After sign-up / sign-in, if an invite id was stored (link opened in browser or before auth),
+ * accept it and create the friendship (Cloud Function), then show a welcome message.
  */
 export default function PendingInviteAfterAuth() {
   const router = useRouter();
@@ -24,9 +32,31 @@ export default function PendingInviteAfterAuth() {
       if (handledRef.current) return;
       const pending = await getPendingInviteId();
       if (!pending) return;
-      handledRef.current = true;
-      await setPendingInviteId(null);
-      router.replace(`/invite/${pending}`);
+
+      try {
+        const invite = await fetchInviteById(pending);
+        if (!invite || invite.status !== 'pending' || inviteIsExpired(invite)) {
+          await setPendingInviteId(null);
+          return;
+        }
+        if (invite.createdBy === user.uid) {
+          await setPendingInviteId(null);
+          return;
+        }
+
+        handledRef.current = true;
+
+        await acceptPendingInvite(pending, user.uid);
+        await setPendingInviteId(null);
+
+        const sender = await fetchUserProfileForInvite(invite.createdBy);
+        const name = sender?.displayName?.trim() || 'your friend';
+        router.replace('/friends');
+        Alert.alert('Welcome to mySplit', `You're now connected with ${name}.`);
+      } catch {
+        handledRef.current = false;
+        await setPendingInviteId(null);
+      }
     });
 
     return () => {

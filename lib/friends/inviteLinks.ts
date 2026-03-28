@@ -12,7 +12,7 @@ export function buildInviteUrl(inviteId: string): string {
 
 export function buildInviteShareMessage(inviteId: string): string {
   const url = buildInviteUrl(inviteId);
-  return `Hey, I use mySplit to split subscriptions and bills. Join me here: ${url}`;
+  return `Hey, join me on mySplit to split subscriptions and bills together: ${url}`;
 }
 
 const INVITE_PATH = /\/invite\/([^/?#]+)/i;

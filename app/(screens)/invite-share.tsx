@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react';
-;
 import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -128,6 +127,7 @@ export default function InviteShareScreen() {
             shareMessage={shareMessage}
             subtitle={suggestedName ? `For ${suggestedName}` : null}
             onClose={onClose}
+            autoShareOnMount
           />
         ) : null}
       </View>

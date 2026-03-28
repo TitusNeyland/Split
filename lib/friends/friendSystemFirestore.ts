@@ -45,7 +45,7 @@ export type FirestoreFriendship = {
   initiatedBy: string;
 };
 
-export type InviteStatus = 'pending' | 'accepted' | 'expired';
+export type InviteStatus = 'pending' | 'accepted' | 'expired' | 'declined';
 
 /** `invites/{inviteId}` — `inviteId` matches document id (deep link). */
 export type FirestoreInvite = {
@@ -61,6 +61,8 @@ export type FirestoreInvite = {
   status: InviteStatus;
   acceptedBy?: string;
   acceptedAt?: Timestamp;
+  declinedBy?: string;
+  declinedAt?: Timestamp;
   /** Snapshot at invite creation for the accept screen (invitee cannot query sender's data). */
   senderActiveSplits?: number;
   senderFriendCount?: number;
@@ -122,14 +124,16 @@ export type CreatePendingInviteInput = {
 
 /**
  * Creates `invites/{inviteId}` with `status: pending` and a 7-day `expiresAt`.
+ * Uses a new Firestore doc id (`doc(collection()).id`), equivalent to `addDoc`, so links are
+ * `https://…/invite/{inviteId}`.
  * Phone numbers must already be E.164 before hashing.
  */
 export async function createPendingInvite(input: CreatePendingInviteInput): Promise<string> {
   const db = getFirebaseFirestore();
   if (!db) throw new Error('Firestore is not configured.');
 
-  const inviteId = await generateInviteId();
-  const ref = doc(db, INVITES_COLLECTION, inviteId);
+  const ref = doc(collection(db, INVITES_COLLECTION));
+  const inviteId = ref.id;
   const expiresAt = Timestamp.fromMillis(Date.now() + INVITE_TTL_MS);
 
   let connectedVia = input.connectedVia;
@@ -162,6 +166,16 @@ export async function createPendingInvite(input: CreatePendingInviteInput): Prom
 
   await setDoc(ref, payload);
   return inviteId;
+}
+
+export async function declinePendingInvite(inviteId: string, declinerUid: string): Promise<void> {
+  const db = getFirebaseFirestore();
+  if (!db) throw new Error('Firestore is not configured.');
+  await updateDoc(doc(db, INVITES_COLLECTION, inviteId), {
+    status: 'declined' satisfies InviteStatus,
+    declinedBy: declinerUid,
+    declinedAt: serverTimestamp(),
+  });
 }
 
 export async function acceptPendingInvite(inviteId: string, accepterUid: string): Promise<void> {

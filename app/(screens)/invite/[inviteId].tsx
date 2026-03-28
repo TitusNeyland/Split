@@ -15,25 +15,20 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { onAuthStateChanged, type User } from 'firebase/auth';
-import { Timestamp } from 'firebase/firestore';
 import { getFirebaseAuth, isFirebaseConfigured } from '../../../lib/firebase';
 import {
   acceptPendingInvite,
+  declinePendingInvite,
   fetchInviteById,
   fetchUserProfileForInvite,
   type FirestoreInvite,
   type InviteSenderProfile,
 } from '../../../lib/friends/friendSystemFirestore';
+import { inviteIsExpired } from '../../../lib/friends/inviteHelpers';
 import { formatMemberSince, initialsFromName } from '../../../lib/profile';
+import { openAppStoreDownload } from '../../../lib/storeLinks';
 import { setPendingInviteId } from '../../../lib/friends/pendingInviteStorage';
 import { buildInviteUrl } from '../../../lib/friends/inviteLinks';
-
-function inviteIsExpired(invite: FirestoreInvite): boolean {
-  if (invite.status === 'expired') return true;
-  const ex = invite.expiresAt;
-  if (ex instanceof Timestamp && ex.toMillis() < Date.now()) return true;
-  return false;
-}
 
 function daysLeft(invite: FirestoreInvite): number {
   const ex = invite.expiresAt;
@@ -53,6 +48,7 @@ export default function AcceptInviteScreen() {
   const [invite, setInvite] = useState<FirestoreInvite | null>(null);
   const [sender, setSender] = useState<InviteSenderProfile | null>(null);
   const [accepting, setAccepting] = useState(false);
+  const [declining, setDeclining] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -105,11 +101,28 @@ export default function AcceptInviteScreen() {
   }, [inviteId]);
 
   useEffect(() => {
+    if (!inviteId || !user || loading) return;
+    let alive = true;
+    void (async () => {
+      try {
+        const inv = await fetchInviteById(inviteId);
+        if (!alive || !inv) return;
+        setInvite(inv);
+        const profile = await fetchUserProfileForInvite(inv.createdBy);
+        if (!alive) return;
+        setSender(profile);
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [user, inviteId, loading]);
+
+  useEffect(() => {
     if (!inviteId || loading) return;
-    if (user) {
-      void setPendingInviteId(null);
-      return;
-    }
+    if (user) return;
     if (invite && inviteIsExpired(invite)) return;
     void setPendingInviteId(inviteId);
   }, [inviteId, user, loading, invite]);
@@ -134,9 +147,21 @@ export default function AcceptInviteScreen() {
     }
   }, [user?.uid, invite, inviteId, expired, alreadyAccepted, selfInvite, router]);
 
-  const onDecline = useCallback(() => {
-    router.back();
-  }, [router]);
+  const onDecline = useCallback(async () => {
+    if (!user?.uid || !inviteId) {
+      router.back();
+      return;
+    }
+    setDeclining(true);
+    try {
+      await declinePendingInvite(inviteId, user.uid);
+      router.back();
+    } catch (e) {
+      Alert.alert('Could not update invite', e instanceof Error ? e.message : 'Try again.');
+    } finally {
+      setDeclining(false);
+    }
+  }, [user?.uid, inviteId, router]);
 
   if (!inviteId) {
     return (
@@ -175,13 +200,43 @@ export default function AcceptInviteScreen() {
     return (
       <View style={[styles.expiredWrap, { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 16 }]}>
         <StatusBar style="dark" />
-        <Ionicons name="time-outline" size={48} color="#888780" />
+        <View style={styles.expiredIconCircle}>
+          <Ionicons name="time-outline" size={28} color="#E24B4A" />
+        </View>
         <Text style={styles.expiredTitle}>This invite has expired</Text>
         <Text style={styles.expiredBody}>
-          Ask {senderName} to send a new one.
+          This invite link is no longer valid. Ask {senderName} to send a new one.
         </Text>
-        <Pressable onPress={() => router.back()} style={styles.primaryBtn}>
-          <Text style={styles.primaryBtnTxt}>OK</Text>
+        <View style={styles.expiredSenderCard}>
+          <Text style={styles.expiredSenderLbl}>Invite was from</Text>
+          <View style={styles.expiredSenderRow}>
+            {sender?.avatarUrl ? (
+              <Image source={{ uri: sender.avatarUrl }} style={styles.expiredSenderAv} />
+            ) : (
+              <LinearGradient colors={['#7F77DD', '#534AB7']} style={styles.expiredSenderAv}>
+                <Text style={styles.expiredSenderAvTxt}>{senderInitials}</Text>
+              </LinearGradient>
+            )}
+            <Text style={styles.expiredSenderName}>{senderName}</Text>
+          </View>
+        </View>
+        <Pressable onPress={() => openAppStoreDownload()} style={styles.primaryBtn}>
+          <Text style={styles.primaryBtnTxt}>Download mySplit anyway</Text>
+        </Pressable>
+        <Pressable onPress={() => router.back()} style={styles.ghostBtn}>
+          <Text style={styles.ghostBtnTxt}>Dismiss</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
+  if (invite.status === 'declined') {
+    return (
+      <View style={[styles.centered, { paddingTop: insets.top, paddingHorizontal: 24 }]}>
+        <StatusBar style="dark" />
+        <Text style={styles.errTxt}>This invite was declined.</Text>
+        <Pressable onPress={() => router.back()} style={styles.secondaryBtn}>
+          <Text style={styles.secondaryBtnTxt}>Go back</Text>
         </Pressable>
       </View>
     );
@@ -313,8 +368,12 @@ export default function AcceptInviteScreen() {
               <Text style={styles.primaryBtnTxt}>Accept & connect</Text>
             )}
           </Pressable>
-          <Pressable onPress={onDecline} style={styles.secondaryBtn}>
-            <Text style={styles.secondaryBtnTxt}>Decline</Text>
+          <Pressable
+            onPress={() => void onDecline()}
+            disabled={declining}
+            style={styles.secondaryBtn}
+          >
+            <Text style={styles.secondaryBtnTxt}>{declining ? 'Declining…' : 'Decline'}</Text>
           </Pressable>
         </>
       )}
@@ -539,5 +598,57 @@ const styles = StyleSheet.create({
     color: '#888780',
     textAlign: 'center',
     lineHeight: 20,
+    marginBottom: 8,
+  },
+  expiredIconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#FCEBEB',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  expiredSenderCard: {
+    width: '100%',
+    backgroundColor: '#F5F3EE',
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 20,
+  },
+  expiredSenderLbl: {
+    fontSize: 11,
+    color: '#888780',
+    marginBottom: 8,
+  },
+  expiredSenderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  expiredSenderAv: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  expiredSenderAvTxt: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  expiredSenderName: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#1a1a18',
+  },
+  ghostBtn: {
+    paddingVertical: 12,
+  },
+  ghostBtnTxt: {
+    fontSize: 13,
+    color: '#888780',
   },
 });
