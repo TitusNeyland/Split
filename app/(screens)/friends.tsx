@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Animated,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -100,13 +101,12 @@ function SearchResultRow({
           {row.displayName}
         </Text>
         <Text style={styles.resultSub} numberOfLines={1}>
-          {row.maskedEmail}
+          {row.usernameHandle} · on mySplit
         </Text>
       </View>
       {status === 'friend' ? (
         <View style={styles.friendsPill}>
-          <Ionicons name="checkmark-circle" size={14} color={C.green} />
-          <Text style={styles.friendsPillTxt}>Friends</Text>
+          <Text style={styles.friendsPillTxt}>Friends ✓</Text>
         </View>
       ) : null}
       {status === 'invited' ? <Text style={styles.invitedLbl}>Invited</Text> : null}
@@ -155,6 +155,9 @@ export default function FriendsScreen() {
   const [fetchedPending, setFetchedPending] = useState<OutgoingPendingInviteSummary[]>([]);
   const [pendingRefresh, setPendingRefresh] = useState(0);
   const [connectingUid, setConnectingUid] = useState<string | null>(null);
+  const [connectToast, setConnectToast] = useState<string | null>(null);
+  const toastOpacity = useRef(new Animated.Value(0)).current;
+  const toastTranslate = useRef(new Animated.Value(12)).current;
   const [inviteModalOpen, setInviteModalOpen] = useState(false);
   const [prefilledInviteId, setPrefilledInviteId] = useState<string | null>(null);
 
@@ -259,6 +262,41 @@ export default function FriendsScreen() {
     searchInputRef.current?.focus();
   }, []);
 
+  const showConnectToast = useCallback(
+    (message: string) => {
+      setConnectToast(message);
+      toastOpacity.setValue(0);
+      toastTranslate.setValue(12);
+      Animated.parallel([
+        Animated.timing(toastOpacity, {
+          toValue: 1,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+        Animated.timing(toastTranslate, {
+          toValue: 0,
+          duration: 220,
+          useNativeDriver: true,
+        }),
+      ]).start();
+      setTimeout(() => {
+        Animated.parallel([
+          Animated.timing(toastOpacity, {
+            toValue: 0,
+            duration: 200,
+            useNativeDriver: true,
+          }),
+          Animated.timing(toastTranslate, {
+            toValue: 12,
+            duration: 200,
+            useNativeDriver: true,
+          }),
+        ]).start(() => setConnectToast(null));
+      }, 2600);
+    },
+    [toastOpacity, toastTranslate]
+  );
+
   const onConnect = useCallback(
     async (row: FriendSearchUserRow) => {
       if (!uid) return;
@@ -268,7 +306,10 @@ export default function FriendsScreen() {
       }
       setConnectingUid(row.uid);
       try {
-        await createDirectFriendshipFromSearch({ currentUid: uid, otherUid: row.uid });
+        const outcome = await createDirectFriendshipFromSearch({ currentUid: uid, otherUid: row.uid });
+        if (outcome === 'created') {
+          showConnectToast(`You're now connected with ${row.displayName}`);
+        }
       } catch (e) {
         const msg = e instanceof Error ? e.message : 'Could not connect. Try again.';
         Alert.alert('Could not connect', msg);
@@ -276,7 +317,7 @@ export default function FriendsScreen() {
         setConnectingUid(null);
       }
     },
-    [uid]
+    [uid, showConnectToast]
   );
 
   const confirmRemoveFriend = useCallback(
@@ -402,8 +443,17 @@ export default function FriendsScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.searchWrap}>
-          <Ionicons name="search-outline" size={18} color={C.muted} />
+        <View
+          style={[
+            styles.searchWrap,
+            searchQuery.trim().length >= 3 && styles.searchWrapActive,
+          ]}
+        >
+          <Ionicons
+            name="search-outline"
+            size={18}
+            color={searchQuery.trim().length >= 3 ? C.purple : C.muted}
+          />
           <TextInput
             ref={searchInputRef}
             style={styles.searchInput}
@@ -425,37 +475,7 @@ export default function FriendsScreen() {
         ) : null}
         {needsSignIn ? <Text style={styles.hint}>Sign in to manage friends and invites.</Text> : null}
 
-        {!hasFriends ? (
-          <View style={styles.emptyHero}>
-            <View style={styles.emptyIllu}>
-              <View style={[styles.emptyPerson, { marginRight: -12, zIndex: 1 }]}>
-                <Ionicons name="person" size={28} color={C.purple} />
-              </View>
-              <View style={[styles.emptyPerson, { backgroundColor: '#E1F5EE' }]}>
-                <Ionicons name="person" size={28} color={C.green} />
-              </View>
-            </View>
-            <Text style={styles.emptyHeroTitle}>No friends yet</Text>
-            <Text style={styles.emptyHeroSub}>
-              Invite someone to split your first subscription together
-            </Text>
-            <Pressable
-              onPress={openInvite}
-              style={({ pressed }) => [styles.emptyPrimaryBtn, pressed && styles.emptyPrimaryBtnPressed]}
-              accessibilityRole="button"
-              accessibilityLabel="Invite a friend"
-            >
-              <Text style={styles.emptyPrimaryBtnTxt}>Invite a friend</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => router.push('/friends-contacts')}
-              style={({ pressed }) => [styles.emptySecondaryBtn, pressed && styles.emptySecondaryBtnPressed]}
-              accessibilityRole="button"
-            >
-              <Text style={styles.emptySecondaryBtnTxt}>Find from contacts</Text>
-            </Pressable>
-          </View>
-        ) : (
+        {hasFriends ? (
           <>
             <SectionHeader title={`My friends (${hubFriends.length})`} />
             <View style={styles.card}>
@@ -523,47 +543,93 @@ export default function FriendsScreen() {
                 ))
               )}
             </View>
+          </>
+        ) : null}
 
-            {debouncedSearch.trim().length >= 3 && uid ? (
-              <>
-                <SectionHeader title="Find new people" />
-                {results.map((r) => {
-                  const isFriend = friendUids.has(r.uid);
-                  const invited =
-                    !isFriend &&
-                    r.emailNormalized != null &&
-                    pendingInviteEmails.has(r.emailNormalized);
-                  const status: 'friend' | 'invited' | 'connect' = isFriend
-                    ? 'friend'
-                    : invited
-                      ? 'invited'
-                      : 'connect';
-                  return (
-                    <SearchResultRow
-                      key={r.uid}
-                      row={r}
-                      status={status}
-                      busy={connectingUid === r.uid}
-                      onConnect={() => void onConnect(r)}
-                    />
-                  );
-                })}
-                {showDiscoveryEmpty ? (
-                  <View style={styles.discoveryEmpty}>
-                    <Text style={styles.discoveryEmptyTxt}>
-                      No users found · Try inviting them by link instead
-                    </Text>
-                    <Pressable
-                      onPress={openInvite}
-                      style={({ pressed }) => [styles.discoveryInviteBtn, pressed && styles.discoveryInviteBtnPressed]}
-                    >
-                      <Text style={styles.discoveryInviteBtnTxt}>Invite by link</Text>
-                    </Pressable>
-                  </View>
-                ) : null}
-              </>
+        {!hasFriends && debouncedSearch.trim().length < 3 ? (
+          <View style={styles.emptyHero}>
+            <View style={styles.emptyIllu}>
+              <View style={[styles.emptyPerson, { marginRight: -12, zIndex: 1 }]}>
+                <Ionicons name="person" size={28} color={C.purple} />
+              </View>
+              <View style={[styles.emptyPerson, { backgroundColor: '#E1F5EE' }]}>
+                <Ionicons name="person" size={28} color={C.green} />
+              </View>
+            </View>
+            <Text style={styles.emptyHeroTitle}>No friends yet</Text>
+            <Text style={styles.emptyHeroSub}>
+              Invite someone to split your first subscription together
+            </Text>
+            <Pressable
+              onPress={openInvite}
+              style={({ pressed }) => [styles.emptyPrimaryBtn, pressed && styles.emptyPrimaryBtnPressed]}
+              accessibilityRole="button"
+              accessibilityLabel="Invite a friend"
+            >
+              <Text style={styles.emptyPrimaryBtnTxt}>Invite a friend</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => router.push('/friends-contacts')}
+              style={({ pressed }) => [styles.emptySecondaryBtn, pressed && styles.emptySecondaryBtnPressed]}
+              accessibilityRole="button"
+            >
+              <Text style={styles.emptySecondaryBtnTxt}>Find from contacts</Text>
+            </Pressable>
+          </View>
+        ) : null}
+
+        {uid && debouncedSearch.trim().length >= 3 ? (
+          <>
+            <SectionHeader
+              title="Results"
+              rightAction={
+                !searching ? <Text style={styles.resultsCount}>{results.length} found</Text> : null
+              }
+            />
+            {results.map((r) => {
+              const isFriend = friendUids.has(r.uid);
+              const invited =
+                !isFriend &&
+                r.emailNormalized != null &&
+                pendingInviteEmails.has(r.emailNormalized);
+              const status: 'friend' | 'invited' | 'connect' = isFriend
+                ? 'friend'
+                : invited
+                  ? 'invited'
+                  : 'connect';
+              return (
+                <SearchResultRow
+                  key={r.uid}
+                  row={r}
+                  status={status}
+                  busy={connectingUid === r.uid}
+                  onConnect={() => void onConnect(r)}
+                />
+              );
+            })}
+            {showDiscoveryEmpty ? (
+              <View style={styles.discoveryEmpty}>
+                <View style={styles.discoveryEmptyIcon}>
+                  <Ionicons name="search-outline" size={22} color={C.muted} />
+                </View>
+                <Text style={styles.discoveryEmptyTxt}>
+                  No one found · {debouncedSearch.trim()} isn&apos;t on mySplit yet
+                </Text>
+                <Pressable
+                  onPress={openInvite}
+                  style={({ pressed }) => [styles.discoveryInviteBtn, pressed && styles.discoveryInviteBtnPressed]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Invite by link"
+                >
+                  <Text style={styles.discoveryInviteBtnTxt}>Invite by link →</Text>
+                </Pressable>
+              </View>
             ) : null}
+          </>
+        ) : null}
 
+        {uid ? (
+          <>
             <SectionHeader title="Find people" />
             <View style={styles.card}>
               <Pressable
@@ -608,50 +674,67 @@ export default function FriendsScreen() {
                 <Ionicons name="chevron-forward" size={18} color="#C8C6C0" />
               </Pressable>
             </View>
-
-            {pendingRows.length > 0 ? (
-              <>
-                <SectionHeader title={`Pending (${pendingRows.length})`} />
-                <View style={styles.card}>
-                  {pendingRows.map((p, i) => (
-                    <View key={p.inviteId}>
-                      {i > 0 ? <View style={styles.cardDivider} /> : null}
-                      <View style={styles.pendingRow}>
-                        <View style={styles.pendingAv}>
-                          <Text style={styles.pendingAvTxt}>?</Text>
-                        </View>
-                        <View style={styles.pendingMid}>
-                          <Text style={styles.pendingTitle} numberOfLines={1}>
-                            {p.recipientLabel}
-                          </Text>
-                          <Text style={styles.pendingSub} numberOfLines={2}>
-                            {formatInviteSentAgo(p.createdAt)}
-                            {p.expiresAt ? ` · ${formatInviteExpiresIn(p.expiresAt)}` : ''}
-                          </Text>
-                        </View>
-                        <View style={styles.pendingActions}>
-                          <Pressable
-                            onPress={() => void onResendPending(p)}
-                            style={({ pressed }) => [styles.resendBtn, pressed && styles.resendBtnPressed]}
-          >
-                            <Text style={styles.resendBtnTxt}>Resend</Text>
-                          </Pressable>
-                          <Pressable
-                            onPress={() => void onCancelPending(p)}
-                            style={({ pressed }) => [styles.cancelBtn, pressed && styles.cancelBtnPressed]}
-                          >
-                            <Text style={styles.cancelBtnTxt}>Cancel</Text>
-                          </Pressable>
-                        </View>
-                      </View>
-                    </View>
-                  ))}
-                </View>
-              </>
-            ) : null}
           </>
-        )}
+        ) : null}
+
+        {uid && pendingRows.length > 0 ? (
+          <>
+            <SectionHeader title={`Pending (${pendingRows.length})`} />
+            <View style={styles.card}>
+              {pendingRows.map((p, i) => (
+                <View key={p.inviteId}>
+                  {i > 0 ? <View style={styles.cardDivider} /> : null}
+                  <View style={styles.pendingRow}>
+                    <View style={styles.pendingAv}>
+                      <Text style={styles.pendingAvTxt}>?</Text>
+                    </View>
+                    <View style={styles.pendingMid}>
+                      <Text style={styles.pendingTitle} numberOfLines={1}>
+                        {p.recipientLabel}
+                      </Text>
+                      <Text style={styles.pendingSub} numberOfLines={2}>
+                        {formatInviteSentAgo(p.createdAt)}
+                        {p.expiresAt ? ` · ${formatInviteExpiresIn(p.expiresAt)}` : ''}
+                      </Text>
+                    </View>
+                    <View style={styles.pendingActions}>
+                      <Pressable
+                        onPress={() => void onResendPending(p)}
+                        style={({ pressed }) => [styles.resendBtn, pressed && styles.resendBtnPressed]}
+                      >
+                        <Text style={styles.resendBtnTxt}>Resend</Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={() => void onCancelPending(p)}
+                        style={({ pressed }) => [styles.cancelBtn, pressed && styles.cancelBtnPressed]}
+                      >
+                        <Text style={styles.cancelBtnTxt}>Cancel</Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                </View>
+              ))}
+            </View>
+          </>
+        ) : null}
       </ScrollView>
+
+      {connectToast ? (
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.connectToast,
+            {
+              bottom: insets.bottom + 20,
+              opacity: toastOpacity,
+              transform: [{ translateY: toastTranslate }],
+            },
+          ]}
+        >
+          <Ionicons name="checkmark" size={18} color="#fff" />
+          <Text style={styles.connectToastTxt}>{connectToast}</Text>
+        </Animated.View>
+      ) : null}
 
       {inviteModalOpen ? (
         <FriendsInviteModal
@@ -728,6 +811,13 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: C.border,
+  },
+  searchWrapActive: {
+    borderColor: C.purple,
+  },
+  resultsCount: {
+    fontSize: 10,
+    color: C.muted,
   },
   searchInput: {
     flex: 1,
@@ -1080,16 +1170,15 @@ const styles = StyleSheet.create({
   friendsPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
     backgroundColor: '#E1F5EE',
-    paddingHorizontal: 10,
+    paddingHorizontal: 9,
     paddingVertical: 5,
-    borderRadius: 20,
+    borderRadius: 9,
   },
   friendsPillTxt: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '600',
-    color: C.green,
+    color: '#0F6E56',
   },
   invitedLbl: {
     fontSize: 12,
@@ -1098,15 +1187,49 @@ const styles = StyleSheet.create({
   },
   discoveryEmpty: {
     alignItems: 'center',
-    paddingVertical: 16,
+    paddingVertical: 20,
     paddingHorizontal: 12,
+  },
+  discoveryEmptyIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#F0EEE9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
   },
   discoveryEmptyTxt: {
     fontSize: 13,
-    fontWeight: '500',
-    color: C.muted,
+    fontWeight: '600',
+    color: C.text,
     textAlign: 'center',
     lineHeight: 19,
+    marginBottom: 16,
+  },
+  connectToast: {
+    position: 'absolute',
+    left: 13,
+    right: 13,
+    backgroundColor: '#1D9E75',
+    borderRadius: 14,
+    paddingVertical: 11,
+    paddingHorizontal: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    zIndex: 50,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  connectToastTxt: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#fff',
   },
   discoveryInviteBtn: {
     marginTop: 12,

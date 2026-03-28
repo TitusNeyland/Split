@@ -3,11 +3,31 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // --- Friend system: friendships (server-written only) ---
+    // --- Friend system: friendships ---
     match /friendships/{friendshipId} {
       allow read: if request.auth != null
         && request.auth.uid in resource.data.users;
-      allow create, update, delete: if false;
+
+      // Direct connect from Find People: deterministic doc id `uidSmall_uidLarge`, sorted `users`.
+      allow create: if request.auth != null
+        && request.resource.data.keys().hasAll(['users', 'connectedAt', 'connectedVia', 'initiatedBy'])
+        && request.resource.data.users is list
+        && request.resource.data.users.size() == 2
+        && request.resource.data.users[0] is string
+        && request.resource.data.users[1] is string
+        && request.resource.data.users[0] < request.resource.data.users[1]
+        && request.auth.uid in request.resource.data.users
+        && request.resource.data.initiatedBy == request.auth.uid
+        && request.resource.data.connectedVia == 'search'
+        && request.resource.data.connectedAt == request.time
+        && friendshipId == request.resource.data.users[0] + '_' + request.resource.data.users[1];
+
+      allow update: if false;
+
+      allow delete: if request.auth != null
+        && request.auth.uid in resource.data.users
+        && resource.data.users is list
+        && resource.data.users.size() == 2;
     }
 
     // --- Friend system: invites ---
@@ -79,7 +99,25 @@ service cloud.firestore {
 
     // --- User profile + device sessions + address-book contacts ---
     match /users/{userId} {
-      allow read, create, update, delete: if request.auth != null
+      // Friend search queries `users` by displayNameLower / emailNormalized; readers must be allowed
+      // to read other users' docs when discoverable (see lib/friends/userSearchFirestore.ts).
+      // NOTE: This exposes the full user doc to other signed-in users; consider moving PII/payment
+      // fields to a private subcollection later.
+      function discoverableForUserSearch() {
+        return (!resource.data.keys().hasAny(['discoverableByName']) || resource.data.discoverableByName != false)
+          && (!resource.data.keys().hasAny(['privacySettings'])
+            || !(resource.data.privacySettings is map)
+            || !resource.data.privacySettings.keys().hasAny(['discoverableByName'])
+            || resource.data.privacySettings.discoverableByName != false);
+      }
+
+      allow read: if request.auth != null
+        && (
+          request.auth.uid == userId
+          || discoverableForUserSearch()
+        );
+
+      allow create, update, delete: if request.auth != null
         && request.auth.uid == userId;
 
       match /sessions/{sessionId} {

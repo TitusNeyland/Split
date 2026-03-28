@@ -14,6 +14,8 @@ import { mergePrivacySettings, type UserProfileDoc } from '../profile';
 export type FriendSearchUserRow = {
   uid: string;
   displayName: string;
+  /** e.g. `@alex_m` — derived from normalized email local-part when no dedicated username field exists. */
+  usernameHandle: string;
   maskedEmail: string;
   avatarUrl: string | null;
   /** For matching pending link/email invites only; not shown in UI. */
@@ -47,6 +49,15 @@ function isDiscoverableForNameSearch(data: UserProfileDoc): boolean {
   return mergePrivacySettings(data.privacySettings).discoverableByName;
 }
 
+/** Public handle for search rows: `@` + local part of normalized email (underscores for display). */
+export function usernameHandleFromEmailNormalized(emailNormalized: string | null): string {
+  if (!emailNormalized || typeof emailNormalized !== 'string') return '@user';
+  const at = emailNormalized.indexOf('@');
+  if (at <= 0) return '@user';
+  const local = emailNormalized.slice(0, at).replace(/\./g, '_');
+  return local ? `@${local}` : '@user';
+}
+
 function mapUserDoc(snapshot: DocumentSnapshot<DocumentData>): FriendSearchUserRow | null {
   const d = snapshot.data() as UserProfileDoc;
   const displayName =
@@ -63,6 +74,7 @@ function mapUserDoc(snapshot: DocumentSnapshot<DocumentData>): FriendSearchUserR
   return {
     uid: snapshot.id,
     displayName,
+    usernameHandle: usernameHandleFromEmailNormalized(normalized),
     maskedEmail: maskEmailForDisplay(email || null) || '—',
     avatarUrl: typeof d.avatarUrl === 'string' ? d.avatarUrl : null,
     emailNormalized: normalized,

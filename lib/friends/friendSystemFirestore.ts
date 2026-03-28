@@ -29,7 +29,8 @@ export type FriendshipConnectedVia =
   | 'split_invite'
   | 'direct_invite'
   | 'contacts'
-  | 'user_search';
+  | 'user_search'
+  | 'search';
 
 /**
  * Top-level `friendships/{friendshipId}`.
@@ -215,24 +216,28 @@ export function friendsQueryForUid(uid: string) {
 
 /**
  * Creates an accepted friendship immediately (used after in-app user search → Connect).
- * Requires Firestore rules that permit this write, or replace with a callable function.
+ * Idempotent: returns `already` if `friendships/{uidSmall_uidLarge}` already exists.
  */
 export async function createDirectFriendshipFromSearch(input: {
   currentUid: string;
   otherUid: string;
-}): Promise<void> {
+}): Promise<'created' | 'already'> {
   const db = getFirebaseFirestore();
   if (!db) throw new Error('Firestore is not configured.');
   if (input.currentUid === input.otherUid) throw new Error('Invalid friend.');
 
   const id = friendshipDocId(input.currentUid, input.otherUid);
+  const existing = await getDoc(doc(db, FRIENDSHIPS_COLLECTION, id));
+  if (existing.exists()) return 'already';
+
   const [a, b] = sortFriendUids(input.currentUid, input.otherUid);
   await setDoc(doc(db, FRIENDSHIPS_COLLECTION, id), {
     users: [a, b],
     connectedAt: serverTimestamp(),
-    connectedVia: 'user_search' satisfies FriendshipConnectedVia,
+    connectedVia: 'search' satisfies FriendshipConnectedVia,
     initiatedBy: input.currentUid,
   });
+  return 'created';
 }
 
 /** Normalized emails the current user has already invited (pending). */
