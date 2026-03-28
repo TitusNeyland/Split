@@ -37,9 +37,15 @@ import { EndSplitConfirmSheet } from '../components/subscriptions/EndSplitConfir
 import { endSubscriptionSplit } from '../../lib/subscription/endSplitFirestore';
 import {
   formatSettingsPercentsLine,
+  formatSplitPercentsUnchanged,
   membersOwingBeforeEndSplit,
 } from '../../lib/subscription/endSplitHelpers';
-import { setPendingEndSplitToast } from '../../lib/subscription/endSplitNavigationToast';
+import {
+  setPendingEndSplitToast,
+  setPendingSubscriptionsTabToast,
+} from '../../lib/subscription/endSplitNavigationToast';
+import { RestartSplitConfirmSheet } from '../components/subscriptions/RestartSplitConfirmSheet';
+import { restartSubscriptionSplit } from '../../lib/subscription/restartSplitFirestore';
 
 const C = {
   bg: '#F2F0EB',
@@ -94,6 +100,8 @@ export default function SubscriptionDetailScreen() {
   const [resendBusyId, setResendBusyId] = useState<string | null>(null);
   const [endSplitSheetOpen, setEndSplitSheetOpen] = useState(false);
   const [endSplitBusy, setEndSplitBusy] = useState(false);
+  const [restartSheetOpen, setRestartSheetOpen] = useState(false);
+  const [restartBusy, setRestartBusy] = useState(false);
 
   const demoDetail = useMemo(() => {
     if (!SUBSCRIPTIONS_DEMO_MODE || !subscriptionId) return null;
@@ -150,6 +158,18 @@ export default function SubscriptionDetailScreen() {
     };
   }, [detail, uidForEndSplit]);
 
+  const restartSplitSheetModel = useMemo(() => {
+    if (!detail || !uidForEndSplit) return null;
+    const ended = (detail.lifecycleStatus ?? 'active') === 'ended';
+    if (!ended || !detail.isOwner) return null;
+    return {
+      subscriptionName: detail.displayName,
+      firstNewBillLabel: detail.nextBillingLabel,
+      splitUnchangedLine: formatSplitPercentsUnchanged(detail.members),
+      membersNotifiedCount: detail.members.filter((m) => !m.invitePending).length,
+    };
+  }, [detail, uidForEndSplit]);
+
   const handleConfirmEndSplit = useCallback(async () => {
     if (!detail || !detail.isOwner) return;
     if (!SUBSCRIPTIONS_DEMO_MODE && !firebaseUid) return;
@@ -179,8 +199,39 @@ export default function SubscriptionDetailScreen() {
   }, [detail, firebaseUid, profileDisplayName, subscriptionId, router]);
 
   const handleRestartSplit = () => {
-    Alert.alert('Restart split', 'This action will be available when subscription management is connected.');
+    if (!restartSplitSheetModel) return;
+    setRestartSheetOpen(true);
   };
+
+  const handleConfirmRestart = useCallback(async () => {
+    if (!detail || !detail.isOwner || !restartSplitSheetModel) return;
+    if (!SUBSCRIPTIONS_DEMO_MODE && !firebaseUid) return;
+    setRestartBusy(true);
+    try {
+      const dateLabel = restartSplitSheetModel.firstNewBillLabel;
+      if (!SUBSCRIPTIONS_DEMO_MODE) {
+        const ownerName = profileDisplayName?.trim() || 'Someone';
+        const recipientUids = detail.members
+          .filter((m) => m.memberId !== firebaseUid && !m.invitePending)
+          .map((m) => m.memberId);
+        await restartSubscriptionSplit({
+          subscriptionId: subscriptionId.trim(),
+          restartedByUid: firebaseUid!,
+          ownerDisplayName: ownerName,
+          subscriptionDisplayName: detail.displayName,
+          recipientUids,
+          nextBillingDateLabel: dateLabel,
+        });
+      }
+      setRestartSheetOpen(false);
+      setPendingSubscriptionsTabToast(`Split restarted · billing resumes ${dateLabel}`, 'active');
+      router.replace('/(tabs)/subscriptions');
+    } catch (e) {
+      Alert.alert('Could not restart split', e instanceof Error ? e.message : 'Try again.');
+    } finally {
+      setRestartBusy(false);
+    }
+  }, [detail, firebaseUid, profileDisplayName, subscriptionId, router, restartSplitSheetModel]);
 
   const onResendSplitInvite = useCallback(
     async (m: SubscriptionDetailMember) => {
@@ -679,6 +730,21 @@ export default function SubscriptionDetailScreen() {
           membersNotifiedCount={endSplitSheetModel.membersNotifiedCount}
           pendingWarning={endSplitSheetModel.pendingWarning}
           confirming={endSplitBusy}
+        />
+      ) : null}
+
+      {restartSplitSheetModel ? (
+        <RestartSplitConfirmSheet
+          visible={restartSheetOpen}
+          onClose={() => {
+            if (!restartBusy) setRestartSheetOpen(false);
+          }}
+          onConfirm={handleConfirmRestart}
+          subscriptionName={restartSplitSheetModel.subscriptionName}
+          firstNewBillLabel={restartSplitSheetModel.firstNewBillLabel}
+          splitUnchangedLine={restartSplitSheetModel.splitUnchangedLine}
+          membersNotifiedCount={restartSplitSheetModel.membersNotifiedCount}
+          confirming={restartBusy}
         />
       ) : null}
     </View>

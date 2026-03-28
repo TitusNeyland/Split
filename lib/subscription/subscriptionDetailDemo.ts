@@ -350,7 +350,7 @@ export function getDemoSubscriptionDetail(
       serviceName: 'Xbox Game Pass',
       displayName: 'Xbox Game Pass',
       billingCycleLabel: 'Monthly',
-      nextBillingLabel: 'Ended · billing stopped',
+      nextBillingLabel: 'May 21, 2026',
       lifecycleStatus: 'ended',
       totalCents: XBOX_TOTAL,
       isOwner: true,
