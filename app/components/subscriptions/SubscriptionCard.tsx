@@ -74,6 +74,13 @@ export type SubscriptionCardProps = {
   /** Inline split editor or other content below the edit row. */
   belowEditSplit?: React.ReactNode;
   hideEditSplit?: boolean;
+  /** Ended split: Restart + Delete row (hides edit split). */
+  splitEndedActions?: {
+    onRestart: () => void;
+    onDelete: () => void;
+  };
+  /** Visual de-emphasis for ended splits on list cards. */
+  faded?: boolean;
 };
 
 function MemberPip({
@@ -131,6 +138,8 @@ export function SubscriptionCard({
   editSplitButtonLabel = 'Edit split',
   belowEditSplit,
   hideEditSplit = false,
+  splitEndedActions,
+  faded = false,
 }: SubscriptionCardProps) {
   const barColor = progress.barColor ?? C.green;
   const rightColor = progress.isComplete
@@ -226,11 +235,14 @@ export function SubscriptionCard({
     </>
   );
 
+  const hideEdit = hideEditSplit || Boolean(splitEndedActions);
+
   return (
     <View
       style={[
         styles.card,
         priceChange ? styles.cardPriceChanged : null,
+        faded ? styles.cardFaded : null,
       ]}
     >
       {onCardPress ? (
@@ -245,7 +257,28 @@ export function SubscriptionCard({
         mainBlock
       )}
 
-      {!hideEditSplit ? (
+      {splitEndedActions ? (
+        <View style={styles.endedActionsRow}>
+          <Pressable
+            style={styles.endedRestartBtn}
+            onPress={splitEndedActions.onRestart}
+            accessibilityRole="button"
+            accessibilityLabel="Restart split"
+          >
+            <Text style={styles.endedRestartTxt}>Restart split</Text>
+          </Pressable>
+          <Pressable
+            style={styles.endedDeleteBtn}
+            onPress={splitEndedActions.onDelete}
+            accessibilityRole="button"
+            accessibilityLabel="Delete subscription"
+          >
+            <Text style={styles.endedDeleteTxt}>Delete</Text>
+          </Pressable>
+        </View>
+      ) : null}
+
+      {!hideEdit ? (
         <Pressable
           style={styles.editSplitBtn}
           onPress={onEditSplitPress}
@@ -278,6 +311,39 @@ const styles = StyleSheet.create({
   },
   cardPriceChanged: {
     borderColor: '#FAC775',
+  },
+  cardFaded: {
+    opacity: 0.6,
+  },
+  endedActionsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingHorizontal: 13,
+    paddingBottom: 11,
+  },
+  endedRestartBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: '#EEEDFE',
+    alignItems: 'center',
+  },
+  endedRestartTxt: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: C.purple,
+  },
+  endedDeleteBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: '#FCEBEB',
+    alignItems: 'center',
+  },
+  endedDeleteTxt: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: '#A32D2D',
   },
   priceBanner: {
     backgroundColor: C.amberBanner,

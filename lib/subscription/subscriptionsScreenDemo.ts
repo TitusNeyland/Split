@@ -5,5 +5,4 @@ export const SUBSCRIPTIONS_DEMO_MODE = false;
 
 export const DEMO_TAB_BADGES = {
   overdue: 1,
-  paused: 1,
 } as const;

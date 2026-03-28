@@ -65,8 +65,13 @@ const C = {
   text: '#1a1a18',
 };
 
-export function normalizeSubscriptionStatus(raw: unknown): string {
-  return String(raw ?? 'active').toLowerCase();
+/** Firestore: `active` | `ended`. Legacy `paused`, `archived`, and `cancelled` count as ended. */
+export type SubscriptionLifecycleStatus = 'active' | 'ended';
+
+export function normalizeSubscriptionStatus(raw: unknown): SubscriptionLifecycleStatus {
+  const s = String(raw ?? 'active').toLowerCase();
+  if (s === 'active') return 'active';
+  return 'ended';
 }
 
 export function getTotalCents(data: Record<string, unknown>): number {
@@ -329,14 +334,22 @@ function perPersonLabel(data: Record<string, unknown>, totalCents: number): stri
   return `${fmtCents(min)}–${fmtCents(max)}/person`;
 }
 
+function memberCountForSubscriptionCard(data: Record<string, unknown>): number {
+  const shares = getSplitShares(data);
+  if (shares.length > 0) return shares.length;
+  const members = data.members;
+  return Array.isArray(members) ? members.length : 0;
+}
+
 export function buildSubscriptionCardBase(
   doc: { id: string } & Record<string, unknown>,
   viewerUid: string,
   viewerAvatarUrl: string | null,
-  options?: { muted?: boolean }
+  options?: { muted?: boolean; splitEnded?: boolean }
 ): SubscriptionCardBaseProps {
   const data = doc as Record<string, unknown>;
   const totalCents = getTotalCents(data);
+  const splitEnded = Boolean(options?.splitEnded);
   const displayName = subscriptionDisplayName(
     typeof data.serviceName === 'string' ? data.serviceName : '',
     typeof data.planName === 'string' ? data.planName : undefined
@@ -349,28 +362,49 @@ export function buildSubscriptionCardBase(
   const auto = data.autoCharge === true ? 'on' : data.autoCharge === false ? 'off' : undefined;
   const remaining = Math.max(0, totalCents - collected);
   const isComplete = totalCents > 0 && collected >= totalCents;
+  const muted = Boolean(options?.muted || splitEnded);
+
+  const nMembers = memberCountForSubscriptionCard(data);
+  const endedCycleLine =
+    nMembers > 0 ? `Ended · ${nMembers} member${nMembers === 1 ? '' : 's'}` : 'Ended';
 
   return {
     serviceName: serviceNameForIcon(data),
     name: displayName,
-    nameColor: options?.muted ? C.muted : C.text,
-    cycleLine: formatCycleLine(data),
+    nameColor: muted ? C.muted : C.text,
+    cycleLine: splitEnded ? endedCycleLine : formatCycleLine(data),
     isOwner: Boolean(viewerUid && ownerId === viewerUid),
-    autoCharge: auto,
+    autoCharge: splitEnded ? undefined : auto,
     totalAmount: fmtCents(totalCents),
-    totalAmountColor: options?.muted ? C.muted : C.text,
+    totalAmountColor: muted ? C.muted : C.text,
     perPersonAmount: perPersonLabel(data, totalCents),
     members: buildMemberPips(data, viewerUid, viewerAvatarUrl),
-    statusPill: statusPillFromBadge(badge),
-    dueLabel: formatDueBadgeLabel(data),
-    progress: {
-      percentCollected: pct,
-      collectedLabel: `${fmtCents(collected)} collected`,
-      rightLabel: isComplete ? 'Complete' : fmtCents(totalCents),
-      isComplete,
-      rightLabelColor: isComplete ? C.greenDark : remaining > 0 ? C.text : C.muted,
-      barColor: options?.muted ? C.muted : C.green,
-    },
+    statusPill: splitEnded
+      ? {
+          backgroundColor: '#F0EEE9',
+          dotColor: C.muted,
+          label: 'Ended',
+          textColor: C.muted,
+        }
+      : statusPillFromBadge(badge),
+    dueLabel: splitEnded ? undefined : formatDueBadgeLabel(data),
+    progress: splitEnded
+      ? {
+          percentCollected: pct,
+          collectedLabel: `${fmtCents(collected)} collected`,
+          rightLabel: isComplete ? 'Complete' : fmtCents(totalCents),
+          isComplete,
+          rightLabelColor: C.muted,
+          barColor: C.muted,
+        }
+      : {
+          percentCollected: pct,
+          collectedLabel: `${fmtCents(collected)} collected`,
+          rightLabel: isComplete ? 'Complete' : fmtCents(totalCents),
+          isComplete,
+          rightLabelColor: isComplete ? C.greenDark : remaining > 0 ? C.text : C.muted,
+          barColor: options?.muted ? C.muted : C.green,
+        },
   };
 }
 

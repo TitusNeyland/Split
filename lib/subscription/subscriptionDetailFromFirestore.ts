@@ -14,7 +14,12 @@ import type {
   SubscriptionDetailModel,
   SubscriptionHistoryCycle,
 } from './subscriptionDetailDemo';
-import { collectedCentsForSubscription, getOwnerId, getTotalCents } from './subscriptionToCardModel';
+import {
+  collectedCentsForSubscription,
+  getOwnerId,
+  getTotalCents,
+  normalizeSubscriptionStatus,
+} from './subscriptionToCardModel';
 
 type ShareRow = {
   memberId?: string;
@@ -160,6 +165,7 @@ export function mapFirestoreSubscriptionToDetailModel(
   const collectedCents = collectedCentsForSubscription(data);
 
   const autoCharge = data.autoCharge === true ? 'on' : 'off';
+  const lifecycleStatus = normalizeSubscriptionStatus(data.status) === 'ended' ? 'ended' : 'active';
 
   const allPaid = totalCents > 0 && collectedCents >= totalCents;
   const history: SubscriptionHistoryCycle[] = [
@@ -187,6 +193,7 @@ export function mapFirestoreSubscriptionToDetailModel(
     isOwner,
     payerName: isOwner ? undefined : payerName,
     autoCharge,
+    lifecycleStatus,
     members,
     paidMemberCount,
     collectedCents,

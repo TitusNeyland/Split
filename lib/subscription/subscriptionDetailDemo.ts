@@ -49,6 +49,8 @@ export type SubscriptionDetailModel = {
   /** When `isOwner` is false, payer display name (e.g. "Alex L."). */
   payerName?: string;
   autoCharge: 'on' | 'off';
+  /** Firestore `status`: ended splits are read-only in the UI. */
+  lifecycleStatus?: 'active' | 'ended';
   members: SubscriptionDetailMember[];
   paidMemberCount: number;
   collectedCents: number;
@@ -343,15 +345,15 @@ export function getDemoSubscriptionDetail(
         },
       ],
     },
-    'demo-xbox-paused': {
-      id: 'demo-xbox-paused',
+    'demo-xbox-ended': {
+      id: 'demo-xbox-ended',
       serviceName: 'Xbox Game Pass',
       displayName: 'Xbox Game Pass',
       billingCycleLabel: 'Monthly',
-      nextBillingLabel: 'Paused — next cycle TBD',
+      nextBillingLabel: 'Ended · billing stopped',
+      lifecycleStatus: 'ended',
       totalCents: XBOX_TOTAL,
-      isOwner: false,
-      payerName: 'Taylor R.',
+      isOwner: true,
       autoCharge: 'off',
       members: xboxSplit.members,
       paidMemberCount: 0,
