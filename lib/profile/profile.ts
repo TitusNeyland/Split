@@ -66,6 +66,8 @@ export type UserProfileDoc = {
    * Function / backend when payments are applied.
    */
   lifetime_saved?: number | null;
+  /** Denormalized unread in-app notification count; incremented by Cloud Functions, reset when the panel opens. */
+  unreadNotificationCount?: number | null;
 };
 
 export function initialsFromName(name: string | null | undefined): string {

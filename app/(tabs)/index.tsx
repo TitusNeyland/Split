@@ -43,6 +43,12 @@ import {
   type HomeCalendarDayCell,
 } from '../../lib/home/homeBillingCalendar';
 import { subscribeHomeRecentActivity, type HomeRecentActivityFirestoreItem } from '../../lib/home/homeRecentActivityFirestore';
+import {
+  resetUnreadNotificationCount,
+  subscribeHomeNotifications,
+  type AppNotification,
+} from '../../lib/home/homeNotificationsFirestore';
+import HomeNotificationsPanel from '../components/home/HomeNotificationsPanel';
 import { useHomeFriendDirectory } from '../../lib/home/useFriendUidsFromFirestore';
 import { useSubscriptions } from '../contexts/SubscriptionsContext';
 import { HomeDonutChart, HOME_DONUT_SIZE } from '../components/home/HomeDonutChart';
@@ -114,6 +120,9 @@ export default function HomeScreen() {
   const [reminderPickerOpen, setReminderPickerOpen] = useState(false);
   const [savings, setSavings] = useState<HomeSavingsSnapshot>({ lifetimeSaved: 0, joinedAt: null });
   const [recentActivityItems, setRecentActivityItems] = useState<HomeRecentActivityItem[]>([]);
+  const [panelNotifications, setPanelNotifications] = useState<AppNotification[]>([]);
+  const [notificationsLoading, setNotificationsLoading] = useState(true);
+  const [notifPanelOpen, setNotifPanelOpen] = useState(false);
   const [selectedCalendarDay, setSelectedCalendarDay] = useState<HomeCalendarDayCell | null>(null);
 
   const uid = user?.uid ?? '';
@@ -135,7 +144,10 @@ export default function HomeScreen() {
 
   const floatModel = useMemo(() => computeHomeFloatCard(subscriptions, uid), [subscriptions, uid]);
 
-  const notifCount = recentActivityItems.length > 0 ? Math.min(9, recentActivityItems.length) : 0;
+  const notifCount = useMemo(
+    () => panelNotifications.filter((n) => !n.read).length,
+    [panelNotifications]
+  );
   const setupStep = isEmpty ? 0 : 2;
   const setupTotal = 7;
   const setupPct = isEmpty ? 0 : (setupStep / setupTotal) * 100;
@@ -177,6 +189,24 @@ export default function HomeScreen() {
       );
     });
   }, [uid]);
+
+  useEffect(() => {
+    if (!uid) {
+      setPanelNotifications([]);
+      setNotificationsLoading(false);
+      return;
+    }
+    setNotificationsLoading(true);
+    return subscribeHomeNotifications(uid, (items) => {
+      setPanelNotifications(items);
+      setNotificationsLoading(false);
+    });
+  }, [uid]);
+
+  useEffect(() => {
+    if (!notifPanelOpen || !uid) return;
+    void resetUnreadNotificationCount(uid).catch(() => {});
+  }, [notifPanelOpen, uid]);
 
   const savingsMonthsLabel = useMemo(() => formatMemberTenureMonths(savings.joinedAt), [savings.joinedAt]);
 
@@ -355,7 +385,12 @@ export default function HomeScreen() {
             <Text style={styles.greeting} numberOfLines={1}>
               {`Good morning, ${greetingName}`}
             </Text>
-            <Pressable hitSlop={8} accessibilityRole="button" accessibilityLabel="Notifications">
+            <Pressable
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Notifications"
+              onPress={() => setNotifPanelOpen(true)}
+            >
               <View>
                 <Ionicons name="notifications-outline" size={22} color="rgba(255,255,255,0.88)" />
                 {notifCount > 0 ? (
@@ -409,6 +444,15 @@ export default function HomeScreen() {
           onClose={() => setReminderPickerOpen(false)}
           candidates={reminderCandidates}
           onSelect={onReminderPick}
+        />
+
+        <HomeNotificationsPanel
+          visible={notifPanelOpen}
+          onClose={() => setNotifPanelOpen(false)}
+          uid={uid}
+          displayName={homeDisplayName ?? user?.displayName ?? 'Member'}
+          notifications={panelNotifications}
+          loading={Boolean(uid) && notificationsLoading}
         />
 
         <View style={styles.body}>
