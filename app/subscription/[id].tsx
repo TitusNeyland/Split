@@ -33,6 +33,13 @@ import { useSubscriptionDetailFromFirestore } from '../../lib/subscription/subsc
 import { fmtCents } from '../../lib/subscription/addSubscriptionSplitMath';
 import { useFirebaseUid } from '../../lib/auth/useFirebaseUid';
 import { useProfileAvatarUrl } from '../hooks/useProfileAvatarUrl';
+import { EndSplitConfirmSheet } from '../components/subscriptions/EndSplitConfirmSheet';
+import { endSubscriptionSplit } from '../../lib/subscription/endSplitFirestore';
+import {
+  formatSettingsPercentsLine,
+  membersOwingBeforeEndSplit,
+} from '../../lib/subscription/endSplitHelpers';
+import { setPendingEndSplitToast } from '../../lib/subscription/endSplitNavigationToast';
 
 const C = {
   bg: '#F2F0EB',
@@ -77,7 +84,7 @@ export default function SubscriptionDetailScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string | string[] }>();
   const subscriptionId = typeof id === 'string' ? id : id?.[0] ?? '';
-  const { avatarUrl: userAvatarUrl } = useProfileAvatarUrl();
+  const { avatarUrl: userAvatarUrl, displayName: profileDisplayName } = useProfileAvatarUrl();
   const firebaseUid = useFirebaseUid();
   const nextCycleStart = useNextBillingCycleStart();
 
@@ -85,6 +92,8 @@ export default function SubscriptionDetailScreen() {
   const [historyModalCycle, setHistoryModalCycle] = useState<SubscriptionHistoryCycle | null>(null);
   const [detailRetryKey, setDetailRetryKey] = useState(0);
   const [resendBusyId, setResendBusyId] = useState<string | null>(null);
+  const [endSplitSheetOpen, setEndSplitSheetOpen] = useState(false);
+  const [endSplitBusy, setEndSplitBusy] = useState(false);
 
   const demoDetail = useMemo(() => {
     if (!SUBSCRIPTIONS_DEMO_MODE || !subscriptionId) return null;
@@ -115,8 +124,59 @@ export default function SubscriptionDetailScreen() {
   };
 
   const handleEndSplit = () => {
-    Alert.alert('End split', 'This action will be available when subscription management is connected.');
+    setEndSplitSheetOpen(true);
   };
+
+  const uidForEndSplit = useMemo(() => {
+    if (firebaseUid) return firebaseUid;
+    if (SUBSCRIPTIONS_DEMO_MODE && detail?.isOwner) {
+      const you = detail.members.find((m) => m.displayName.includes('(you)'));
+      return you?.memberId ?? '';
+    }
+    return '';
+  }, [firebaseUid, detail]);
+
+  const endSplitSheetModel = useMemo(() => {
+    if (!detail || !uidForEndSplit) return null;
+    const owing = membersOwingBeforeEndSplit(detail.members, uidForEndSplit);
+    const first = owing[0];
+    return {
+      subscriptionName: detail.displayName,
+      settingsSavedLine: formatSettingsPercentsLine(detail.members),
+      membersNotifiedCount: detail.members.filter((m) => !m.invitePending).length,
+      pendingWarning: first
+        ? { memberName: first.displayName, amountFormatted: fmtCents(first.amountCents) }
+        : null,
+    };
+  }, [detail, uidForEndSplit]);
+
+  const handleConfirmEndSplit = useCallback(async () => {
+    if (!detail || !detail.isOwner) return;
+    if (!SUBSCRIPTIONS_DEMO_MODE && !firebaseUid) return;
+    setEndSplitBusy(true);
+    try {
+      if (!SUBSCRIPTIONS_DEMO_MODE) {
+        const ownerName = profileDisplayName?.trim() || 'Someone';
+        const recipientUids = detail.members
+          .filter((m) => m.memberId !== firebaseUid && !m.invitePending)
+          .map((m) => m.memberId);
+        await endSubscriptionSplit({
+          subscriptionId: subscriptionId.trim(),
+          endedByUid: firebaseUid!,
+          ownerDisplayName: ownerName,
+          subscriptionDisplayName: detail.displayName,
+          recipientUids,
+        });
+      }
+      setEndSplitSheetOpen(false);
+      setPendingEndSplitToast(`Split ended · ${detail.displayName} moved to Ended tab`);
+      router.replace('/(tabs)/subscriptions');
+    } catch (e) {
+      Alert.alert('Could not end split', e instanceof Error ? e.message : 'Try again.');
+    } finally {
+      setEndSplitBusy(false);
+    }
+  }, [detail, firebaseUid, profileDisplayName, subscriptionId, router]);
 
   const handleRestartSplit = () => {
     Alert.alert('Restart split', 'This action will be available when subscription management is connected.');
@@ -594,6 +654,21 @@ export default function SubscriptionDetailScreen() {
           </View>
         </Pressable>
       </Modal>
+
+      {endSplitSheetModel ? (
+        <EndSplitConfirmSheet
+          visible={endSplitSheetOpen}
+          onClose={() => {
+            if (!endSplitBusy) setEndSplitSheetOpen(false);
+          }}
+          onConfirm={handleConfirmEndSplit}
+          subscriptionName={endSplitSheetModel.subscriptionName}
+          settingsSavedLine={endSplitSheetModel.settingsSavedLine}
+          membersNotifiedCount={endSplitSheetModel.membersNotifiedCount}
+          pendingWarning={endSplitSheetModel.pendingWarning}
+          confirming={endSplitBusy}
+        />
+      ) : null}
     </View>
   );
 }
