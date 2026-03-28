@@ -1,5 +1,6 @@
 import { addDoc, collection, serverTimestamp, Timestamp } from 'firebase/firestore';
-import { getFirebaseFirestore } from '../firebase';
+import { httpsCallable } from 'firebase/functions';
+import { getFirebaseFirestore, getFirebaseFunctions } from '../firebase';
 import { getNextFirstChargeDate } from './billingDayFormat';
 
 export type WizardSplitMethod = 'equal' | 'custom_percent' | 'fixed_amount' | 'owner_less';
@@ -34,15 +35,30 @@ export type CreateSubscriptionWizardInput = {
 };
 
 /**
- * After a subscription doc exists: server-side jobs should send push invites to non-owners,
- * set payment rows, and (when `autoCharge`) schedule Stripe PaymentIntents for the billing date.
- * Wire this to Cloud Functions / your backend — no client SDK for scheduling intents securely.
+ * After a subscription doc exists: calls `finalizeSubscriptionWizard` to send FCM to members on the
+ * split (non-owner, not invite-pending) and a confirmation push to the owner. Stripe PaymentIntents
+ * for `autoCharge` are created by the scheduled `advanceBillingCycles` function when due.
  */
 export async function runSubscriptionWizardSideEffects(
-  _subscriptionId: string,
+  subscriptionId: string,
   _input: CreateSubscriptionWizardInput
 ): Promise<void> {
-  // Intentionally empty — replace with callable/HTTP trigger to FCM + Stripe.
+  const fns = getFirebaseFunctions();
+  if (!fns) return;
+
+  try {
+    const finalize = httpsCallable<{ subscriptionId: string }, { ok?: boolean; skipped?: boolean }>(
+      fns,
+      'finalizeSubscriptionWizard'
+    );
+    await finalize({ subscriptionId });
+  } catch (e) {
+    const code =
+      e && typeof e === 'object' && 'code' in e ? String((e as { code: string }).code) : '';
+    if (code !== 'functions/not-found') {
+      console.warn('finalizeSubscriptionWizard:', e);
+    }
+  }
 }
 
 /**
