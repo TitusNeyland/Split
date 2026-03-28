@@ -24,6 +24,8 @@ export type ActivityEventType =
   | 'reminder_received'
   // Splits
   | 'split_invite_received'
+  /** Owner invited someone to the split (shown on owner’s feed). */
+  | 'split_invite_sent'
   | 'split_invite_accepted'
   | 'split_invite_declined'
   | 'split_member_joined'

@@ -130,6 +130,14 @@
         { "fieldPath": "recipient", "order": "ASCENDING" },
         { "fieldPath": "paid_at", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "payment_intents",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "due_date", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

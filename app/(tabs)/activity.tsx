@@ -22,6 +22,10 @@ import { getFriendFilterDisplayName } from '../../lib/profile';
 import { ServiceIcon } from '../components/shared/ServiceIcon';
 import { recordManualSettlement } from '../../lib/payment/paymentsFirestore';
 import { useFirebaseUid } from '../../lib/auth/useFirebaseUid';
+import { subscribeActivityFeed } from '../../lib/activity/activityFeedFirestore';
+import type { ActivityEvent } from '../../lib/activity/activityFeedSchema';
+import { activityEventToFeedRow } from '../../lib/activity/activityEventToFeedItem';
+import { sendPaymentReminderCallable } from '../../lib/activity/sendPaymentReminderCallable';
 
 type IonIconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -60,6 +64,7 @@ const FILTER_PILLS: {
 
 type ActivityKind =
   | 'received'
+  | 'payment_sent'
   | 'overdue'
   | 'partial'
   | 'failed'
@@ -69,7 +74,12 @@ type ActivityKind =
   /** Non-payment audit / ledger events (Changes filter). */
   | 'audit_join'
   | 'audit_reminder'
-  | 'audit_ended';
+  | 'audit_ended'
+  | 'reminder_sent'
+  | 'reminder_received'
+  | 'split_invite_received'
+  | 'split_invite_sent'
+  | 'split_ended';
 
 type ActivityBadgeVariant = 'green' | 'amber' | 'red' | 'purple' | 'gray' | 'blue';
 
@@ -187,6 +197,9 @@ type ActivityFeedItem = {
     rows: ActivityDetailRow[];
     actions?: ActivityDetailAction[];
   };
+  /** Firestore `createdAt` (ms) for live feed grouping. */
+  _activityCreatedAtMs?: number;
+  _reminderTap?: { subscriptionId: string; memberUid: string };
 };
 
 type ActivityFeedGroup = { sectionTitle: string; items: ActivityFeedItem[] };
@@ -203,7 +216,11 @@ function itemMatchesFilter(item: ActivityFeedItem, f: ActivityFilterId): boolean
     case 'received':
       return item.kind === 'received';
     case 'pending':
-      return item.kind === 'overdue' || item.kind === 'partial';
+      return (
+        item.kind === 'overdue' ||
+        item.kind === 'partial' ||
+        item.kind === 'reminder_received'
+      );
     case 'failed':
       return item.kind === 'failed';
     case 'audit':
@@ -212,7 +229,10 @@ function itemMatchesFilter(item: ActivityFeedItem, f: ActivityFilterId): boolean
         item.kind === 'updated' ||
         item.kind === 'audit_join' ||
         item.kind === 'audit_reminder' ||
-        item.kind === 'audit_ended'
+        item.kind === 'audit_ended' ||
+        item.kind === 'split_invite_received' ||
+        item.kind === 'split_invite_sent' ||
+        item.kind === 'split_ended'
       );
     case 'receipts':
       return item.kind === 'receipt';
@@ -554,7 +574,55 @@ const MOCK_ACTIVITY_GROUPS: ActivityFeedGroup[] = [
   },
 ];
 
-function findBaseActivityItem(itemId: string): ActivityFeedItem | undefined {
+function startOfDayLocal(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+function groupLiveItemsBySection(items: ActivityFeedItem[]): ActivityFeedGroup[] {
+  const today = startOfDayLocal(new Date()).getTime();
+  const y = new Date();
+  y.setDate(y.getDate() - 1);
+  const yesterday = startOfDayLocal(y).getTime();
+
+  const todayItems: ActivityFeedItem[] = [];
+  const yesterdayItems: ActivityFeedItem[] = [];
+  const older = new Map<string, ActivityFeedItem[]>();
+
+  for (const item of items) {
+    const ms = item._activityCreatedAtMs;
+    if (ms == null) continue;
+    const d = new Date(ms);
+    const ds = startOfDayLocal(d).getTime();
+    if (ds === today) todayItems.push(item);
+    else if (ds === yesterday) yesterdayItems.push(item);
+    else {
+      const label = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      const arr = older.get(label) ?? [];
+      arr.push(item);
+      older.set(label, arr);
+    }
+  }
+
+  const groups: ActivityFeedGroup[] = [];
+  if (todayItems.length) groups.push({ sectionTitle: 'Today', items: todayItems });
+  if (yesterdayItems.length) groups.push({ sectionTitle: 'Yesterday', items: yesterdayItems });
+  const olderSorted = Array.from(older.entries()).sort((a, b) => {
+    const ma = a[1][0]?._activityCreatedAtMs ?? 0;
+    const mb = b[1][0]?._activityCreatedAtMs ?? 0;
+    return mb - ma;
+  });
+  for (const [title, its] of olderSorted) {
+    groups.push({ sectionTitle: title, items: its });
+  }
+  return groups;
+}
+
+function findBaseActivityItem(
+  itemId: string,
+  liveItems: ActivityFeedItem[],
+): ActivityFeedItem | undefined {
+  const live = liveItems.find((i) => i.id === itemId);
+  if (live) return live;
   for (const g of MOCK_ACTIVITY_GROUPS) {
     const found = g.items.find((i) => i.id === itemId);
     if (found) return found;
@@ -567,9 +635,10 @@ function shouldShowMarkPaidInline(
   f: ActivityFilterId,
   paidMap: Record<string, ManualSettlementRecord>,
   drawerOpenId: string | null,
+  liveItems: ActivityFeedItem[],
 ): boolean {
   if (paidMap[itemId]) return false;
-  const base = findBaseActivityItem(itemId);
+  const base = findBaseActivityItem(itemId, liveItems);
   if (!base || !itemEligibleForMarkPaid(base)) return false;
   if (f === 'pending') return true;
   return drawerOpenId === itemId;
@@ -816,6 +885,7 @@ export default function ActivityScreen() {
   >({});
   const [markPaidNotes, setMarkPaidNotes] = useState<Record<string, string>>({});
   const [markPaidDrawerOpenForId, setMarkPaidDrawerOpenForId] = useState<string | null>(null);
+  const [liveFeedItems, setLiveFeedItems] = useState<ActivityFeedItem[]>([]);
 
   const friendIdFilter = useMemo(() => {
     const raw = params.friendId;
@@ -857,43 +927,69 @@ export default function ActivityScreen() {
     setMarkPaidDrawerOpenForId(null);
   }, [params.expandId]);
 
+  useEffect(() => {
+    if (!uid) {
+      setLiveFeedItems([]);
+      return;
+    }
+    const unsub = subscribeActivityFeed(uid, (events) => {
+      const rows: ActivityFeedItem[] = [];
+      for (const e of events) {
+        const row = activityEventToFeedRow(e as ActivityEvent, uid);
+        if (row) rows.push(row as ActivityFeedItem);
+      }
+      setLiveFeedItems(rows);
+    });
+    return unsub;
+  }, [uid]);
+
   const collectedDisplay = useMemo(() => '+$47.50', []);
   const trendDisplay = useMemo(() => '↑ $12 vs last month', []);
   const pendingCount = 3;
   const pendingBreakdown = '1 overdue · 1 partial';
 
   const filteredGroups = useMemo(() => {
-    const groups = MOCK_ACTIVITY_GROUPS.map((g) => ({
-      ...g,
-      items: g.items
-        .map((i) =>
-          manualPaidByItemId[i.id]
-            ? applyManualPaidToItem(i, manualPaidByItemId[i.id]!)
-            : i,
-        )
-        .filter((i) => itemMatchesFilter(i, filter) && itemMatchesFriend(i, friendIdFilter)),
-    })).filter((g) => g.items.length > 0);
+    /** Receipts filter still uses demo rows until receipt splits write to `users/{uid}/activity`. */
+    const useMockOnly = filter === 'receipts';
 
-    if (filter === 'audit' && groups.length > 0) {
+    if (useMockOnly) {
+      const groups = MOCK_ACTIVITY_GROUPS.map((g) => ({
+        ...g,
+        items: g.items
+          .map((i) =>
+            manualPaidByItemId[i.id]
+              ? applyManualPaidToItem(i, manualPaidByItemId[i.id]!)
+              : i,
+          )
+          .filter((i) => itemMatchesFilter(i, filter) && itemMatchesFriend(i, friendIdFilter)),
+      })).filter((g) => g.items.length > 0);
+
+      if (filter === 'receipts' && groups.length > 0) {
+        return [
+          {
+            sectionTitle: 'Receipt splits',
+            items: groups.flatMap((g) => g.items),
+          },
+        ];
+      }
+
+      return groups;
+    }
+
+    const liveFiltered = liveFeedItems.filter(
+      (i) => itemMatchesFilter(i, filter) && itemMatchesFriend(i, friendIdFilter),
+    );
+    const grouped = groupLiveItemsBySection(liveFiltered);
+    if (filter === 'audit' && grouped.length > 0) {
       return [
         {
           sectionTitle: 'All changes',
-          items: groups.flatMap((g) => g.items),
+          items: grouped.flatMap((g) => g.items),
         },
       ];
     }
-
-    if (filter === 'receipts' && groups.length > 0) {
-      return [
-        {
-          sectionTitle: 'Receipt splits',
-          items: groups.flatMap((g) => g.items),
-        },
-      ];
-    }
-
-    return groups;
-  }, [filter, manualPaidByItemId, friendIdFilter]);
+    return grouped;
+  }, [filter, manualPaidByItemId, friendIdFilter, liveFeedItems]);
 
   const toggleExpanded = useCallback((id: string) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -1069,6 +1165,7 @@ export default function ActivityScreen() {
                       filter,
                       manualPaidByItemId,
                       markPaidDrawerOpenForId,
+                      liveFeedItems,
                     )}
                     markPaidNote={markPaidNotes[item.id] ?? ''}
                     onMarkPaidNoteChange={(text) =>
@@ -1076,6 +1173,12 @@ export default function ActivityScreen() {
                     }
                     onConfirmMarkPaid={() => void confirmMarkPaid(item.id)}
                     onDetailAction={(action) => {
+                      if (action.id === 'send-reminder' && item._reminderTap) {
+                        void sendPaymentReminderCallable(item._reminderTap).catch(() => {
+                          Alert.alert('Could not send', 'Try again.');
+                        });
+                        return;
+                      }
                       if (action.opensMarkPaid) {
                         LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
                         setMarkPaidDrawerOpenForId(item.id);
