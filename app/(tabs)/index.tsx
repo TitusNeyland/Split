@@ -26,14 +26,22 @@ import {
   subscribeHomeSavings,
   type HomeSavingsSnapshot,
 } from '../../lib/home/homeSavingsFirestore';
-import { buildCalendarStripDays, pickNextBillPreview } from '../../lib/home/homeWeekCalendar';
+import { getTotalCents } from '../../lib/subscription/subscriptionToCardModel';
 import {
   computeFriendBalances,
   computeHomeFinancialFromSubscriptions,
   computeHomeFloatCard,
   computeUpcomingSplits,
-  subscriptionsToHomeCalendarBills,
 } from '../../lib/home/homeSubscriptionMath';
+import {
+  buildCalendarDays,
+  formatBillingDetailLine,
+  formatHomeBillWhenLabel,
+  getDotColorForSubscription,
+  getUpcomingBillingDates,
+  subscriptionDisplayLabel,
+  type HomeCalendarDayCell,
+} from '../../lib/home/homeBillingCalendar';
 import { subscribeHomeRecentActivity, type HomeRecentActivityFirestoreItem } from '../../lib/home/homeRecentActivityFirestore';
 import { useHomeFriendDirectory } from '../../lib/home/useFriendUidsFromFirestore';
 import { useSubscriptions } from '../contexts/SubscriptionsContext';
@@ -106,6 +114,7 @@ export default function HomeScreen() {
   const [reminderPickerOpen, setReminderPickerOpen] = useState(false);
   const [savings, setSavings] = useState<HomeSavingsSnapshot>({ lifetimeSaved: 0, joinedAt: null });
   const [recentActivityItems, setRecentActivityItems] = useState<HomeRecentActivityItem[]>([]);
+  const [selectedCalendarDay, setSelectedCalendarDay] = useState<HomeCalendarDayCell | null>(null);
 
   const uid = user?.uid ?? '';
   const hasSubscriptions = subscriptions.length > 0;
@@ -171,20 +180,25 @@ export default function HomeScreen() {
 
   const savingsMonthsLabel = useMemo(() => formatMemberTenureMonths(savings.joinedAt), [savings.joinedAt]);
 
-  const homeCalendarBills = useMemo(
-    () => subscriptionsToHomeCalendarBills(subscriptions),
-    [subscriptions]
-  );
+  const CAL_STRIP_DAYS = 21;
+
+  const billingDates = useMemo(() => getUpcomingBillingDates(subscriptions), [subscriptions]);
 
   const calendarDays = useMemo(
-    () => buildCalendarStripDays(new Date(), homeCalendarBills, 21),
-    [homeCalendarBills]
+    () => buildCalendarDays(billingDates, CAL_STRIP_DAYS, new Date()),
+    [billingDates]
   );
 
-  const billPreview = useMemo(
-    () => pickNextBillPreview(homeCalendarBills, new Date()),
-    [homeCalendarBills]
-  );
+  const nextBill = useMemo(() => billingDates[0] ?? null, [billingDates]);
+
+  const nextBillWhen = useMemo(() => {
+    if (!nextBill) return null;
+    return formatHomeBillWhenLabel(nextBill.date, new Date());
+  }, [nextBill]);
+
+  useEffect(() => {
+    setSelectedCalendarDay(null);
+  }, [subscriptions]);
 
   const upcomingSplits = useMemo(() => (uid ? computeUpcomingSplits(subscriptions, uid, 3) : []), [
     subscriptions,
@@ -414,58 +428,132 @@ export default function HomeScreen() {
               {calendarDays.map((d) => (
                 <Pressable
                   key={d.key}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${d.dayName} ${d.dayNum}${d.hasBill ? ', bills due' : ''}`}
+                  onPress={() => {
+                    if (!d.hasBill) {
+                      setSelectedCalendarDay(null);
+                      return;
+                    }
+                    setSelectedCalendarDay((prev) => (prev?.key === d.key ? null : d));
+                  }}
                   style={[
                     styles.calDay,
                     d.isToday && styles.calDayToday,
-                    !d.isToday && d.hasBill && styles.calDayBill,
+                    d.hasBill && !d.isToday && styles.calDayBill,
                   ]}
                 >
                   <Text
                     style={[
                       styles.calDayName,
                       d.isToday && styles.calDayNameOn,
-                      !d.isToday && d.hasBill && styles.calDayNameBill,
+                      d.hasBill && !d.isToday && styles.calDayNameBill,
                       !d.isToday && !d.hasBill && styles.calDayNamePlain,
                     ]}
                   >
-                    {d.dow}
+                    {d.dayName}
                   </Text>
                   <Text
                     style={[
                       styles.calDayNum,
                       d.isToday && styles.calDayNumOn,
-                      !d.isToday && d.hasBill && styles.calDayNumBill,
+                      d.hasBill && !d.isToday && styles.calDayNumBill,
                       !d.isToday && !d.hasBill && styles.calDayNumPlain,
                     ]}
                   >
-                    {d.num}
+                    {d.dayNum}
                   </Text>
-                  <View
-                    style={[
-                      styles.calDot,
-                      d.isToday && styles.calDotToday,
-                      !d.isToday && d.hasBill && styles.calDotBill,
-                      !d.isToday && !d.hasBill && styles.calDotPlain,
-                    ]}
-                  />
+                  <View style={styles.calDotsRow}>
+                    {[0, 1, 2].map((slot) => {
+                      const bill = d.bills[slot];
+                      if (bill) {
+                        return (
+                          <View
+                            key={slot}
+                            style={[
+                              styles.calDotBrand,
+                              { backgroundColor: getDotColorForSubscription(bill.subscription) },
+                            ]}
+                          />
+                        );
+                      }
+                      return <View key={slot} style={styles.calDotPlaceholder} />;
+                    })}
+                    {d.bills.length > 3 ? (
+                      <Text style={styles.calDotMore}>+{d.bills.length - 3}</Text>
+                    ) : null}
+                  </View>
                 </Pressable>
               ))}
             </ScrollView>
-            {!isEmpty && billPreview ? (
+            {selectedCalendarDay && selectedCalendarDay.bills.length > 0 ? (
+              <View style={styles.selectedDayDetail}>
+                {selectedCalendarDay.bills.map((bill) => {
+                  const sub = bill.subscription;
+                  const amt = getTotalCents(sub) / 100;
+                  const name = subscriptionDisplayLabel(sub);
+                  const iconName =
+                    (typeof sub.serviceName === 'string' && sub.serviceName.trim()) ||
+                    (typeof sub.serviceId === 'string' && sub.serviceId.trim()) ||
+                    name;
+                  return (
+                    <Pressable
+                      key={sub.id}
+                      style={styles.billDetailRow}
+                      onPress={() => router.push(`/subscription/${sub.id}`)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${name}, open subscription`}
+                    >
+                      <View style={styles.bpIco}>
+                        <ServiceIcon serviceName={iconName} size={30} />
+                      </View>
+                      <Text style={styles.bpName} numberOfLines={2}>
+                        {name}
+                        <Text style={styles.bpBillingMeta}>
+                          {' '}
+                          · {formatBillingDetailLine(bill.date)}
+                        </Text>
+                      </Text>
+                      <Text style={styles.bpAmt}>{`$${amt.toFixed(2)}`}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            ) : null}
+            {!isEmpty && nextBill ? (
               <View style={styles.billPreview}>
                 <View style={styles.bpIco}>
-                  <ServiceIcon serviceName={billPreview.serviceName} size={30} />
+                  <ServiceIcon
+                    serviceName={
+                      (typeof nextBill.subscription.serviceName === 'string' &&
+                        nextBill.subscription.serviceName.trim()) ||
+                      (typeof nextBill.subscription.serviceId === 'string' &&
+                        nextBill.subscription.serviceId.trim()) ||
+                      subscriptionDisplayLabel(nextBill.subscription)
+                    }
+                    size={30}
+                  />
                 </View>
                 <Text style={styles.bpName} numberOfLines={2}>
-                  {billPreview.serviceName}
-                  <Text style={styles.bpBillingMeta}> · {billPreview.billingDetail}</Text>
+                  {subscriptionDisplayLabel(nextBill.subscription)}
+                  <Text style={styles.bpBillingMeta}>
+                    {' '}
+                    · {formatBillingDetailLine(nextBill.date)}
+                  </Text>
                 </Text>
                 <Text
-                  style={[styles.bpWhen, billPreview.whenIsToday ? styles.bpWhenToday : styles.bpWhenUpcoming]}
+                  style={[
+                    styles.bpWhen,
+                    nextBillWhen?.kind === 'today' && styles.bpWhenToday,
+                    nextBillWhen?.kind === 'tomorrow' && styles.bpWhenTomorrow,
+                    nextBillWhen?.kind === 'other' && styles.bpWhenUpcoming,
+                  ]}
                 >
-                  {billPreview.whenLabel}
+                  {nextBillWhen?.label ?? ''}
                 </Text>
-                <Text style={styles.bpAmt}>{billPreview.amountFormatted}</Text>
+                <Text style={styles.bpAmt}>
+                  {`$${(getTotalCents(nextBill.subscription) / 100).toFixed(2)}`}
+                </Text>
               </View>
             ) : (
               <View style={styles.billPreview}>
@@ -474,8 +562,8 @@ export default function HomeScreen() {
                 </View>
                 <Text style={styles.bpNameEmpty} numberOfLines={2}>
                   {isEmpty
-                    ? 'No bills scheduled this week'
-                    : 'No upcoming bills in the next 14 days'}
+                    ? 'No upcoming bills · Add a subscription to get started'
+                    : 'No upcoming bills scheduled'}
                 </Text>
               </View>
             )}
@@ -796,14 +884,43 @@ const styles = StyleSheet.create({
   calDayNumOn: { color: '#ffffff' },
   calDayNumBill: { color: C.purple },
   calDayNumPlain: { color: C.text },
-  calDot: {
+  calDotsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 3,
+    minHeight: 8,
+    flexWrap: 'wrap',
+    maxWidth: 52,
+  },
+  calDotBrand: {
     width: 5,
     height: 5,
-    borderRadius: 2.5,
+    borderRadius: 3,
   },
-  calDotToday: { backgroundColor: '#ffffff' },
-  calDotBill: { backgroundColor: C.purple },
-  calDotPlain: { backgroundColor: 'transparent' },
+  calDotPlaceholder: {
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: 'transparent',
+  },
+  calDotMore: {
+    fontSize: 8,
+    color: C.muted,
+    fontWeight: '600',
+  },
+  selectedDayDetail: {
+    marginTop: 8,
+    paddingTop: 10,
+    borderTopWidth: 0.5,
+    borderTopColor: '#F0EEE9',
+    gap: 8,
+  },
+  billDetailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
   billPreview: {
     marginTop: 10,
     paddingTop: 12,
@@ -843,6 +960,7 @@ const styles = StyleSheet.create({
   },
   bpWhen: { fontSize: 13, fontWeight: '600', flexShrink: 0 },
   bpWhenToday: { color: C.red },
+  bpWhenTomorrow: { color: C.orange },
   bpWhenUpcoming: { color: C.muted },
   bpAmt: {
     fontSize: 15,
