@@ -130,6 +130,50 @@ async function sendSplitInviteAcceptedNotification(db, recipientUid, subscriptio
   );
 }
 
+/** FCM `data` fields must be strings. */
+function stringifyFcmData(data) {
+  const out = {};
+  if (!data || typeof data !== 'object') return out;
+  for (const [k, v] of Object.entries(data)) {
+    if (v === undefined || v === null) continue;
+    out[k] = typeof v === 'string' ? v : String(v);
+  }
+  return out;
+}
+
+/**
+ * Sends a mySplit notification to all session tokens for `uid`. Respects `notificationPreferences`.
+ */
+async function sendMySplitPushToUser(db, uid, body, dataPayload) {
+  const recipientDoc = await db.collection('users').doc(uid).get();
+  const prefs = recipientDoc.data()?.notificationPreferences;
+  if (prefs && prefs.notificationsEnabled === false) return;
+
+  const sessionsSnap = await db.collection('users').doc(uid).collection('sessions').get();
+  const tokens = new Set();
+  sessionsSnap.docs.forEach((d) => {
+    const t = d.data().fcmToken;
+    if (typeof t === 'string' && t.trim()) tokens.add(t.trim());
+  });
+
+  const data = stringifyFcmData(dataPayload);
+
+  await Promise.all(
+    [...tokens].map((token) =>
+      admin
+        .messaging()
+        .send({
+          token,
+          notification: { title: 'mySplit', body },
+          data,
+        })
+        .catch((e) => {
+          console.warn('sendMySplitPushToUser: FCM send failed', e?.message || e);
+        })
+    )
+  );
+}
+
 /**
  * When an invite moves to `accepted`, create `friendships/{uidSmall_uidLarge}` (Admin SDK; clients cannot write friendships).
  */
@@ -351,6 +395,76 @@ exports.findUsersByPhoneHash = onCall(async (request) => {
   }
 
   return { matches };
+});
+
+/**
+ * Callable after creating a subscription from the wizard: notifies existing app members on the split
+ * and sends a confirmation push to the owner. Stripe PaymentIntents for autoCharge are created by
+ * `advanceBillingCycles` when `nextBillingAt` is due — not here (avoids duplicating cycle logic).
+ *
+ * Input: `{ subscriptionId: string }`
+ */
+exports.finalizeSubscriptionWizard = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Sign in required.');
+  }
+  const ownerUid = request.auth.uid;
+  const subscriptionId = request.data?.subscriptionId;
+  if (typeof subscriptionId !== 'string' || !subscriptionId.trim()) {
+    throw new HttpsError('invalid-argument', 'Expected { subscriptionId: string }.');
+  }
+
+  const db = admin.firestore();
+  const subRef = db.collection('subscriptions').doc(subscriptionId.trim());
+  const subSnap = await subRef.get();
+  if (!subSnap.exists) {
+    throw new HttpsError('not-found', 'Subscription not found.');
+  }
+
+  const sub = subSnap.data();
+  if (sub.ownerUid !== ownerUid) {
+    throw new HttpsError('permission-denied', 'Only the split owner can finalize.');
+  }
+  if (sub.status !== 'active') {
+    return { ok: true, skipped: true };
+  }
+
+  const serviceName =
+    typeof sub.serviceName === 'string' && sub.serviceName.trim()
+      ? sub.serviceName.trim()
+      : typeof sub.planName === 'string' && sub.planName.trim()
+        ? sub.planName.trim()
+        : 'a split';
+
+  const creatorDoc = await db.collection('users').doc(ownerUid).get();
+  const dn = creatorDoc.data()?.displayName;
+  const senderName = typeof dn === 'string' && dn.trim() ? dn.trim() : 'Someone';
+
+  const shares = Array.isArray(sub.splitMemberShares) ? sub.splitMemberShares : [];
+  const notified = new Set();
+  const memberBody = `${senderName} added you to ${serviceName}`;
+
+  for (const share of shares) {
+    if (!share || share.role === 'owner' || share.invitePending) continue;
+    const mid = share.memberId;
+    if (typeof mid !== 'string' || !mid.trim() || mid === ownerUid) continue;
+    if (notified.has(mid)) continue;
+    notified.add(mid);
+
+    await sendMySplitPushToUser(db, mid, memberBody, {
+      type: 'split_member_added',
+      subscriptionId: subRef.id,
+      inviterUid: ownerUid,
+    });
+  }
+
+  const ownerBody = `Your ${serviceName} split is set up.`;
+  await sendMySplitPushToUser(db, ownerUid, ownerBody, {
+    type: 'subscription_wizard_complete',
+    subscriptionId: subRef.id,
+  });
+
+  return { ok: true };
 });
 
 // ---------------------------------------------------------------------------
