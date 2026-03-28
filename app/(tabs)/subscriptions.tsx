@@ -15,7 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { getFirebaseAuth } from '../../lib/firebase';
 import { fmtCents } from '../../lib/subscription/addSubscriptionSplitMath';
-import { subscribeMemberSubscriptions, type MemberSubscriptionDoc } from '../../lib/subscription/memberSubscriptionsFirestore';
+import type { MemberSubscriptionDoc } from '../../lib/subscription/memberSubscriptionsFirestore';
 import {
   getTotalCents,
   getViewerShareCents,
@@ -28,6 +28,7 @@ import { SubscriptionsDemoFloatCard, SubscriptionsDemoPanel } from '../component
 import { LiveSubscriptionCard } from '../components/subscriptions/LiveSubscriptionCard';
 import { SubscriptionCardSkeletonList } from '../components/subscriptions/SubscriptionCardSkeleton';
 import { useProfileAvatarUrl } from '../hooks/useProfileAvatarUrl';
+import { useSubscriptions } from '../contexts/SubscriptionsContext';
 import { spacing } from '../../constants/theme';
 
 const C = {
@@ -62,8 +63,7 @@ export default function SubscriptionsScreen() {
   const { width } = useWindowDimensions();
   const [user, setUser] = useState<User | null>(null);
   const [filter, setFilter] = useState<FilterId>('active');
-  const [memberSubscriptions, setMemberSubscriptions] = useState<MemberSubscriptionDoc[]>([]);
-  const [subscriptionsLoading, setSubscriptionsLoading] = useState(true);
+  const { subscriptions: ctxSubscriptions, loading: ctxSubscriptionsLoading } = useSubscriptions();
   const [lastSeenPriceMap, setLastSeenPriceMap] = useState<
     Record<string, { toMillis?: () => number }> | null | undefined
   >(null);
@@ -88,21 +88,8 @@ export default function SubscriptionsScreen() {
     });
   }, []);
 
-  useEffect(() => {
-    if (SUBSCRIPTIONS_DEMO_MODE) {
-      return;
-    }
-    const uid = user?.uid;
-    if (!uid) {
-      setMemberSubscriptions([]);
-      setSubscriptionsLoading(false);
-      return;
-    }
-    return subscribeMemberSubscriptions(uid, (subs, loading) => {
-      setMemberSubscriptions(subs);
-      setSubscriptionsLoading(loading);
-    });
-  }, [user?.uid]);
+  const memberSubscriptions = SUBSCRIPTIONS_DEMO_MODE ? [] : ctxSubscriptions;
+  const subscriptionsLoading = SUBSCRIPTIONS_DEMO_MODE ? false : ctxSubscriptionsLoading;
 
   const uid = user?.uid ?? '';
 
