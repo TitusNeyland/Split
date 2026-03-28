@@ -72,7 +72,14 @@ export type ActivityFeedKind =
   | 'audit_ended'
   | 'split_invite_received'
   | 'split_invite_sent'
-  | 'split_ended';
+  | 'split_invite_accepted'
+  | 'split_invite_declined'
+  | 'split_member_joined'
+  | 'split_member_removed'
+  | 'split_ended'
+  | 'split_restarted'
+  | 'split_percentage_updated'
+  | 'split_price_updated';
 
 export type ActivityBadgeVariant = 'green' | 'amber' | 'red' | 'purple' | 'gray' | 'blue';
 
@@ -108,6 +115,10 @@ export type ActivityFeedRow = {
   _activityCreatedAtMs?: number;
   /** Owner: send reminder to this member for this subscription. */
   _reminderTap?: { subscriptionId: string; memberUid: string };
+  /** Navigate to subscription detail (split invite). */
+  joinSubscriptionId?: string;
+  /** Muted / desaturated service tile */
+  serviceIconMuted?: boolean;
 };
 
 /**
@@ -272,10 +283,13 @@ export function activityEventToFeedRow(
     case 'split_invite_received': {
       const actor = event.actorName?.trim() || 'Someone';
       const userShareCents =
-        typeof meta.userShareCents === 'number' && Number.isFinite(meta.userShareCents)
-          ? meta.userShareCents
-          : undefined;
+        typeof event.amount === 'number' && Number.isFinite(event.amount)
+          ? event.amount
+          : typeof meta.userShareCents === 'number' && Number.isFinite(meta.userShareCents)
+            ? meta.userShareCents
+            : undefined;
       const shareStr = userShareCents != null ? formatMoneyCents(userShareCents) : '';
+      const subId = event.subscriptionId;
       return {
         id: event.id,
         kind: 'split_invite_received',
@@ -289,8 +303,9 @@ export function activityEventToFeedRow(
         time,
         amount: shareStr || undefined,
         amountColor: C.text,
-        badge: 'Invite',
+        badge: 'Join',
         badgeVariant: 'purple',
+        joinSubscriptionId: typeof subId === 'string' && subId ? subId : undefined,
         _activityCreatedAtMs: createdMs,
       };
     }
@@ -324,29 +339,201 @@ export function activityEventToFeedRow(
         _activityCreatedAtMs: createdMs,
       };
     }
+    case 'split_invite_accepted': {
+      const ownerName =
+        typeof meta.ownerName === 'string' && meta.ownerName.trim() ? meta.ownerName.trim() : 'Owner';
+      const shareCents =
+        typeof event.amount === 'number' && Number.isFinite(event.amount) ? event.amount : 0;
+      const shareStr = formatMoneyCents(shareCents);
+      return {
+        id: event.id,
+        kind: 'split_invite_accepted',
+        serviceMark,
+        icon: 'checkmark-circle-outline',
+        iconBg: '#E1F5EE',
+        iconColor: C.green,
+        title: `You joined ${subName}`,
+        sub: `${ownerName}'s split · ${shareStr}/month`,
+        time,
+        amountColor: C.text,
+        badge: 'Joined',
+        badgeVariant: 'green',
+        _activityCreatedAtMs: createdMs,
+      };
+    }
+    case 'split_invite_declined': {
+      const inviter = event.actorName?.trim() || 'Someone';
+      return {
+        id: event.id,
+        kind: 'split_invite_declined',
+        serviceMark,
+        serviceIconMuted: true,
+        icon: 'close-outline',
+        iconBg: '#F0EEE9',
+        iconColor: C.muted,
+        title: `You declined ${subName}`,
+        sub: `${inviter}'s split`,
+        time,
+        amountColor: C.muted,
+        badge: 'Declined',
+        badgeVariant: 'gray',
+        _activityCreatedAtMs: createdMs,
+      };
+    }
+    case 'split_member_joined': {
+      const actor = event.actorName?.trim() || 'Someone';
+      const newShare =
+        typeof meta.newMemberShare === 'number' && Number.isFinite(meta.newMemberShare)
+          ? meta.newMemberShare
+          : 0;
+      const shareStr = formatMoneyCents(newShare);
+      return {
+        id: event.id,
+        kind: 'split_member_joined',
+        friendLinkIds: event.actorUid ? [event.actorUid] : undefined,
+        icon: 'person',
+        iconBg: '#E1F5EE',
+        iconColor: '#0F6E56',
+        title: `${actor} joined ${subName}`,
+        sub: shareStr ? `Their share · ${shareStr}/month` : 'New member',
+        time,
+        amountColor: C.text,
+        badge: 'Joined',
+        badgeVariant: 'green',
+        _activityCreatedAtMs: createdMs,
+      };
+    }
+    case 'split_member_removed': {
+      const removedUid = typeof meta.removedMemberUid === 'string' ? meta.removedMemberUid : undefined;
+      const actor = event.actorName?.trim() || 'Someone';
+      const youRemoved =
+        typeof viewerUid === 'string' && viewerUid && removedUid === viewerUid;
+      return {
+        id: event.id,
+        kind: 'split_member_removed',
+        icon: 'person-remove-outline',
+        iconBg: '#F0EEE9',
+        iconColor: C.muted,
+        title: youRemoved ? `You were removed from ${brand}` : `${actor} was removed from ${brand}`,
+        sub: youRemoved ? 'Removed from this split' : 'Member removed',
+        time,
+        amountColor: C.muted,
+        badge: 'Removed',
+        badgeVariant: 'gray',
+        _activityCreatedAtMs: createdMs,
+      };
+    }
     case 'split_ended': {
       const actor = event.actorName?.trim() || 'Someone';
       const endedByUid = event.actorUid;
-      const youEnded =
-        typeof viewerUid === 'string' &&
-        viewerUid &&
-        typeof endedByUid === 'string' &&
-        endedByUid === viewerUid;
-      const title = youEnded ? `You ended ${brand}` : `${actor} ended ${brand}`;
       return {
         id: event.id,
         kind: 'split_ended',
         friendLinkIds: endedByUid ? [endedByUid] : undefined,
         serviceMark,
+        serviceIconMuted: true,
         icon: 'close-circle-outline',
         iconBg: '#F0EEE9',
         iconColor: '#5F5E5A',
-        title,
-        sub: 'Split ended · billing stopped',
+        title: `${subName} split ended`,
+        sub: `${actor} ended this split`,
         time,
         amountColor: C.text,
         badge: 'Ended',
         badgeVariant: 'gray',
+        _activityCreatedAtMs: createdMs,
+      };
+    }
+    case 'split_restarted': {
+      const nextBill =
+        typeof meta.nextBillingLabel === 'string' && meta.nextBillingLabel.trim()
+          ? meta.nextBillingLabel.trim()
+          : '';
+      return {
+        id: event.id,
+        kind: 'split_restarted',
+        serviceMark,
+        icon: 'refresh-outline',
+        iconBg: '#EEEDFE',
+        iconColor: C.purple,
+        title: `${subName} restarted`,
+        sub: nextBill ? `Billing resumes ${nextBill}` : 'Billing resumed',
+        time,
+        amountColor: C.text,
+        badge: 'Restarted',
+        badgeVariant: 'purple',
+        _activityCreatedAtMs: createdMs,
+      };
+    }
+    case 'split_price_updated': {
+      const oldP = typeof meta.oldPrice === 'number' ? meta.oldPrice : 0;
+      const newP = typeof meta.newPrice === 'number' ? meta.newPrice : 0;
+      return {
+        id: event.id,
+        kind: 'split_price_updated',
+        serviceMark,
+        icon: 'information-circle-outline',
+        iconBg: '#FAEEDA',
+        iconColor: '#854F0B',
+        title: `${brand} price updated`,
+        sub: `${formatMoneyCents(oldP)} → ${formatMoneyCents(newP)} · your share changed`,
+        time,
+        amountColor: C.orange,
+        badge: 'Updated',
+        badgeVariant: 'amber',
+        _activityCreatedAtMs: createdMs,
+      };
+    }
+    case 'split_percentage_updated': {
+      const actor = event.actorName?.trim() || 'Someone';
+      const rawChanges = Array.isArray(meta.changes) ? meta.changes : [];
+      const changes = rawChanges.filter((c) => c && typeof c === 'object') as Array<{
+        memberName?: string;
+        memberId?: string;
+        oldPct?: number;
+        newPct?: number;
+        oldAmountCents?: number;
+        newAmountCents?: number;
+      }>;
+      let subLine = 'Split percentages updated';
+      const mine = changes.find(
+        (c) => typeof viewerUid === 'string' && c.memberId === viewerUid,
+      );
+      if (mine) {
+        if (
+          mine.oldAmountCents != null &&
+          mine.newAmountCents != null &&
+          mine.oldAmountCents !== mine.newAmountCents
+        ) {
+          subLine = `Your share changed from ${formatMoneyCents(mine.oldAmountCents)} → ${formatMoneyCents(mine.newAmountCents)}`;
+        } else if (mine.oldPct != null && mine.newPct != null) {
+          subLine = `Your share changed from ${mine.oldPct}% → ${mine.newPct}%`;
+        }
+      }
+      return {
+        id: event.id,
+        kind: 'split_percentage_updated',
+        icon: 'create-outline',
+        iconBg: '#EEEDFE',
+        iconColor: C.purple,
+        title: `Split updated · ${subName}`,
+        sub: subLine,
+        time,
+        amountColor: C.text,
+        badge: 'Updated',
+        badgeVariant: 'purple',
+        detail: {
+          rows: [
+            { label: 'Updated by', value: actor },
+            ...changes.slice(0, 6).map((c) => ({
+              label: typeof c.memberName === 'string' ? c.memberName : 'Member',
+              value:
+                c.oldAmountCents != null && c.newAmountCents != null
+                  ? `${formatMoneyCents(c.oldAmountCents)} → ${formatMoneyCents(c.newAmountCents)}`
+                  : `${c.oldPct ?? '—'}% → ${c.newPct ?? '—'}%`,
+            })),
+          ],
+        },
         _activityCreatedAtMs: createdMs,
       };
     }

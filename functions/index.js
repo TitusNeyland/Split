@@ -441,7 +441,9 @@ async function sendSplitInviteInAppNotifications(db, subId, after, newUids) {
         actorUid: ownerUid,
         actorName: inviterName,
         actorAvatarUrl: inviterAvatarUrl,
+        amount: userShare,
         metadata: {
+          inviterUid: ownerUid,
           userShareCents: userShare,
           billingCycle: typeof after.billingCycle === 'string' ? after.billingCycle : 'monthly',
         },
@@ -605,10 +607,274 @@ exports.onSubscriptionEndedActivity = onDocumentUpdated('subscriptions/{subscrip
         serviceId,
         actorUid: endedBy,
         actorName,
-        metadata: { subscriptionId: subId },
+        metadata: {
+          subscriptionId: subId,
+          endedByOwner: typeof ownerUid === 'string' && endedBy === ownerUid,
+        },
       });
     } catch (e) {
       console.warn('onSubscriptionEndedActivity: failed for', uid, e?.message || e);
+    }
+  }
+});
+
+function subscriptionTotalCents(data) {
+  if (!data || typeof data !== 'object') return null;
+  if (typeof data.totalCents === 'number') return data.totalCents;
+  if (typeof data.amountCents === 'number') return data.amountCents;
+  return null;
+}
+
+function buildSharePercentChanges(bShares, aShares) {
+  const changes = [];
+  for (const a of aShares) {
+    if (!a || typeof a !== 'object') continue;
+    const uid = a.memberId;
+    if (!uid) continue;
+    const b = bShares.find((s) => s && s.memberId === uid);
+    const oldPct = typeof b?.percent === 'number' ? b.percent : null;
+    const newPct = typeof a.percent === 'number' ? a.percent : null;
+    const oldAmt = typeof b?.amountCents === 'number' ? b.amountCents : null;
+    const newAmt = typeof a.amountCents === 'number' ? a.amountCents : null;
+    const name = typeof a.displayName === 'string' && a.displayName.trim() ? a.displayName.trim() : 'Member';
+    if (oldPct != null && newPct != null && oldPct !== newPct) {
+      changes.push({ memberName: name, memberId: uid, oldPct, newPct });
+    } else if (oldAmt != null && newAmt != null && oldAmt !== newAmt) {
+      changes.push({
+        memberName: name,
+        memberId: uid,
+        oldPct: oldPct ?? 0,
+        newPct: newPct ?? 0,
+        oldAmountCents: oldAmt,
+        newAmountCents: newAmt,
+      });
+    }
+  }
+  return changes;
+}
+
+/**
+ * Decline split invite (notification marked declined) → activity on that user’s feed.
+ */
+exports.onNotificationSplitInviteDeclinedActivity = onDocumentUpdated(
+  'users/{userId}/notifications/{notificationId}',
+  async (event) => {
+    const before = event.data.before.exists ? event.data.before.data() : {};
+    const after = event.data.after.data();
+    if (!after || after.type !== 'split_invite') return;
+    if (after.actioned !== 'declined') return;
+    if (before.actioned === 'declined') return;
+
+    const userId = event.params.userId;
+    const m = after.metadata || {};
+    const subscriptionId = typeof m.subscriptionId === 'string' ? m.subscriptionId : '';
+    const subscriptionName =
+      typeof m.subscriptionName === 'string' && m.subscriptionName.trim()
+        ? m.subscriptionName.trim()
+        : 'Subscription';
+    const inviterUid = typeof m.inviterUid === 'string' ? m.inviterUid : '';
+    const inviterName =
+      typeof m.inviterName === 'string' && m.inviterName.trim() ? m.inviterName.trim() : 'Someone';
+    const slugId = slugifyServiceIdFromName(subscriptionName);
+
+    const db = admin.firestore();
+    try {
+      await appendActivityEvent(db, userId, {
+        type: 'split_invite_declined',
+        subscriptionId,
+        subscriptionName,
+        serviceId: slugId,
+        actorUid: inviterUid || undefined,
+        actorName: inviterName,
+        metadata: { inviterUid },
+      });
+    } catch (e) {
+      console.warn('onNotificationSplitInviteDeclinedActivity', e?.message || e);
+    }
+  }
+);
+
+/**
+ * Restart, member removed, invite accepted, price change, split edit (percent/amount).
+ */
+exports.onSubscriptionSplitLifecycleActivity = onDocumentUpdated('subscriptions/{subscriptionId}', async (event) => {
+  const before = event.data.before.exists ? event.data.before.data() : {};
+  const after = event.data.after.data();
+  if (!after) return;
+  const subId = event.params.subscriptionId;
+  const ownerUid = after.ownerUid;
+  if (typeof ownerUid !== 'string' || !ownerUid) return;
+
+  const subName = subscriptionLabelFromData(after);
+  const slugId = slugifyServiceIdFromName(subName);
+  const db = admin.firestore();
+
+  const bShares = Array.isArray(before.splitMemberShares) ? before.splitMemberShares : [];
+  const aShares = Array.isArray(after.splitMemberShares) ? after.splitMemberShares : [];
+  const bMps = before.memberPaymentStatus || {};
+  const aMps = after.memberPaymentStatus || {};
+
+  const bUids = new Set(Array.isArray(before.memberUids) ? before.memberUids : []);
+  const aUids = new Set(Array.isArray(after.memberUids) ? after.memberUids : []);
+  const allMemberUids = new Set([...aUids, ownerUid].filter((u) => typeof u === 'string' && u));
+
+  if (before.status === 'ended' && after.status === 'active') {
+    let billLabel = '';
+    const nb = after.nextBillingAt;
+    if (nb && typeof nb.toDate === 'function') {
+      try {
+        billLabel = nb.toDate().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      } catch (_) {}
+    }
+    for (const uid of allMemberUids) {
+      try {
+        await appendActivityEvent(db, uid, {
+          type: 'split_restarted',
+          subscriptionId: subId,
+          subscriptionName: subName,
+          serviceId: slugId,
+          metadata: { nextBillingLabel: billLabel },
+        });
+      } catch (e) {
+        console.warn('split_restarted activity', uid, e?.message || e);
+      }
+    }
+    return;
+  }
+
+  for (const rid of bUids) {
+    if (aUids.has(rid)) continue;
+    if (typeof rid !== 'string' || !rid) continue;
+    const bShare = bShares.find((s) => s && s.memberId === rid);
+    const removedName =
+      typeof bShare?.displayName === 'string' && bShare.displayName.trim()
+        ? bShare.displayName.trim()
+        : await getUserDisplayName(db, rid);
+    for (const target of [ownerUid, rid]) {
+      try {
+        await appendActivityEvent(db, target, {
+          type: 'split_member_removed',
+          subscriptionId: subId,
+          subscriptionName: subName,
+          serviceId: slugId,
+          actorUid: rid,
+          actorName: removedName,
+          metadata: { removedMemberUid: rid },
+        });
+      } catch (e) {
+        console.warn('split_member_removed', target, e?.message || e);
+      }
+    }
+  }
+
+  let inviteAccepted = false;
+  for (const aShare of aShares) {
+    if (!aShare || typeof aShare !== 'object') continue;
+    const uid = aShare.memberId;
+    if (!uid || uid === ownerUid) continue;
+    const bShare = bShares.find((s) => s && s.memberId === uid);
+    const wasInvite = bShare?.invitePending === true || bMps[uid] === 'invited_pending';
+    const nowJoined = aShare.invitePending === false && aMps[uid] === 'pending';
+    if (wasInvite && nowJoined) {
+      inviteAccepted = true;
+      const memberName = await getUserDisplayName(db, uid);
+      const amountCents = typeof aShare.amountCents === 'number' ? aShare.amountCents : 0;
+      const ownerName = await getUserDisplayName(db, ownerUid);
+      try {
+        await appendActivityEvent(db, uid, {
+          type: 'split_invite_accepted',
+          subscriptionId: subId,
+          subscriptionName: subName,
+          serviceId: slugId,
+          amount: amountCents,
+          metadata: { ownerUid, ownerName },
+        });
+      } catch (e) {
+        console.warn('split_invite_accepted', e?.message || e);
+      }
+      try {
+        await appendActivityEvent(db, ownerUid, {
+          type: 'split_member_joined',
+          subscriptionId: subId,
+          subscriptionName: subName,
+          serviceId: slugId,
+          actorUid: uid,
+          actorName: memberName,
+          metadata: { newMemberUid: uid, newMemberShare: amountCents },
+        });
+      } catch (e) {
+        console.warn('split_member_joined', e?.message || e);
+      }
+    }
+  }
+
+  const beforePc = before.priceChangedAt;
+  const afterPc = after.priceChangedAt;
+  let priceChanged = false;
+  if (afterPc && typeof afterPc.toMillis === 'function') {
+    if (!beforePc || typeof beforePc.toMillis !== 'function') priceChanged = true;
+    else if (beforePc.toMillis() !== afterPc.toMillis()) priceChanged = true;
+  }
+  if (priceChanged) {
+    const oldPrice =
+      typeof after.priceChangeFromCents === 'number'
+        ? after.priceChangeFromCents
+        : subscriptionTotalCents(before);
+    const newPrice =
+      typeof after.priceChangeToCents === 'number'
+        ? after.priceChangeToCents
+        : subscriptionTotalCents(after);
+    const actorUid =
+      typeof after.priceLastChangedByUid === 'string' && after.priceLastChangedByUid
+        ? after.priceLastChangedByUid
+        : ownerUid;
+    const actorName = await getUserDisplayName(db, actorUid);
+    for (const uid of allMemberUids) {
+      try {
+        await appendActivityEvent(db, uid, {
+          type: 'split_price_updated',
+          subscriptionId: subId,
+          subscriptionName: subName,
+          serviceId: slugId,
+          actorUid,
+          actorName,
+          metadata: {
+            oldPrice: oldPrice ?? 0,
+            newPrice: newPrice ?? 0,
+          },
+        });
+      } catch (e) {
+        console.warn('split_price_updated', e?.message || e);
+      }
+    }
+  }
+
+  if (inviteAccepted || priceChanged) return;
+
+  const editedBy = after.splitLastEditedByUid;
+  if (typeof editedBy !== 'string' || !editedBy) return;
+
+  const tb = subscriptionTotalCents(before);
+  const ta = subscriptionTotalCents(after);
+  if (tb != null && ta != null && tb !== ta) return;
+
+  const changes = buildSharePercentChanges(bShares, aShares);
+  if (changes.length === 0) return;
+
+  const actorName = await getUserDisplayName(db, editedBy);
+  for (const uid of allMemberUids) {
+    try {
+      await appendActivityEvent(db, uid, {
+        type: 'split_percentage_updated',
+        subscriptionId: subId,
+        subscriptionName: subName,
+        serviceId: slugId,
+        actorUid: editedBy,
+        actorName,
+        metadata: { changes },
+      });
+    } catch (e) {
+      console.warn('split_percentage_updated', e?.message || e);
     }
   }
 });

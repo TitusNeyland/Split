@@ -12,6 +12,8 @@ export async function recordSubscriptionPriceChange(opts: {
   newCents: number;
   /** Optional; enables auto-dismiss after the following billing anchor. */
   billingDayOfMonth?: number;
+  /** For activity feed attribution (defaults to owner-only flows). */
+  actorUid?: string;
 }): Promise<void> {
   const db = getFirebaseFirestore();
   if (!db) throw new Error('Firestore is not configured.');
@@ -22,6 +24,9 @@ export async function recordSubscriptionPriceChange(opts: {
     priceChangedAt: serverTimestamp(),
     amountCents: opts.newCents,
   };
+  if (opts.actorUid) {
+    patch.priceLastChangedByUid = opts.actorUid;
+  }
   if (opts.billingDayOfMonth != null) {
     patch.billingDayOfMonth = opts.billingDayOfMonth;
   }

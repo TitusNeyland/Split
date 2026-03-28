@@ -1,5 +1,4 @@
 import {
-  collection,
   limit,
   onSnapshot,
   orderBy,
@@ -7,72 +6,31 @@ import {
   type Unsubscribe,
 } from 'firebase/firestore';
 import { getFirebaseFirestore } from '../firebase';
+import {
+  getActivityFeedCollectionRef,
+  parseActivityEventDoc,
+} from '../activity/activityFeedFirestore';
+import { activityEventToFeedRow } from '../activity/activityEventToFeedItem';
+import type { ActivityEvent } from '../activity/activityFeedSchema';
+
+const HOME_RECENT_LIMIT = 3;
 
 export type HomeRecentActivityFirestoreItem = {
   id: string;
-  kind: 'payment' | 'reminder' | 'system';
   title: string;
   timestamp: string;
   amount: string;
   amountColor: string;
   serviceMark?: string;
+  icon: string;
+  iconBg: string;
+  iconColor: string;
+  serviceIconMuted?: boolean;
 };
-
-function formatRelativeTime(ts: { toDate?: () => Date } | null | undefined): string {
-  if (!ts?.toDate) return '';
-  const d = ts.toDate();
-  if (!d || Number.isNaN(d.getTime())) return '';
-  const now = new Date();
-  const diffMs = now.getTime() - d.getTime();
-  const mins = Math.floor(diffMs / 60000);
-  if (mins < 1) return 'Just now';
-  if (mins < 60) return `${mins} min ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs} hr ago`;
-  const days = Math.floor(hrs / 24);
-  if (days === 1) return 'Yesterday';
-  if (days < 7) return `${days} days ago`;
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-}
-
-const C = {
-  green: '#1D9E75',
-  orange: '#EF9F27',
-  muted: '#888780',
-};
-
-function mapDoc(
-  id: string,
-  data: Record<string, unknown>
-): HomeRecentActivityFirestoreItem | null {
-  const title = typeof data.title === 'string' ? data.title : typeof data.body === 'string' ? data.body : '';
-  if (!title.trim()) return null;
-  const kindRaw = data.kind;
-  const kind =
-    kindRaw === 'reminder' ? 'reminder' : kindRaw === 'payment' ? 'payment' : 'system';
-  const createdAt = data.createdAt as { toDate?: () => Date } | undefined;
-  const amountCents = typeof data.amountCents === 'number' ? data.amountCents : null;
-  const amountStr =
-    amountCents != null && Number.isFinite(amountCents)
-      ? `${amountCents >= 0 ? '+' : ''}$${(Math.abs(amountCents) / 100).toFixed(2)}`
-      : '';
-  const serviceMark = typeof data.serviceName === 'string' ? data.serviceName : undefined;
-  const amountColor =
-    kind === 'payment' ? C.green : kind === 'reminder' ? C.orange : C.muted;
-
-  return {
-    id,
-    kind,
-    title: title.trim(),
-    timestamp: formatRelativeTime(createdAt),
-    amount: amountStr || '—',
-    amountColor,
-    serviceMark,
-  };
-}
 
 /**
- * Recent activity from `users/{uid}/notifications` (requires Firestore rules + index on createdAt).
+ * Latest events from `users/{uid}/activity` — same collection as the Activity tab.
+ * (Older implementation read `notifications`, which does not receive CF activity events.)
  */
 export function subscribeHomeRecentActivity(
   uid: string,
@@ -85,9 +43,9 @@ export function subscribeHomeRecentActivity(
   }
 
   const q = query(
-    collection(db, 'users', uid, 'notifications'),
+    getActivityFeedCollectionRef(db, uid),
     orderBy('createdAt', 'desc'),
-    limit(3)
+    limit(HOME_RECENT_LIMIT)
   );
 
   let unsub: Unsubscribe;
@@ -96,8 +54,23 @@ export function subscribeHomeRecentActivity(
     (snap) => {
       const items: HomeRecentActivityFirestoreItem[] = [];
       for (const d of snap.docs) {
-        const row = mapDoc(d.id, d.data() as Record<string, unknown>);
-        if (row) items.push(row);
+        const ev = parseActivityEventDoc(d);
+        if (!ev) continue;
+        const row = activityEventToFeedRow(ev as ActivityEvent, uid);
+        if (!row) continue;
+        const amountRight = row.amount?.trim() ? row.amount : row.badge;
+        items.push({
+          id: row.id,
+          title: row.title,
+          timestamp: row.time,
+          amount: amountRight,
+          amountColor: row.amountColor,
+          serviceMark: row.serviceMark,
+          icon: row.icon,
+          iconBg: row.iconBg,
+          iconColor: row.iconColor,
+          serviceIconMuted: row.serviceIconMuted,
+        });
       }
       onUpdate(items);
     },
