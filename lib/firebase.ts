@@ -1,7 +1,8 @@
 import { getApp, getApps, initializeApp, type FirebaseApp, type FirebaseOptions } from 'firebase/app';
 import { initializeAuth, getAuth, getReactNativePersistence, type Auth } from 'firebase/auth';
 import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage';
-import { getFirestore, type Firestore } from 'firebase/firestore';
+import { getFirestore, initializeFirestore, type Firestore } from 'firebase/firestore';
+import { getFunctions, type Functions } from 'firebase/functions';
 import { getStorage, type FirebaseStorage } from 'firebase/storage';
 
 function readEnv(key: string): string | undefined {
@@ -43,6 +44,8 @@ export function getFirebaseApp(): FirebaseApp | null {
   return cachedApp;
 }
 
+let cachedFirestore: Firestore | null | undefined;
+
 let cachedAuth: Auth | null | undefined;
 
 export function getFirebaseAuth(): Auth | null {
@@ -60,12 +63,31 @@ export function getFirebaseAuth(): Auth | null {
   return cachedAuth;
 }
 
+/**
+ * React Native / Expo often hit WebChannel `Listen` transport errors; long-polling is stable.
+ * If Firestore was already initialized (e.g. hot reload), fall back to `getFirestore`.
+ */
 export function getFirebaseFirestore(): Firestore | null {
   const app = getFirebaseApp();
-  return app ? getFirestore(app) : null;
+  if (!app) return null;
+  if (cachedFirestore !== undefined) return cachedFirestore;
+  try {
+    cachedFirestore = initializeFirestore(app, {
+      experimentalForceLongPolling: true,
+    });
+  } catch {
+    cachedFirestore = getFirestore(app);
+  }
+  return cachedFirestore;
 }
 
 export function getFirebaseStorage(): FirebaseStorage | null {
   const app = getFirebaseApp();
   return app ? getStorage(app) : null;
+}
+
+/** Callable HTTPS functions (same region as `functions` deployment, e.g. `us-central1`). */
+export function getFirebaseFunctions(region = 'us-central1'): Functions | null {
+  const app = getFirebaseApp();
+  return app ? getFunctions(app, region) : null;
 }

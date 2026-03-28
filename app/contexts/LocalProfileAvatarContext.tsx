@@ -1,6 +1,6 @@
 /**
  * TEMP: Device-only avatar while Firebase is not configured.
- * See removal checklist in `lib/localProfileAvatarStorage.ts` (search: LOCAL_PROFILE_AVATAR_OFFLINE).
+ * See removal checklist in `lib/profile/localProfileAvatarStorage.ts` (search: LOCAL_PROFILE_AVATAR_OFFLINE).
  */
 import React, {
   createContext,
@@ -17,7 +17,7 @@ import {
   getLocalAvatarFileUri,
   localProfileAvatarFileExists,
   saveLocalProfileAvatarFile,
-} from '../../lib/localProfileAvatarStorage';
+} from '../../lib/profile';
 
 type Value = {
   /** file:// URI when a local-only avatar exists (Firebase off). */

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -6,21 +6,44 @@ import {
   ScrollView,
   Pressable,
   useWindowDimensions,
+  Animated,
+  Alert,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { getFirebaseAuth } from '../../lib/firebase';
+import { fmtCents } from '../../lib/subscription/addSubscriptionSplitMath';
 import {
-  subscribeSubscriptionsTabPrefetch,
-  type SubscriptionsTabPrefetchState,
-} from '../../lib/subscriptionTabBadgesFirestore';
-import { DEMO_TAB_BADGES, SUBSCRIPTIONS_DEMO_MODE } from '../../lib/subscriptionsScreenDemo';
-import { SubscriptionsDemoFloatCard, SubscriptionsDemoPanel } from '../components/SubscriptionsDemoPanels';
+  subscribeEndedMemberSubscriptions,
+  type MemberSubscriptionDoc,
+} from '../../lib/subscription/memberSubscriptionsFirestore';
+import {
+  getTotalCents,
+  getViewerShareCents,
+  normalizeSubscriptionStatus,
+  subscriptionEndedAtMillis,
+  subscriptionIsUserOverdue,
+} from '../../lib/subscription/subscriptionToCardModel';
+import { subscribeAuthAndProfile } from '../../lib/profile';
+import { SUBSCRIPTIONS_DEMO_MODE, DEMO_TAB_BADGES } from '../../lib/subscription/subscriptionsScreenDemo';
+import { SubscriptionsDemoFloatCard, SubscriptionsDemoPanel } from '../components/subscriptions/SubscriptionsDemoPanels';
+import { LiveSubscriptionCard } from '../components/subscriptions/LiveSubscriptionCard';
+import { SubscriptionCardSkeletonList } from '../components/subscriptions/SubscriptionCardSkeleton';
+import { useProfileAvatarUrl } from '../hooks/useProfileAvatarUrl';
+import { useSubscriptions } from '../contexts/SubscriptionsContext';
 import { spacing } from '../../constants/theme';
+import {
+  consumePendingSubscriptionsTabToast,
+  setPendingSubscriptionsTabToast,
+} from '../../lib/subscription/endSplitNavigationToast';
+import { RestartSplitConfirmSheet } from '../components/subscriptions/RestartSplitConfirmSheet';
+import { restartSubscriptionSplit } from '../../lib/subscription/restartSplitFirestore';
+import { deleteSubscriptionDocument } from '../../lib/subscription/deleteSubscriptionFirestore';
+import { buildRestartSheetModelFromMemberDoc } from '../../lib/subscription/restartSplitSheetModel';
 
 const C = {
   bg: '#F2F0EB',
@@ -30,18 +53,21 @@ const C = {
   muted: '#888780',
 };
 
-type FilterId = 'active' | 'overdue' | 'paused' | 'archived';
+type FilterId = 'active' | 'overdue' | 'ended';
 
-const FILTERS: { id: FilterId; label: string; badge?: 'overdue' | 'paused' }[] = [
+const FILTERS: { id: FilterId; label: string; badge?: 'overdue' }[] = [
   { id: 'active', label: 'Active' },
   { id: 'overdue', label: 'Overdue', badge: 'overdue' },
-  { id: 'paused', label: 'Paused', badge: 'paused' },
-  { id: 'archived', label: 'Archived' },
+  { id: 'ended', label: 'Ended' },
 ];
 
 function formatBadgeCount(n: number): string {
   if (n > 99) return '99+';
   return String(n);
+}
+
+function heroMoneyLabel(cents: number): string {
+  return fmtCents(Math.max(0, Math.round(cents)));
 }
 
 export default function SubscriptionsScreen() {
@@ -50,12 +76,44 @@ export default function SubscriptionsScreen() {
   const { width } = useWindowDimensions();
   const [user, setUser] = useState<User | null>(null);
   const [filter, setFilter] = useState<FilterId>('active');
-  const [tabData, setTabData] = useState<SubscriptionsTabPrefetchState>({
-    overdue: 0,
-    paused: 0,
-    active: 0,
-    archived: 0,
-  });
+  const { subscriptions: ctxSubscriptions, loading: ctxSubscriptionsLoading } = useSubscriptions();
+  const [lastSeenPriceMap, setLastSeenPriceMap] = useState<
+    Record<string, { toMillis?: () => number }> | null | undefined
+  >(null);
+  const [splitEndedToast, setSplitEndedToast] = useState<string | null>(null);
+  const splitEndedToastOpacity = useRef(new Animated.Value(0)).current;
+
+  const { avatarUrl: userAvatarUrl, displayName: profileDisplayName } = useProfileAvatarUrl();
+
+  const [endedSubsOrdered, setEndedSubsOrdered] = useState<MemberSubscriptionDoc[]>([]);
+  const [endedLoading, setEndedLoading] = useState(true);
+  const [restartSheetOpen, setRestartSheetOpen] = useState(false);
+  const [restartDoc, setRestartDoc] = useState<MemberSubscriptionDoc | null>(null);
+  const [restartDemo, setRestartDemo] = useState(false);
+  const [restartBusy, setRestartBusy] = useState(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      const pending = consumePendingSubscriptionsTabToast();
+      if (!pending) return undefined;
+      setFilter(pending.filter);
+      setSplitEndedToast(pending.message);
+      splitEndedToastOpacity.setValue(0);
+      Animated.timing(splitEndedToastOpacity, {
+        toValue: 1,
+        duration: 220,
+        useNativeDriver: true,
+      }).start();
+      const t = setTimeout(() => {
+        Animated.timing(splitEndedToastOpacity, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }).start(() => setSplitEndedToast(null));
+      }, 3200);
+      return () => clearTimeout(t);
+    }, [splitEndedToastOpacity])
+  );
 
   useEffect(() => {
     const auth = getFirebaseAuth();
@@ -70,13 +128,177 @@ export default function SubscriptionsScreen() {
     if (SUBSCRIPTIONS_DEMO_MODE) {
       return;
     }
-    const uid = user?.uid;
-    if (!uid) {
-      setTabData({ overdue: 0, paused: 0, active: 0, archived: 0 });
+    return subscribeAuthAndProfile((s) => {
+      setLastSeenPriceMap(s.profile?.lastSeenPriceChangeBySubscription ?? null);
+    });
+  }, []);
+
+  const memberSubscriptions = SUBSCRIPTIONS_DEMO_MODE ? [] : ctxSubscriptions;
+  const subscriptionsLoading = SUBSCRIPTIONS_DEMO_MODE ? false : ctxSubscriptionsLoading;
+
+  const uid = user?.uid ?? '';
+
+  useEffect(() => {
+    if (SUBSCRIPTIONS_DEMO_MODE || !uid) {
+      setEndedSubsOrdered([]);
+      setEndedLoading(false);
       return;
     }
-    return subscribeSubscriptionsTabPrefetch(uid, setTabData);
-  }, [user?.uid]);
+    return subscribeEndedMemberSubscriptions(uid, (subs, loading) => {
+      setEndedSubsOrdered(subs);
+      setEndedLoading(loading);
+    });
+  }, [uid]);
+
+  const { activeSubs, overdueSubs } = useMemo(() => {
+    const active: MemberSubscriptionDoc[] = [];
+    const overdue: MemberSubscriptionDoc[] = [];
+    for (const s of memberSubscriptions) {
+      const st = normalizeSubscriptionStatus(s.status);
+      if (st === 'ended') {
+        continue;
+      }
+      if (st === 'active') {
+        active.push(s);
+        if (uid && subscriptionIsUserOverdue(s, uid)) {
+          overdue.push(s);
+        }
+      }
+    }
+    return { activeSubs: active, overdueSubs: overdue };
+  }, [memberSubscriptions, uid]);
+
+  /** Fallback when ended-specific listeners fail (index / rules): same subs as context, filtered to ended. */
+  const endedSubsFromContext = useMemo(
+    () => memberSubscriptions.filter((s) => normalizeSubscriptionStatus(s.status) === 'ended'),
+    [memberSubscriptions]
+  );
+
+  const endedSubsDisplay = useMemo(() => {
+    const map = new Map<string, MemberSubscriptionDoc>();
+    for (const d of endedSubsFromContext) {
+      map.set(d.id, d);
+    }
+    for (const d of endedSubsOrdered) {
+      map.set(d.id, d);
+    }
+    return [...map.values()].sort((a, b) => {
+      const ma = subscriptionEndedAtMillis(a.endedAt) ?? 0;
+      const mb = subscriptionEndedAtMillis(b.endedAt) ?? 0;
+      return mb - ma;
+    });
+  }, [endedSubsOrdered, endedSubsFromContext]);
+
+  const restartSheetModel = useMemo(() => {
+    if (restartDemo) {
+      return {
+        subscriptionName: 'Xbox Game Pass',
+        firstNewBillLabel: 'May 21, 2026',
+        splitUnchangedLine: '50% / 50% · unchanged',
+        membersNotifiedCount: 2,
+      };
+    }
+    if (!restartDoc) return null;
+    return buildRestartSheetModelFromMemberDoc(restartDoc);
+  }, [restartDoc, restartDemo]);
+
+  const openRestartForDoc = useCallback((doc: MemberSubscriptionDoc) => {
+    const model = buildRestartSheetModelFromMemberDoc(doc);
+    if (!model) {
+      Alert.alert('Cannot restart', 'This split is missing member data.');
+      return;
+    }
+    setRestartDoc(doc);
+    setRestartDemo(false);
+    setRestartSheetOpen(true);
+  }, []);
+
+  const handleConfirmRestart = useCallback(async () => {
+    if (!restartSheetModel) return;
+    if (restartDemo) {
+      setRestartSheetOpen(false);
+      setRestartDemo(false);
+      setPendingSubscriptionsTabToast(
+        `Split restarted · billing resumes ${restartSheetModel.firstNewBillLabel}`,
+        'active'
+      );
+      router.replace('/(tabs)/subscriptions');
+      return;
+    }
+    if (!restartDoc || !uid) return;
+    setRestartBusy(true);
+    try {
+      const dateLabel = restartSheetModel.firstNewBillLabel;
+      const shares = restartDoc.splitMemberShares;
+      const recipientUids = Array.isArray(shares)
+        ? shares
+            .filter(
+              (r: { invitePending?: boolean; memberId?: string }) =>
+                !r.invitePending && r.memberId && String(r.memberId) !== uid
+            )
+            .map((r: { memberId: string }) => String(r.memberId))
+        : [];
+      await restartSubscriptionSplit({
+        subscriptionId: restartDoc.id,
+        restartedByUid: uid,
+        ownerDisplayName: profileDisplayName?.trim() || 'Someone',
+        subscriptionDisplayName: restartSheetModel.subscriptionName,
+        recipientUids,
+        nextBillingDateLabel: dateLabel,
+      });
+      setRestartSheetOpen(false);
+      setRestartDoc(null);
+      setPendingSubscriptionsTabToast(`Split restarted · billing resumes ${dateLabel}`, 'active');
+      router.replace('/(tabs)/subscriptions');
+    } catch (e) {
+      Alert.alert('Could not restart split', e instanceof Error ? e.message : 'Try again.');
+    } finally {
+      setRestartBusy(false);
+    }
+  }, [restartSheetModel, restartDemo, restartDoc, uid, profileDisplayName, router]);
+
+  const confirmDeleteEnded = useCallback(
+    async (doc: MemberSubscriptionDoc) => {
+      try {
+        await deleteSubscriptionDocument(doc.id);
+      } catch (e) {
+        Alert.alert('Could not delete', e instanceof Error ? e.message : 'Try again.');
+      }
+    },
+    []
+  );
+
+  const promptDeleteEnded = useCallback(
+    (doc: MemberSubscriptionDoc) => {
+      Alert.alert(
+        'Delete this split?',
+        'This permanently removes the split and all its history. This cannot be undone.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: () => void confirmDeleteEnded(doc),
+          },
+        ]
+      );
+    },
+    [confirmDeleteEnded]
+  );
+
+  const monthlyTotalCents = useMemo(
+    () => activeSubs.reduce((sum, s) => sum + getTotalCents(s), 0),
+    [activeSubs]
+  );
+
+  const yourShareCents = useMemo(
+    () => activeSubs.reduce((sum, s) => sum + (uid ? getViewerShareCents(s, uid) : 0), 0),
+    [activeSubs, uid]
+  );
+
+  const activeCount = activeSubs.length;
+
+  const overdueBadge = SUBSCRIPTIONS_DEMO_MODE ? DEMO_TAB_BADGES.overdue : overdueSubs.length;
 
   return (
     <View style={styles.root}>
@@ -117,15 +339,19 @@ export default function SubscriptionsScreen() {
 
           <View style={styles.heroStats}>
             <View style={styles.hstat}>
-              <Text style={styles.hstatVal}>$127</Text>
+              <Text style={styles.hstatVal}>
+                {SUBSCRIPTIONS_DEMO_MODE ? '$127' : heroMoneyLabel(monthlyTotalCents)}
+              </Text>
               <Text style={styles.hstatLbl}>Monthly total</Text>
             </View>
             <View style={styles.hstat}>
-              <Text style={styles.hstatVal}>$28</Text>
+              <Text style={styles.hstatVal}>
+                {SUBSCRIPTIONS_DEMO_MODE ? '$28' : heroMoneyLabel(yourShareCents)}
+              </Text>
               <Text style={styles.hstatLbl}>Your share</Text>
             </View>
             <View style={styles.hstat}>
-              <Text style={styles.hstatVal}>4</Text>
+              <Text style={styles.hstatVal}>{SUBSCRIPTIONS_DEMO_MODE ? '4' : String(activeCount)}</Text>
               <Text style={styles.hstatLbl}>Active splits</Text>
             </View>
           </View>
@@ -133,16 +359,7 @@ export default function SubscriptionsScreen() {
           <View style={styles.seg} accessibilityRole="tablist" accessibilityLabel="Subscription filters">
             {FILTERS.map((f) => {
               const selected = filter === f.id;
-              const badgeCount =
-                f.badge === 'overdue'
-                  ? SUBSCRIPTIONS_DEMO_MODE
-                    ? DEMO_TAB_BADGES.overdue
-                    : tabData.overdue
-                  : f.badge === 'paused'
-                    ? SUBSCRIPTIONS_DEMO_MODE
-                      ? DEMO_TAB_BADGES.paused
-                      : tabData.paused
-                    : 0;
+              const badgeCount = f.badge === 'overdue' ? overdueBadge : 0;
               return (
                 <Pressable
                   key={f.id}
@@ -162,7 +379,7 @@ export default function SubscriptionsScreen() {
                         style={[
                           styles.segBtnTxt,
                           selected && styles.segBtnTxtOn,
-                          f.id === 'archived' && styles.segBtnTxtArchived,
+                          f.id === 'ended' && styles.segBtnTxtEnded,
                         ]}
                         numberOfLines={1}
                       >
@@ -172,7 +389,7 @@ export default function SubscriptionsScreen() {
                         <View
                           style={[
                             styles.countPill,
-                            f.badge === 'overdue' ? styles.countPillOverdue : styles.countPillPaused,
+                            styles.countPillOverdue,
                           ]}
                         >
                           <Text style={styles.countPillTxt}>{formatBadgeCount(badgeCount)}</Text>
@@ -190,7 +407,30 @@ export default function SubscriptionsScreen() {
 
         <View style={[styles.body, { minHeight: Math.max(320, width * 0.9) }]}>
           {SUBSCRIPTIONS_DEMO_MODE ? (
-            <SubscriptionsDemoPanel filter={filter} />
+            <SubscriptionsDemoPanel
+              filter={filter}
+              onDemoEndedRestart={() => {
+                setRestartDemo(true);
+                setRestartDoc(null);
+                setRestartSheetOpen(true);
+              }}
+              onDemoEndedDelete={() => {
+                Alert.alert(
+                  'Delete this split?',
+                  'This permanently removes the split and all its history. This cannot be undone.',
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                      text: 'Delete',
+                      style: 'destructive',
+                      onPress: () => {
+                        Alert.alert('Demo mode', 'Deleting subscriptions is not available in the demo.');
+                      },
+                    },
+                  ]
+                );
+              }}
+            />
           ) : (
             <>
               {filter === 'active' ? (
@@ -199,11 +439,39 @@ export default function SubscriptionsScreen() {
                     <Text style={styles.shTitle}>Active splits</Text>
                     <Text style={styles.shAction}>Sort</Text>
                   </View>
-                  <Text style={styles.panelHint}>
-                    {tabData.active === 0
-                      ? 'No active subscriptions yet. Subscription cards will appear here.'
-                      : `${tabData.active} active subscription${tabData.active === 1 ? '' : 's'} — cards will appear here.`}
-                  </Text>
+                  {subscriptionsLoading && uid ? (
+                    <SubscriptionCardSkeletonList count={3} />
+                  ) : !uid ? (
+                    <Text style={styles.panelHint}>Sign in to see your subscription splits.</Text>
+                  ) : activeSubs.length === 0 ? (
+                    <View style={styles.empty}>
+                      <View style={styles.emptyIcon}>
+                        <Ionicons name="archive-outline" size={30} color={C.muted} />
+                      </View>
+                      <Text style={styles.emptyTitle}>No active splits yet</Text>
+                      <Text style={styles.emptySub}>
+                        Tap + Add to create your first subscription split
+                      </Text>
+                      <Pressable
+                        style={styles.emptyAddBtn}
+                        accessibilityRole="button"
+                        accessibilityLabel="Add subscription"
+                        onPress={() => router.push('/add-subscription')}
+                      >
+                        <Text style={styles.emptyAddBtnTxt}>+ Add</Text>
+                      </Pressable>
+                    </View>
+                  ) : (
+                    activeSubs.map((doc) => (
+                      <LiveSubscriptionCard
+                        key={doc.id}
+                        doc={doc}
+                        viewerUid={uid}
+                        viewerAvatarUrl={userAvatarUrl}
+                        lastSeenPriceMap={lastSeenPriceMap}
+                      />
+                    ))
+                  )}
                 </View>
               ) : null}
 
@@ -212,46 +480,72 @@ export default function SubscriptionsScreen() {
                   <View style={styles.sh}>
                     <Text style={styles.shTitle}>Needs attention</Text>
                   </View>
-                  <Text style={styles.panelHint}>
-                    {tabData.overdue === 0
-                      ? 'Nothing overdue. Subscriptions with a member payment past due will show here.'
-                      : `${tabData.overdue} overdue payment${tabData.overdue === 1 ? '' : 's'} — details will appear here.`}
-                  </Text>
+                  {subscriptionsLoading && uid ? (
+                    <SubscriptionCardSkeletonList count={2} />
+                  ) : !uid ? (
+                    <Text style={styles.panelHint}>Sign in to see overdue payments.</Text>
+                  ) : overdueSubs.length === 0 ? (
+                    <Text style={styles.panelHint}>
+                      Nothing overdue. Subscriptions with a member payment past due will show here.
+                    </Text>
+                  ) : (
+                    overdueSubs.map((doc) => (
+                      <LiveSubscriptionCard
+                        key={doc.id}
+                        doc={doc}
+                        viewerUid={uid}
+                        viewerAvatarUrl={userAvatarUrl}
+                        lastSeenPriceMap={lastSeenPriceMap}
+                      />
+                    ))
+                  )}
                 </View>
               ) : null}
 
-              {filter === 'paused' ? (
+              {filter === 'ended' ? (
                 <View style={styles.panel}>
                   <View style={styles.sh}>
-                    <Text style={styles.shTitle}>Paused</Text>
+                    <Text style={styles.shTitle}>Ended splits</Text>
                   </View>
-                  <Text style={styles.panelHint}>
-                    {tabData.paused === 0
-                      ? 'No paused subscriptions. Paused splits will appear here.'
-                      : `${tabData.paused} paused subscription${tabData.paused === 1 ? '' : 's'} — cards will appear here.`}
-                  </Text>
-                </View>
-              ) : null}
-
-              {filter === 'archived' ? (
-                <View style={styles.panel}>
-                  {tabData.archived === 0 ? (
+                  {endedLoading && uid ? (
+                    <SubscriptionCardSkeletonList count={2} />
+                  ) : !uid ? (
+                    <Text style={styles.panelHint}>Sign in to see ended subscription splits.</Text>
+                  ) : endedSubsDisplay.length === 0 ? (
                     <View style={styles.empty}>
                       <View style={styles.emptyIcon}>
                         <Ionicons name="archive-outline" size={30} color={C.muted} />
                       </View>
-                      <Text style={styles.emptyTitle}>No archived subscriptions</Text>
-                      <Text style={styles.emptySub}>Cancelled subscriptions{'\n'}will appear here</Text>
+                      <Text style={styles.emptyTitle}>No ended splits</Text>
+                      <Text style={styles.emptySub}>Splits you end will appear here</Text>
                     </View>
                   ) : (
                     <>
-                      <View style={styles.sh}>
-                        <Text style={styles.shTitle}>Archived</Text>
+                      {endedSubsDisplay.map((doc) => (
+                        <LiveSubscriptionCard
+                          key={doc.id}
+                          doc={doc}
+                          viewerUid={uid}
+                          viewerAvatarUrl={userAvatarUrl}
+                          lastSeenPriceMap={lastSeenPriceMap}
+                          onEndedRestart={openRestartForDoc}
+                          onEndedDelete={promptDeleteEnded}
+                        />
+                      ))}
+                      <View style={styles.endedPromptCard}>
+                        <Text style={styles.endedPromptTitle}>Want to start a new split?</Text>
+                        <Text style={styles.endedPromptSub}>
+                          Restart an ended one or add a new subscription
+                        </Text>
+                        <Pressable
+                          style={styles.endedPromptBtn}
+                          accessibilityRole="button"
+                          accessibilityLabel="Add subscription"
+                          onPress={() => router.push('/add-subscription')}
+                        >
+                          <Text style={styles.endedPromptBtnTxt}>+ Add subscription</Text>
+                        </Pressable>
                       </View>
-                      <Text style={styles.panelHint}>
-                        {tabData.archived} archived subscription{tabData.archived === 1 ? '' : 's'} — list will
-                        appear here.
-                      </Text>
                     </>
                   )}
                 </View>
@@ -260,6 +554,37 @@ export default function SubscriptionsScreen() {
           )}
         </View>
       </ScrollView>
+
+      {splitEndedToast ? (
+        <Animated.View
+          style={[
+            styles.toast,
+            { bottom: Math.max(insets.bottom, 12) + 8, opacity: splitEndedToastOpacity },
+          ]}
+          pointerEvents="none"
+        >
+          <Text style={styles.toastTxt}>{splitEndedToast}</Text>
+        </Animated.View>
+      ) : null}
+
+      {restartSheetModel ? (
+        <RestartSplitConfirmSheet
+          visible={restartSheetOpen}
+          onClose={() => {
+            if (!restartBusy) {
+              setRestartSheetOpen(false);
+              setRestartDoc(null);
+              setRestartDemo(false);
+            }
+          }}
+          onConfirm={handleConfirmRestart}
+          subscriptionName={restartSheetModel.subscriptionName}
+          firstNewBillLabel={restartSheetModel.firstNewBillLabel}
+          splitUnchangedLine={restartSheetModel.splitUnchangedLine}
+          membersNotifiedCount={restartSheetModel.membersNotifiedCount}
+          confirming={restartBusy}
+        />
+      ) : null}
     </View>
   );
 }
@@ -379,7 +704,7 @@ const styles = StyleSheet.create({
   segBtnTxtOn: {
     color: C.purple,
   },
-  segBtnTxtArchived: {
+  segBtnTxtEnded: {
     fontSize: 11.5,
     letterSpacing: -0.15,
   },
@@ -393,9 +718,6 @@ const styles = StyleSheet.create({
   },
   countPillOverdue: {
     backgroundColor: C.red,
-  },
-  countPillPaused: {
-    backgroundColor: '#8A8984',
   },
   countPillTxt: {
     fontSize: 9,
@@ -459,5 +781,68 @@ const styles = StyleSheet.create({
     color: C.muted,
     textAlign: 'center',
     lineHeight: 22,
+    marginBottom: 16,
+  },
+  emptyAddBtn: {
+    backgroundColor: C.purple,
+    paddingHorizontal: 22,
+    paddingVertical: 12,
+    borderRadius: 22,
+  },
+  emptyAddBtnTxt: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  toast: {
+    position: 'absolute',
+    left: 20,
+    right: 20,
+    backgroundColor: 'rgba(26,26,24,0.92)',
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    zIndex: 50,
+  },
+  toastTxt: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#fff',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  endedPromptCard: {
+    backgroundColor: '#fff',
+    borderRadius: 18,
+    borderWidth: 0.5,
+    borderColor: 'rgba(0,0,0,0.06)',
+    paddingHorizontal: 18,
+    paddingVertical: 18,
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  endedPromptTitle: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: C.text,
+    marginBottom: 6,
+  },
+  endedPromptSub: {
+    fontSize: 14,
+    color: C.muted,
+    lineHeight: 20,
+    marginBottom: 14,
+  },
+  endedPromptBtn: {
+    alignSelf: 'flex-start',
+    backgroundColor: C.purple,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 22,
+  },
+  endedPromptBtnTxt: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
   },
 });

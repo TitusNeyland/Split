@@ -14,16 +14,16 @@ import {
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { router, useFocusEffect } from 'expo-router';
-import { parseReceiptImage } from '../../lib/receiptApi';
-import { setReceiptAssignSession } from '../../lib/receiptParseSession';
-import { emptyManualSession, sessionFromParse } from '../../lib/receiptMappers';
+import { parseReceiptImage } from '../../lib/receipts/receiptApi';
+import { setReceiptAssignSession } from '../../lib/receipts/receiptParseSession';
+import { emptyManualSession, sessionFromParse } from '../../lib/receipts/receiptMappers';
 import {
   getRecentReceiptById,
   loadRecentReceipts,
   newReceiptId,
   upsertRecentFromSession,
-} from '../../lib/recentReceipts';
-import type { AssignReceiptLine, ReceiptAssignSession, StoredReceiptRecord } from '../../lib/receiptTypes';
+} from '../../lib/receipts/recentReceipts';
+import type { AssignReceiptLine, ReceiptAssignSession, StoredReceiptRecord } from '../../lib/receipts/receiptTypes';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
@@ -39,7 +39,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { PermissionStatus } from 'expo-modules-core';
-import { useMergedSplitPreferences } from '../../lib/useMergedSplitPreferences';
+import { useMergedSplitPreferences } from '../../lib/split-preferences/useMergedSplitPreferences';
 
 const C = {
   bg: '#F2F0EB',

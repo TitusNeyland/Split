@@ -1,6 +1,6 @@
 const crypto = require('crypto');
 const admin = require('firebase-admin');
-const { onDocumentUpdated } = require('firebase-functions/v2/firestore');
+const { onDocumentCreated, onDocumentUpdated } = require('firebase-functions/v2/firestore');
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { setGlobalOptions } = require('firebase-functions/v2');
@@ -33,6 +33,101 @@ function inferConnectedVia(data) {
   const v = data.connectedVia;
   if (v === 'contacts' || v === 'direct_invite' || v === 'split_invite') return v;
   return 'direct_invite';
+}
+
+async function mergeSplitInviteMember(db, subscriptionId, inviteId, acceptedBy) {
+  const subRef = db.collection('subscriptions').doc(subscriptionId);
+  const userRef = db.collection('users').doc(acceptedBy);
+  await db.runTransaction(async (tx) => {
+    const subSnap = await tx.get(subRef);
+    if (!subSnap.exists) return;
+    const userSnap = await tx.get(userRef);
+    const data = subSnap.data();
+    const shares = Array.isArray(data.splitMemberShares) ? [...data.splitMemberShares] : [];
+    const idx = shares.findIndex((s) => s && s.inviteId === inviteId);
+    if (idx < 0) return;
+
+    const oldShare = shares[idx];
+    const oldMemberId = oldShare.memberId;
+    const ud = userSnap.data() || {};
+    const dn =
+      typeof ud.displayName === 'string' && ud.displayName.trim() ? ud.displayName.trim() : 'Member';
+    const parts = dn.replace(/\s+/g, ' ').trim().split(/\s+/).filter(Boolean);
+    const init =
+      parts.length >= 2
+        ? `${parts[0][0] || ''}${parts[parts.length - 1][0] || ''}`.toUpperCase()
+        : (parts[0] || '?').slice(0, 2).toUpperCase();
+
+    shares[idx] = {
+      ...oldShare,
+      memberId: acceptedBy,
+      displayName: dn,
+      initials: init,
+      invitePending: false,
+      inviteId: admin.firestore.FieldValue.delete(),
+      inviteExpiresAt: admin.firestore.FieldValue.delete(),
+      pendingInviteEmail: admin.firestore.FieldValue.delete(),
+    };
+
+    const memberUids = (data.memberUids || []).map((u) => (u === oldMemberId ? acceptedBy : u));
+    const members = (data.members || []).map((u) => (u === oldMemberId ? acceptedBy : u));
+    const mps = { ...(data.memberPaymentStatus || {}) };
+    if (mps[oldMemberId] === 'invited_pending') {
+      delete mps[oldMemberId];
+      mps[acceptedBy] = 'pending';
+    }
+
+    tx.update(subRef, {
+      splitMemberShares: shares,
+      memberUids,
+      members,
+      memberPaymentStatus: mps,
+      splitUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  });
+}
+
+async function sendSplitInviteAcceptedNotification(db, recipientUid, subscriptionId, createdBy) {
+  const subSnap = await db.collection('subscriptions').doc(subscriptionId).get();
+  const serviceName =
+    typeof subSnap.data()?.serviceName === 'string' && subSnap.data().serviceName.trim()
+      ? subSnap.data().serviceName.trim()
+      : 'a split';
+  const creatorDoc = await db.collection('users').doc(createdBy).get();
+  const dn = creatorDoc.data()?.displayName;
+  const senderName = typeof dn === 'string' && dn.trim() ? dn.trim() : 'Someone';
+
+  const recipientDoc = await db.collection('users').doc(recipientUid).get();
+  const prefs = recipientDoc.data()?.notificationPreferences;
+  if (prefs && prefs.notificationsEnabled === false) return;
+
+  const body = `${senderName} added you to ${serviceName}`;
+
+  const sessionsSnap = await db.collection('users').doc(recipientUid).collection('sessions').get();
+  const tokens = new Set();
+  sessionsSnap.docs.forEach((d) => {
+    const t = d.data().fcmToken;
+    if (typeof t === 'string' && t.trim()) tokens.add(t.trim());
+  });
+
+  await Promise.all(
+    [...tokens].map((token) =>
+      admin
+        .messaging()
+        .send({
+          token,
+          notification: { title: 'mySplit', body },
+          data: {
+            type: 'split_invite_accepted',
+            subscriptionId,
+            inviterUid: createdBy,
+          },
+        })
+        .catch((e) => {
+          console.warn('sendSplitInviteAcceptedNotification: FCM send failed', e?.message || e);
+        })
+    )
+  );
 }
 
 /**
@@ -74,6 +169,75 @@ exports.onInviteAccepted = onDocumentUpdated('invites/{inviteId}', async (event)
     if (cur.exists) return;
     tx.set(ref, payload);
   });
+
+  const db = admin.firestore();
+  const inviteId = event.params.inviteId;
+  const splitId = typeof after.splitId === 'string' && after.splitId.length > 0 ? after.splitId : null;
+
+  if (splitId) {
+    try {
+      await mergeSplitInviteMember(db, splitId, inviteId, acceptedBy);
+    } catch (e) {
+      console.warn('onInviteAccepted: mergeSplitInviteMember failed', e?.message || e);
+    }
+    try {
+      await sendSplitInviteAcceptedNotification(db, acceptedBy, splitId, createdBy);
+    } catch (e) {
+      console.warn('onInviteAccepted: sendSplitInviteAcceptedNotification failed', e?.message || e);
+    }
+  }
+});
+
+/**
+ * Push to the non-initiator when a friendship is created from Find People (`connectedVia: search`).
+ */
+exports.onFriendshipCreatedNotify = onDocumentCreated('friendships/{friendshipId}', async (event) => {
+  const snap = event.data;
+  if (!snap) return;
+  const data = snap.data();
+  const via = data.connectedVia;
+  if (via !== 'search' && via !== 'user_search' && via !== 'contacts') return;
+
+  const users = data.users;
+  const initiatedBy = data.initiatedBy;
+  if (!Array.isArray(users) || users.length !== 2) return;
+  if (typeof initiatedBy !== 'string') return;
+
+  const recipientUid = users[0] === initiatedBy ? users[1] : users[0];
+  if (!recipientUid || recipientUid === initiatedBy) return;
+
+  const db = admin.firestore();
+  const recipientDoc = await db.collection('users').doc(recipientUid).get();
+  const prefs = recipientDoc.data()?.notificationPreferences;
+  if (prefs && prefs.notificationsEnabled === false) return;
+
+  const senderDoc = await db.collection('users').doc(initiatedBy).get();
+  const dn = senderDoc.data()?.displayName;
+  const senderName = typeof dn === 'string' && dn.trim() ? dn.trim() : 'Someone';
+
+  const body = `${senderName} connected with you on mySplit`;
+
+  const sessionsSnap = await db.collection('users').doc(recipientUid).collection('sessions').get();
+  const tokens = new Set();
+  sessionsSnap.docs.forEach((d) => {
+    const t = d.data().fcmToken;
+    if (typeof t === 'string' && t.trim()) tokens.add(t.trim());
+  });
+
+  await Promise.all(
+    [...tokens].map((token) =>
+      admin
+        .messaging()
+        .send({
+          token,
+          notification: { title: 'mySplit', body },
+          data: { type: 'friend_connected', initiatorUid: initiatedBy },
+        })
+        .catch((e) => {
+          console.warn('onFriendshipCreatedNotify: FCM send failed', e?.message || e);
+        })
+    )
+  );
 });
 
 /**
@@ -105,6 +269,8 @@ exports.syncPhoneHashOnUserCreate = functions.auth.user().onCreate(async (user) 
   if (!user.phoneNumber) return;
   const phone_hash = sha256Hex(user.phoneNumber);
   await admin.auth().setCustomUserClaims(user.uid, { phone_hash });
+  const db = admin.firestore();
+  await db.collection('users').doc(user.uid).set({ phoneHash: phone_hash }, { merge: true });
 });
 
 /**
@@ -120,7 +286,71 @@ exports.refreshPhoneHashClaim = onCall(async (request) => {
   }
   const phone_hash = sha256Hex(user.phoneNumber);
   await admin.auth().setCustomUserClaims(request.auth.uid, { phone_hash });
+  const db = admin.firestore();
+  await db.collection('users').doc(request.auth.uid).set({ phoneHash: phone_hash }, { merge: true });
   return { ok: true };
+});
+
+function usernameFromEmailNormalized(emailNorm) {
+  if (!emailNorm || typeof emailNorm !== 'string') return '@user';
+  const at = emailNorm.indexOf('@');
+  if (at <= 0) return '@user';
+  const local = emailNorm.slice(0, at).replace(/\./g, '_');
+  return local ? `@${local}` : '@user';
+}
+
+/**
+ * Callable: input `{ hashes: string[] }` (SHA-256 hex of E.164). Returns mySplit users whose
+ * `users.phoneHash` matches. Never exposes raw phone numbers.
+ */
+exports.findUsersByPhoneHash = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Sign in required.');
+  }
+  const raw = request.data?.hashes;
+  if (!Array.isArray(raw)) {
+    throw new HttpsError('invalid-argument', 'Expected { hashes: string[] }.');
+  }
+  const hashes = [...new Set(raw.map((h) => String(h).toLowerCase().trim()))].filter(Boolean);
+  if (hashes.length > 2000) {
+    throw new HttpsError('invalid-argument', 'Too many hashes.');
+  }
+  if (hashes.length === 0) {
+    return { matches: [] };
+  }
+
+  const db = admin.firestore();
+  const uid = request.auth.uid;
+  const matches = [];
+  const seenUids = new Set();
+
+  for (let i = 0; i < hashes.length; i += 30) {
+    const chunk = hashes.slice(i, i + 30);
+    const snap = await db.collection('users').where('phoneHash', 'in', chunk).get();
+    snap.docs.forEach((doc) => {
+      if (doc.id === uid) return;
+      if (seenUids.has(doc.id)) return;
+      const data = doc.data() || {};
+      const ph = typeof data.phoneHash === 'string' ? data.phoneHash.toLowerCase() : '';
+      if (!ph || !chunk.includes(ph)) return;
+      seenUids.add(doc.id);
+      const displayName =
+        typeof data.displayName === 'string' && data.displayName.trim()
+          ? data.displayName.trim()
+          : 'mySplit user';
+      const avatarUrl = typeof data.avatarUrl === 'string' ? data.avatarUrl : null;
+      const emailNorm = typeof data.emailNormalized === 'string' ? data.emailNormalized : '';
+      matches.push({
+        uid: doc.id,
+        displayName,
+        avatarUrl,
+        username: usernameFromEmailNormalized(emailNorm),
+        requestHash: ph,
+      });
+    });
+  }
+
+  return { matches };
 });
 
 // ---------------------------------------------------------------------------

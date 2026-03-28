@@ -18,10 +18,10 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { getFriendFilterDisplayName } from '../../lib/profileFriendsBalance';
-import { ServiceIcon } from '../components/ServiceIcon';
-import { recordManualSettlement } from '../../lib/paymentsFirestore';
-import { useFirebaseUid } from '../../lib/useFirebaseUid';
+import { getFriendFilterDisplayName } from '../../lib/profile';
+import { ServiceIcon } from '../components/shared/ServiceIcon';
+import { recordManualSettlement } from '../../lib/payment/paymentsFirestore';
+import { useFirebaseUid } from '../../lib/auth/useFirebaseUid';
 
 type IonIconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -69,9 +69,7 @@ type ActivityKind =
   /** Non-payment audit / ledger events (Changes filter). */
   | 'audit_join'
   | 'audit_reminder'
-  | 'audit_paused'
-  | 'audit_resumed'
-  | 'audit_archived';
+  | 'audit_ended';
 
 type ActivityBadgeVariant = 'green' | 'amber' | 'red' | 'purple' | 'gray' | 'blue';
 
@@ -214,9 +212,7 @@ function itemMatchesFilter(item: ActivityFeedItem, f: ActivityFilterId): boolean
         item.kind === 'updated' ||
         item.kind === 'audit_join' ||
         item.kind === 'audit_reminder' ||
-        item.kind === 'audit_paused' ||
-        item.kind === 'audit_resumed' ||
-        item.kind === 'audit_archived'
+        item.kind === 'audit_ended'
       );
     case 'receipts':
       return item.kind === 'receipt';
@@ -468,72 +464,28 @@ const MOCK_ACTIVITY_GROUPS: ActivityFeedGroup[] = [
           ],
         },
       },
-      {
-        id: 'y-paused',
-        friendLinkIds: ['alex', 'sam', 'taylor'],
-        kind: 'audit_paused',
-        serviceMark: 'Spotify Family',
-        icon: 'pause-circle-outline',
-        iconBg: '#F0EEE9',
-        iconColor: '#5F5E5A',
-        title: 'Spotify Family paused',
-        sub: 'Paused by Titus · billing suspended until resumed',
-        time: 'Mar 15 · 2:00 PM',
-        badge: 'Paused',
-        badgeVariant: 'gray',
-        amountColor: C.text,
-        detail: {
-          rows: [
-            { label: 'Subscription', value: 'Spotify Family' },
-            { label: 'Paused by', value: 'Titus (you)' },
-            { label: 'Effective', value: 'Immediately' },
-          ],
-        },
-      },
-      {
-        id: 'y-resumed',
-        friendLinkIds: ['alex', 'sam', 'taylor'],
-        kind: 'audit_resumed',
-        serviceMark: 'Spotify Family',
-        icon: 'play-circle-outline',
-        iconBg: '#E1F5EE',
-        iconColor: '#0F6E56',
-        title: 'Spotify Family resumed',
-        sub: 'Resumed by Titus · billing back on schedule',
-        time: 'Mar 15 · 3:30 PM',
-        badge: 'Resumed',
-        badgeVariant: 'green',
-        amountColor: C.text,
-        detail: {
-          rows: [
-            { label: 'Subscription', value: 'Spotify Family' },
-            { label: 'Resumed by', value: 'Titus (you)' },
-            { label: 'Next bill', value: 'Per existing cycle' },
-          ],
-        },
-      },
     ],
   },
   {
     sectionTitle: 'Mar 14',
     items: [
       {
-        id: 'm-archived',
-        kind: 'audit_archived',
+        id: 'm-ended',
+        kind: 'audit_ended',
         serviceMark: 'Hulu',
-        icon: 'archive-outline',
+        icon: 'close-circle-outline',
         iconBg: '#F0EEE9',
         iconColor: '#5F5E5A',
-        title: 'Hulu subscription archived',
-        sub: 'Archived by Titus · removed from active splits',
+        title: 'Hulu split ended',
+        sub: 'Ended by Titus · billing stopped · history saved',
         time: 'Mar 14 · 8:00 AM',
-        badge: 'Archived',
+        badge: 'Ended',
         badgeVariant: 'gray',
         amountColor: C.text,
         detail: {
           rows: [
             { label: 'Subscription', value: 'Hulu (ad-free)' },
-            { label: 'Archived by', value: 'Titus (you)' },
+            { label: 'Ended by', value: 'Titus (you)' },
             { label: 'History', value: 'Retained · read-only audit trail' },
           ],
         },

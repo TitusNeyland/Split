@@ -4,14 +4,15 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Stack } from 'expo-router';
 import { StripeProvider } from '@stripe/stripe-react-native';
 import { FirebaseRecaptchaVerifierModal } from 'expo-firebase-recaptcha';
-import SplashScreen from './components/SplashScreen';
-import AuthSessionSync from './components/AuthSessionSync';
-import InviteDeepLinkBootstrap from './components/InviteDeepLinkBootstrap';
-import PendingInviteAfterAuth from './components/PendingInviteAfterAuth';
-import BiometricAppLock from './components/BiometricAppLock';
+import SplashScreen from './components/shared/SplashScreen';
+import AuthSessionSync from './components/auth/AuthSessionSync';
+import InviteDeepLinkBootstrap from './components/invite/InviteDeepLinkBootstrap';
+import PendingInviteAfterAuth from './components/invite/PendingInviteAfterAuth';
+import BiometricAppLock from './components/auth/BiometricAppLock';
 import { SecurityPrefsProvider } from './contexts/SecurityPrefsContext';
 import { FirebaseRecaptchaProvider } from './contexts/FirebaseRecaptchaContext';
 import { LocalProfileAvatarProvider } from './contexts/LocalProfileAvatarContext';
+import { SubscriptionsProvider } from './contexts/SubscriptionsContext';
 import { getFirebaseWebOptions, isFirebaseConfigured } from '../lib/firebase';
 import { ENABLE_PROFILE_SECURITY } from '../constants/features';
 
@@ -39,15 +40,16 @@ export default function RootLayout() {
 
   const stackAndSplash = (
     <GestureHandlerRootView style={styles.root}>
-      {/* LOCAL_PROFILE_AVATAR_OFFLINE — remove LocalProfileAvatarProvider when Firebase-only avatars (see lib/localProfileAvatarStorage.ts). */}
+      {/* LOCAL_PROFILE_AVATAR_OFFLINE — remove LocalProfileAvatarProvider when Firebase-only avatars (see lib/profile/localProfileAvatarStorage.ts). */}
       <LocalProfileAvatarProvider>
+      <SubscriptionsProvider>
       <View style={styles.root}>
         <AuthSessionSync />
         <InviteDeepLinkBootstrap />
         <PendingInviteAfterAuth />
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="index" />
-          <Stack.Screen name="onboarding" options={{ headerShown: false }} />
+          <Stack.Screen name="(screens)/onboarding" options={{ headerShown: false }} />
           <Stack.Screen
             name="(tabs)"
             options={{
@@ -55,7 +57,7 @@ export default function RootLayout() {
             }}
           />
           <Stack.Screen
-            name="receipt/[id]"
+            name="(screens)/receipt/[id]"
             options={{
               headerShown: true,
               headerTitle: 'Receipt',
@@ -66,9 +68,17 @@ export default function RootLayout() {
               headerBackTitleStyle: { fontSize: 17 },
             }}
           />
-          <Stack.Screen name="receipt-assign" options={{ headerShown: false }} />
+          <Stack.Screen name="(screens)/receipt-assign" options={{ headerShown: false }} />
           <Stack.Screen
-            name="split-created"
+            name="(screens)/split-created"
+            options={{
+              headerShown: false,
+              gestureEnabled: false,
+              animation: 'fade',
+            }}
+          />
+          <Stack.Screen
+            name="(screens)/split-added"
             options={{
               headerShown: false,
               gestureEnabled: false,
@@ -83,25 +93,25 @@ export default function RootLayout() {
             }}
           />
           <Stack.Screen
-            name="billing-calendar"
+            name="(screens)/billing-calendar"
             options={{
               headerShown: false,
               animation: 'slide_from_right',
             }}
           />
           <Stack.Screen
-            name="invite-share"
+            name="(screens)/invite-share"
             options={{
               presentation: 'transparentModal',
               animation: 'fade',
               headerShown: false,
             }}
           />
-          <Stack.Screen name="invite/[inviteId]" options={{ headerShown: false }} />
-          <Stack.Screen name="friends" options={{ headerShown: false }} />
-          <Stack.Screen name="friends-contacts" options={{ headerShown: false }} />
-          <Stack.Screen name="sign-in" options={{ headerShown: false, animation: 'fade' }} />
-          <Stack.Screen name="forgot-password" options={{ headerShown: false, animation: 'slide_from_right' }} />
+          <Stack.Screen name="(screens)/invite/[inviteId]" options={{ headerShown: false }} />
+          <Stack.Screen name="(screens)/friends" options={{ headerShown: false }} />
+          <Stack.Screen name="(screens)/friends-contacts" options={{ headerShown: false }} />
+          <Stack.Screen name="(screens)/sign-in" options={{ headerShown: false, animation: 'fade' }} />
+          <Stack.Screen name="(screens)/forgot-password" options={{ headerShown: false, animation: 'slide_from_right' }} />
         </Stack>
         {showSplash && (
           <Animated.View style={[styles.splashOverlay, { opacity }]}>
@@ -109,6 +119,7 @@ export default function RootLayout() {
           </Animated.View>
         )}
       </View>
+      </SubscriptionsProvider>
       </LocalProfileAvatarProvider>
     </GestureHandlerRootView>
   );

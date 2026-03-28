@@ -3,11 +3,31 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // --- Friend system: friendships (server-written only) ---
+    // --- Friend system: friendships ---
     match /friendships/{friendshipId} {
       allow read: if request.auth != null
         && request.auth.uid in resource.data.users;
-      allow create, update, delete: if false;
+
+      // Direct connect from Find People: deterministic doc id `uidSmall_uidLarge`, sorted `users`.
+      allow create: if request.auth != null
+        && request.resource.data.keys().hasAll(['users', 'connectedAt', 'connectedVia', 'initiatedBy'])
+        && request.resource.data.users is list
+        && request.resource.data.users.size() == 2
+        && request.resource.data.users[0] is string
+        && request.resource.data.users[1] is string
+        && request.resource.data.users[0] < request.resource.data.users[1]
+        && request.auth.uid in request.resource.data.users
+        && request.resource.data.initiatedBy == request.auth.uid
+        && request.resource.data.connectedVia in ['search', 'contacts']
+        && request.resource.data.connectedAt == request.time
+        && friendshipId == request.resource.data.users[0] + '_' + request.resource.data.users[1];
+
+      allow update: if false;
+
+      allow delete: if request.auth != null
+        && request.auth.uid in resource.data.users
+        && resource.data.users is list
+        && resource.data.users.size() == 2;
     }
 
     // --- Friend system: invites ---
@@ -71,6 +91,15 @@ service cloud.firestore {
             && request.resource.data.diff(resource.data).affectedKeys()
               .hasOnly(['status', 'acceptedBy', 'acceptedAt'])
           )
+          || (
+            request.resource.data.status == 'declined'
+            && request.resource.data.declinedBy == request.auth.uid
+            && request.resource.data.declinedAt is timestamp
+            && request.auth.uid != resource.data.createdBy
+            && resource.data.expiresAt > request.time
+            && request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['status', 'declinedBy', 'declinedAt'])
+          )
         );
 
       allow delete: if request.auth != null
@@ -79,7 +108,25 @@ service cloud.firestore {
 
     // --- User profile + device sessions + address-book contacts ---
     match /users/{userId} {
-      allow read, create, update, delete: if request.auth != null
+      // Friend search queries `users` by displayNameLower / emailNormalized; readers must be allowed
+      // to read other users' docs when discoverable (see lib/friends/userSearchFirestore.ts).
+      // NOTE: This exposes the full user doc to other signed-in users; consider moving PII/payment
+      // fields to a private subcollection later.
+      function discoverableForUserSearch() {
+        return (!resource.data.keys().hasAny(['discoverableByName']) || resource.data.discoverableByName != false)
+          && (!resource.data.keys().hasAny(['privacySettings'])
+            || !(resource.data.privacySettings is map)
+            || !resource.data.privacySettings.keys().hasAny(['discoverableByName'])
+            || resource.data.privacySettings.discoverableByName != false);
+      }
+
+      allow read: if request.auth != null
+        && (
+          request.auth.uid == userId
+          || discoverableForUserSearch()
+        );
+
+      allow create, update, delete: if request.auth != null
         && request.auth.uid == userId;
 
       match /sessions/{sessionId} {
@@ -91,26 +138,42 @@ service cloud.firestore {
         allow read, create, update, delete: if request.auth != null
           && request.auth.uid == userId;
       }
+
+      /** Feed items for home “Recent activity” (client read; server/CF writes). */
+      match /notifications/{notificationId} {
+        allow read: if request.auth != null && request.auth.uid == userId;
+        allow create, update, delete: if false;
+      }
     }
 
     // --- Rest of app (align with client modules under lib/) ---
     match /subscriptions/{subscriptionId} {
+      /** Client uses `members` (legacy) and/or `memberUids` (see memberSubscriptionsFirestore.ts). */
+      function subscriptionMemberData(data) {
+        return (data.keys().hasAny(['members']) && request.auth.uid in data.members)
+          || (data.keys().hasAny(['memberUids']) && request.auth.uid in data.memberUids);
+      }
+
       allow read: if request.auth != null
-        && request.auth.uid in resource.data.members;
+        && subscriptionMemberData(resource.data);
       allow create: if request.auth != null
         && request.auth.uid == request.resource.data.ownerUid
-        && request.auth.uid in request.resource.data.members;
+        && subscriptionMemberData(request.resource.data);
       allow update, delete: if request.auth != null
-        && request.auth.uid in resource.data.members;
+        && subscriptionMemberData(resource.data);
 
       match /billing_cycles/{cycleId} {
         allow read, write: if request.auth != null
-          && request.auth.uid in get(/databases/$(database)/documents/subscriptions/$(subscriptionId)).data.members;
+          && subscriptionMemberData(
+            get(/databases/$(database)/documents/subscriptions/$(subscriptionId)).data
+          );
       }
 
       match /split_change_log/{entryId} {
         allow read, write: if request.auth != null
-          && request.auth.uid in get(/databases/$(database)/documents/subscriptions/$(subscriptionId)).data.members;
+          && subscriptionMemberData(
+            get(/databases/$(database)/documents/subscriptions/$(subscriptionId)).data
+          );
       }
     }
 
@@ -157,6 +220,16 @@ service cloud.firestore {
     match /service_tiers/{docId} {
       allow read: if request.auth != null;
       allow write: if false;
+    }
+
+    // Phone hash -> uid for contact discovery (owner may claim their hash).
+    match /contact_phone_index/{hash} {
+      allow read: if request.auth != null;
+      allow create, update: if request.auth != null
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.uid is string;
+      allow delete: if request.auth != null
+        && resource.data.uid == request.auth.uid;
     }
   }
 }

@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>mySplit — You’re invited</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #F2F0EB; color: #1a1a18; margin: 0; padding: 24px; text-align: center; }
+    h1 { font-size: 22px; margin: 0 0 12px; }
+    p { color: #888780; font-size: 15px; line-height: 1.5; margin: 0 0 24px; }
+    .btn { display: inline-block; background: #534AB7; color: #fff; text-decoration: none; padding: 14px 24px; border-radius: 14px; font-weight: 600; margin: 6px; }
+    .btn-secondary { background: #F0EEE9; color: #5F5E5A; }
+    .hint { font-size: 12px; color: #B4B2A9; margin-top: 28px; }
+  </style>
+</head>
+<body>
+  <h1>You’re invited to mySplit</h1>
+  <p>Open the mySplit app to see who invited you and connect. If you don’t have the app yet, download it below.</p>
+  <p id="invite-id" style="font-size:12px;color:#B4B2A9;"></p>
+  <a id="open-app" class="btn" href="#">Open in mySplit app</a>
+  <div>
+    <a class="btn btn-secondary" href="https://apps.apple.com/app/id0000000000">App Store</a>
+    <a class="btn btn-secondary" href="https://play.google.com/store/apps/details?id=com.mysplit.app">Google Play</a>
+  </div>
+  <p class="hint">After installing, sign up or sign in — your invite will complete automatically if you opened this link on the same device.</p>
+  <script>
+    (function () {
+      var path = window.location.pathname || '';
+      var m = path.match(/\/invite\/([^/]+)/);
+      var id = m && m[1] ? m[1] : '';
+      if (id) {
+        document.getElementById('invite-id').textContent = 'Invite: ' + id;
+        var app = 'mysplit://invite/' + id;
+        var link = document.getElementById('open-app');
+        link.href = app;
+        link.addEventListener('click', function (e) {
+          var t = Date.now();
+          setTimeout(function () {
+            if (Date.now() - t < 1600) {
+              window.location.href = 'https://mysplit.app/download';
+            }
+          }, 1500);
+        });
+      }
+    })();
+  </script>
+</body>
+</html>

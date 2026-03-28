@@ -11,8 +11,8 @@ import {
   hasOnboardingPaymentStepDone,
   hasOnboardingPasswordSaved,
   hasOnboardingFindUsStepDone,
-} from '../lib/onboardingStorage';
-import { hasLocalOnboardingGoalsDraft } from '../lib/onboardingGoals';
+} from '../lib/onboarding/onboardingStorage';
+import { hasLocalOnboardingGoalsDraft } from '../lib/onboarding/onboardingGoals';
 
 /**
  * Entry: completed onboarding → tabs (or sign-in if guest); anonymous mid-flow → resume password / email / name;
