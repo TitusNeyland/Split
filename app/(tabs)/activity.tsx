@@ -1,5 +1,4 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-;
 import {
   View,
   Text,
@@ -79,7 +78,14 @@ type ActivityKind =
   | 'reminder_received'
   | 'split_invite_received'
   | 'split_invite_sent'
-  | 'split_ended';
+  | 'split_invite_accepted'
+  | 'split_invite_declined'
+  | 'split_member_joined'
+  | 'split_member_removed'
+  | 'split_ended'
+  | 'split_restarted'
+  | 'split_percentage_updated'
+  | 'split_price_updated';
 
 type ActivityBadgeVariant = 'green' | 'amber' | 'red' | 'purple' | 'gray' | 'blue';
 
@@ -200,6 +206,8 @@ type ActivityFeedItem = {
   /** Firestore `createdAt` (ms) for live feed grouping. */
   _activityCreatedAtMs?: number;
   _reminderTap?: { subscriptionId: string; memberUid: string };
+  joinSubscriptionId?: string;
+  serviceIconMuted?: boolean;
 };
 
 type ActivityFeedGroup = { sectionTitle: string; items: ActivityFeedItem[] };
@@ -232,7 +240,14 @@ function itemMatchesFilter(item: ActivityFeedItem, f: ActivityFilterId): boolean
         item.kind === 'audit_ended' ||
         item.kind === 'split_invite_received' ||
         item.kind === 'split_invite_sent' ||
-        item.kind === 'split_ended'
+        item.kind === 'split_invite_accepted' ||
+        item.kind === 'split_invite_declined' ||
+        item.kind === 'split_member_joined' ||
+        item.kind === 'split_member_removed' ||
+        item.kind === 'split_ended' ||
+        item.kind === 'split_restarted' ||
+        item.kind === 'split_percentage_updated' ||
+        item.kind === 'split_price_updated'
       );
     case 'receipts':
       return item.kind === 'receipt';
@@ -680,6 +695,8 @@ type ActivityItemRowProps = {
   /** Receipts filter: tap row opens receipt detail instead of inline drawer. */
   receiptNavigateMode: boolean;
   onReceiptPress: () => void;
+  /** Split invite row: open subscription to join. */
+  onJoinSplitPress?: (subscriptionId: string) => void;
 };
 
 function ActivityItemRow({
@@ -694,6 +711,7 @@ function ActivityItemRow({
   onDetailAction,
   receiptNavigateMode,
   onReceiptPress,
+  onJoinSplitPress,
 }: ActivityItemRowProps) {
   const b = badgeStyles(item.badgeVariant);
   const receiptTapOpensDetail = receiptNavigateMode && item.kind === 'receipt';
@@ -708,50 +726,70 @@ function ActivityItemRow({
     else if (hasExpandableDetail) onToggle();
   };
 
+  const rowPressable =
+    receiptTapOpensDetail || hasExpandableDetail ? onMainPress : undefined;
+
   return (
     <View style={styles.actItem}>
-      <Pressable
-        onPress={receiptTapOpensDetail || hasExpandableDetail ? onMainPress : undefined}
-        style={styles.actMain}
-        accessibilityRole={receiptTapOpensDetail || hasExpandableDetail ? 'button' : 'none'}
-        accessibilityLabel={receiptTapOpensDetail ? `Open receipt ${item.title}` : undefined}
-        accessibilityState={hasExpandableDetail ? { expanded } : undefined}
-      >
-        <View style={styles.actLeft}>
-          {item.serviceMark ? (
-            <View style={styles.actIcoPlain}>
-              <ServiceIcon serviceName={item.serviceMark} size={40} />
-            </View>
-          ) : (
-            <View style={[styles.actIco, { backgroundColor: item.iconBg }]}>
-              <Ionicons name={item.icon} size={18} color={item.iconColor} />
-            </View>
-          )}
-          {showTimelineLine ? <View style={styles.actLine} /> : null}
-        </View>
-        <View style={styles.actContent}>
-          <Text style={styles.actTitle} numberOfLines={2}>
-            {item.title}
-          </Text>
-          <Text style={styles.actSub} numberOfLines={2}>
-            {item.sub}
-          </Text>
-          {item.payerNote ? (
-            <Text style={styles.actNote} numberOfLines={2}>
-              {`"${item.payerNote}"`}
+      <View style={styles.actMain}>
+        <Pressable
+          onPress={rowPressable}
+          style={styles.actMainPressable}
+          accessibilityRole={receiptTapOpensDetail || hasExpandableDetail ? 'button' : 'none'}
+          accessibilityLabel={receiptTapOpensDetail ? `Open receipt ${item.title}` : undefined}
+          accessibilityState={hasExpandableDetail ? { expanded } : undefined}
+        >
+          <View style={styles.actLeft}>
+            {item.serviceMark ? (
+              <View style={styles.actIcoPlain}>
+                <ServiceIcon
+                  serviceName={item.serviceMark}
+                  size={40}
+                  listEndedMuted={item.serviceIconMuted}
+                />
+              </View>
+            ) : (
+              <View style={[styles.actIco, { backgroundColor: item.iconBg }]}>
+                <Ionicons name={item.icon} size={18} color={item.iconColor} />
+              </View>
+            )}
+            {showTimelineLine ? <View style={styles.actLine} /> : null}
+          </View>
+          <View style={styles.actContent}>
+            <Text style={styles.actTitle} numberOfLines={2}>
+              {item.title}
             </Text>
-          ) : null}
-          <Text style={styles.actTime}>{item.time}</Text>
-        </View>
+            <Text style={styles.actSub} numberOfLines={2}>
+              {item.sub}
+            </Text>
+            {item.payerNote ? (
+              <Text style={styles.actNote} numberOfLines={2}>
+                {`"${item.payerNote}"`}
+              </Text>
+            ) : null}
+            <Text style={styles.actTime}>{item.time}</Text>
+          </View>
+        </Pressable>
         <View style={styles.actRight}>
           {item.amount ? (
             <Text style={[styles.actAmt, { color: item.amountColor }]}>{item.amount}</Text>
           ) : null}
-          <View style={[styles.badge, { backgroundColor: b.bg }]}>
-            <Text style={[styles.badgeText, { color: b.text }]}>{item.badge}</Text>
-          </View>
+          {item.joinSubscriptionId && onJoinSplitPress ? (
+            <Pressable
+              onPress={() => onJoinSplitPress(item.joinSubscriptionId!)}
+              style={styles.joinSplitPill}
+              accessibilityRole="button"
+              accessibilityLabel="Join split"
+            >
+              <Text style={styles.joinSplitPillText}>Join</Text>
+            </Pressable>
+          ) : (
+            <View style={[styles.badge, { backgroundColor: b.bg }]}>
+              <Text style={[styles.badgeText, { color: b.text }]}>{item.badge}</Text>
+            </View>
+          )}
         </View>
-      </Pressable>
+      </View>
 
       {item.partial ? (
         <View style={styles.partialWrap}>
@@ -776,8 +814,8 @@ function ActivityItemRow({
 
       {!receiptTapOpensDetail && expanded && item.detail ? (
         <View style={styles.actDetail}>
-          {item.detail.rows.map((row) => (
-            <View key={`${item.id}-${row.label}`} style={styles.detailRow}>
+          {item.detail.rows.map((row, rowIdx) => (
+            <View key={`${item.id}-detail-${rowIdx}`} style={styles.detailRow}>
               <Text style={styles.drLbl}>{row.label}</Text>
               {row.link ? (
                 <Pressable
@@ -1187,6 +1225,9 @@ export default function ActivityScreen() {
                     }}
                     receiptNavigateMode={filter === 'receipts'}
                     onReceiptPress={() => router.push(`/receipt/${item.id}`)}
+                    onJoinSplitPress={(subscriptionId) =>
+                      router.push({ pathname: '/subscription/[id]', params: { id: subscriptionId } })
+                    }
                   />
                 ))}
               </View>
@@ -1417,6 +1458,13 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
     paddingHorizontal: 14,
   },
+  actMainPressable: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    gap: 12,
+    minWidth: 0,
+  },
   actLeft: {
     width: 40,
     alignItems: 'center',
@@ -1489,6 +1537,17 @@ const styles = StyleSheet.create({
   badgeText: {
     fontSize: 12,
     fontWeight: '500',
+  },
+  joinSplitPill: {
+    paddingVertical: 6,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    backgroundColor: '#EEEDFE',
+  },
+  joinSplitPillText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: C.purple,
   },
   partialWrap: {
     paddingTop: 8,

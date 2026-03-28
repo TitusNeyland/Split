@@ -100,12 +100,15 @@ type SplitRow = {
 
 type HomeRecentActivityItem = {
   id: string;
-  kind: 'payment' | 'reminder' | 'system';
   title: string;
   timestamp: string;
   amount: string;
   amountColor: string;
   serviceMark?: string;
+  icon: string;
+  iconBg: string;
+  iconColor: string;
+  serviceIconMuted?: boolean;
   viewerAvatarUrl?: string | null;
 };
 
@@ -179,12 +182,15 @@ export default function HomeScreen() {
       setRecentActivityItems(
         items.map((x) => ({
           id: x.id,
-          kind: x.kind,
           title: x.title,
           timestamp: x.timestamp,
           amount: x.amount,
           amountColor: x.amountColor,
           serviceMark: x.serviceMark,
+          icon: x.icon,
+          iconBg: x.iconBg,
+          iconColor: x.iconColor,
+          serviceIconMuted: x.serviceIconMuted,
         }))
       );
     });
@@ -726,13 +732,21 @@ export default function HomeScreen() {
                         accessibilityLabel="You"
                       />
                     </View>
-                  ) : item.kind === 'payment' && item.serviceMark ? (
+                  ) : item.serviceMark ? (
                     <View style={styles.actIcoWrap}>
-                      <ServiceIcon serviceName={item.serviceMark} size={38} />
+                      <ServiceIcon
+                        serviceName={item.serviceMark}
+                        size={38}
+                        listEndedMuted={item.serviceIconMuted}
+                      />
                     </View>
                   ) : (
-                    <View style={[styles.actIcoWrap, styles.actReminderTile]}>
-                      <Ionicons name="notifications-outline" size={30} color="#854F0B" />
+                    <View style={[styles.actIcoWrap, { backgroundColor: item.iconBg }]}>
+                      <Ionicons
+                        name={item.icon as React.ComponentProps<typeof Ionicons>['name']}
+                        size={24}
+                        color={item.iconColor}
+                      />
                     </View>
                   )}
                   <View style={styles.actMid}>

@@ -40,6 +40,8 @@ export async function saveSubscriptionSplitToFirestore(opts: {
     splitMemberShares: opts.memberShares,
     splitPendingEffectiveFrom: effectiveTs,
     splitUpdatedAt: serverTimestamp(),
+    /** Lets Cloud Functions attribute `split_percentage_updated` activity. */
+    splitLastEditedByUid: opts.actorUid,
   });
 
   await addDoc(collection(subRef, 'split_change_log'), {
