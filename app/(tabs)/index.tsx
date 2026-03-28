@@ -152,10 +152,6 @@ export default function HomeScreen() {
     () => panelNotifications.filter((n) => !n.read).length,
     [panelNotifications]
   );
-  const setupStep = isEmpty ? 0 : 2;
-  const setupTotal = 7;
-  const setupPct = isEmpty ? 0 : (setupStep / setupTotal) * 100;
-
   useEffect(() => {
     const auth = getFirebaseAuth();
     if (!auth) {
@@ -774,18 +770,6 @@ export default function HomeScreen() {
               <Text style={styles.emptyActivityTxt}>No activity yet</Text>
             </View>
           )}
-
-          <View style={styles.setupWrap}>
-            <View style={styles.setupTop}>
-              <Text style={styles.setupLbl}>
-                Complete setup ({setupStep}/{setupTotal})
-              </Text>
-              <Text style={styles.setupAction}>Continue →</Text>
-            </View>
-            <View style={styles.setupTrack}>
-              <View style={[styles.setupFill, { width: `${setupPct}%` }]} />
-            </View>
-          </View>
         </View>
       </ScrollView>
     </View>
@@ -1190,31 +1174,4 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
   },
   emptyActivityTxt: { fontSize: 14, color: C.muted, lineHeight: 21 },
-  setupWrap: {
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    marginTop: 12,
-    borderWidth: 0.5,
-    borderColor: C.border,
-  },
-  setupTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  setupLbl: { fontSize: 14, fontWeight: '500', color: C.text },
-  setupAction: { fontSize: 14, fontWeight: '500', color: C.purple },
-  setupTrack: {
-    height: 5,
-    borderRadius: 3,
-    backgroundColor: C.divider,
-    overflow: 'hidden',
-  },
-  setupFill: {
-    height: '100%',
-    borderRadius: 3,
-    backgroundColor: C.purple,
-  },
 });
