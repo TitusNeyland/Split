@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -6,8 +6,9 @@ import {
   ScrollView,
   Pressable,
   useWindowDimensions,
+  Animated,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
@@ -30,6 +31,7 @@ import { SubscriptionCardSkeletonList } from '../components/subscriptions/Subscr
 import { useProfileAvatarUrl } from '../hooks/useProfileAvatarUrl';
 import { useSubscriptions } from '../contexts/SubscriptionsContext';
 import { spacing } from '../../constants/theme';
+import { consumePendingEndSplitToast } from '../../lib/subscription/endSplitNavigationToast';
 
 const C = {
   bg: '#F2F0EB',
@@ -66,8 +68,33 @@ export default function SubscriptionsScreen() {
   const [lastSeenPriceMap, setLastSeenPriceMap] = useState<
     Record<string, { toMillis?: () => number }> | null | undefined
   >(null);
+  const [splitEndedToast, setSplitEndedToast] = useState<string | null>(null);
+  const splitEndedToastOpacity = useRef(new Animated.Value(0)).current;
 
   const { avatarUrl: userAvatarUrl } = useProfileAvatarUrl();
+
+  useFocusEffect(
+    useCallback(() => {
+      const pending = consumePendingEndSplitToast();
+      if (!pending) return undefined;
+      setFilter(pending.filter);
+      setSplitEndedToast(pending.message);
+      splitEndedToastOpacity.setValue(0);
+      Animated.timing(splitEndedToastOpacity, {
+        toValue: 1,
+        duration: 220,
+        useNativeDriver: true,
+      }).start();
+      const t = setTimeout(() => {
+        Animated.timing(splitEndedToastOpacity, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }).start(() => setSplitEndedToast(null));
+      }, 3200);
+      return () => clearTimeout(t);
+    }, [splitEndedToastOpacity])
+  );
 
   useEffect(() => {
     const auth = getFirebaseAuth();
@@ -341,6 +368,18 @@ export default function SubscriptionsScreen() {
           )}
         </View>
       </ScrollView>
+
+      {splitEndedToast ? (
+        <Animated.View
+          style={[
+            styles.toast,
+            { bottom: Math.max(insets.bottom, 12) + 8, opacity: splitEndedToastOpacity },
+          ]}
+          pointerEvents="none"
+        >
+          <Text style={styles.toastTxt}>{splitEndedToast}</Text>
+        </Animated.View>
+      ) : null}
     </View>
   );
 }
@@ -549,5 +588,22 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#fff',
+  },
+  toast: {
+    position: 'absolute',
+    left: 20,
+    right: 20,
+    backgroundColor: 'rgba(26,26,24,0.92)',
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    zIndex: 50,
+  },
+  toastTxt: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#fff',
+    textAlign: 'center',
+    lineHeight: 20,
   },
 });
