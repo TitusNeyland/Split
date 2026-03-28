@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,9 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Linking,
+  Platform,
+  Share,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -16,43 +19,60 @@ import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import * as Contacts from 'expo-contacts';
 import { onAuthStateChanged, type User } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
-import { getFirebaseAuth, getFirebaseFirestore, isFirebaseConfigured } from '../../lib/firebase';
+import { getFirebaseAuth, isFirebaseConfigured } from '../../lib/firebase';
 import {
+  countActiveSubscriptionsForUser,
+  countFriendshipsForUser,
   createDirectFriendshipFromSearch,
-  lookupUsersByPhoneHashes,
-  sha256HexUtf8,
-  upsertContactPhoneIndexForUser,
-  upsertUserContact,
+  createPendingInvite,
 } from '../../lib/friends/friendSystemFirestore';
+import { findUsersByPhoneHashCallable, type PhoneHashMatch } from '../../lib/friends/findUsersByPhoneHashCallable';
+import { sha256HexUtf8Js } from '../../lib/friends/phoneHashClient';
 import { normalizePhoneToE164 } from '../../lib/friends/phoneNormalize';
 import { getFriendAvatarColors } from '../../lib/friends/friendAvatar';
 import { initialsFromName } from '../../lib/profile';
+import { useHomeFriendDirectory } from '../../lib/home/useFriendUidsFromFirestore';
+import { buildInviteShareMessage } from '../../lib/friends/inviteLinks';
 
 const C = {
   text: '#1a1a18',
   muted: '#888780',
   purple: '#534AB7',
+  purpleTint: '#EEEDFE',
   green: '#0F6E56',
+  greenTint: '#E1F5EE',
   sheetBg: '#F2F0EB',
+  divider: '#F0EEE9',
 };
 
-type MatchRow = {
-  uid: string;
-  displayName: string;
-  avatarUrl: string | null;
+const MAX_HASHES = 2000;
+
+type Phase = 'intro' | 'scanning' | 'results';
+
+type ParsedContact = {
+  id: string;
+  name: string;
+  hashes: string[];
 };
 
-const MAX_HASHES = 800;
+function openAppSettings() {
+  void Linking.openSettings();
+}
 
 export default function FriendsContactsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const [user, setUser] = useState<User | null>(null);
-  const [syncing, setSyncing] = useState(false);
-  const [matches, setMatches] = useState<MatchRow[]>([]);
-  const [doneOnce, setDoneOnce] = useState(false);
+  const [user, setUser] = useState<User | null>(() => getFirebaseAuth()?.currentUser ?? null);
+  const uid = user?.uid ?? null;
+  const { friendUids: friendUidList } = useHomeFriendDirectory(uid);
+  const friendUids = useMemo(() => new Set(friendUidList), [friendUidList]);
+
+  const [phase, setPhase] = useState<Phase>('intro');
+  const [matches, setMatches] = useState<PhoneHashMatch[]>([]);
+  const [unmatchedContacts, setUnmatchedContacts] = useState<ParsedContact[]>([]);
   const [connectingUid, setConnectingUid] = useState<string | null>(null);
+  const [connectAllBusy, setConnectAllBusy] = useState(false);
+  const [inviteBusy, setInviteBusy] = useState(false);
 
   useEffect(() => {
     const auth = getFirebaseAuth();
@@ -60,102 +80,180 @@ export default function FriendsContactsScreen() {
     return onAuthStateChanged(auth, setUser);
   }, []);
 
-  const registerOwnPhoneIndex = useCallback(async (uid: string) => {
-    const auth = getFirebaseAuth();
-    const u = auth?.currentUser;
-    const raw = u?.phoneNumber;
-    if (!raw) return;
-    const e164 = normalizePhoneToE164(raw) ?? raw;
-    const db = getFirebaseFirestore();
-    if (!db) return;
-    const snap = await getDoc(doc(db, 'users', uid));
-    const d = snap.exists() ? (snap.data() as { displayName?: string; avatarUrl?: string }) : {};
-    const displayName =
-      typeof d.displayName === 'string' && d.displayName.trim() ? d.displayName.trim() : 'mySplit user';
-    const avatarUrl = typeof d.avatarUrl === 'string' ? d.avatarUrl : null;
-    await upsertContactPhoneIndexForUser({ uid, phoneE164: e164, displayName, avatarUrl });
-  }, []);
-
-  const onAllow = async () => {
-    const { status } = await Contacts.requestPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert(
-        'No access',
-        'You can enable contacts later in Settings if you change your mind.'
-      );
-      return;
-    }
-
+  const runContactSync = useCallback(async () => {
     if (!isFirebaseConfigured() || !user?.uid) {
       Alert.alert('Sign in required', 'Sign in to find friends on mySplit.');
       return;
     }
 
-    setSyncing(true);
+    setPhase('scanning');
     setMatches([]);
+    setUnmatchedContacts([]);
+
     try {
       const { data } = await Contacts.getContactsAsync({
         fields: [Contacts.Fields.PhoneNumbers, Contacts.Fields.Name],
       });
 
-      const hashToName = new Map<string, string>();
-      for (const c of data) {
+      const hashToName: Record<string, string> = {};
+      const contactsParsed: ParsedContact[] = [];
+
+      outer: for (const c of data) {
         const name =
           [c.firstName, c.lastName].filter(Boolean).join(' ').trim() ||
           (typeof c.name === 'string' ? c.name : '') ||
           'Contact';
+        const hashesSet = new Set<string>();
         const phones = c.phoneNumbers ?? [];
         for (const p of phones) {
+          if (Object.keys(hashToName).length >= MAX_HASHES) break outer;
           const raw = typeof p.number === 'string' ? p.number : '';
           const e164 = normalizePhoneToE164(raw);
           if (!e164) continue;
-          const hash = await sha256HexUtf8(e164);
-          if (!hashToName.has(hash)) hashToName.set(hash, name);
-          if (hashToName.size >= MAX_HASHES) break;
+          const h = sha256HexUtf8Js(e164).toLowerCase();
+          hashesSet.add(h);
+          if (!hashToName[h]) hashToName[h] = name;
         }
-        if (hashToName.size >= MAX_HASHES) break;
+        if (hashesSet.size > 0) {
+          const hashes = [...hashesSet];
+          contactsParsed.push({
+            id: String(c.id ?? `${name}-${hashes[0]}`),
+            name,
+            hashes,
+          });
+        }
       }
 
-      const hashes = [...hashToName.keys()];
-      await Promise.all(
-        [...hashToName.entries()].map(([h, name]) =>
-          upsertUserContact({ uid: user.uid, phoneHash: h, name })
-        )
-      );
+      const uniqueHashes = [...new Set(Object.keys(hashToName))];
+      if (uniqueHashes.length === 0) {
+        Alert.alert('No phone numbers', 'None of your contacts had phone numbers we could read.');
+        setPhase('intro');
+        return;
+      }
 
-      await registerOwnPhoneIndex(user.uid);
+      const found = await findUsersByPhoneHashCallable(uniqueHashes);
+      setMatches(found);
 
-      const found = await lookupUsersByPhoneHashes(hashes, user.uid);
-      setMatches(
-        found.map((f) => ({
-          uid: f.uid,
-          displayName: f.displayName,
-          avatarUrl: f.avatarUrl,
-        }))
-      );
-      setDoneOnce(true);
+      const matchedHashes = new Set(found.map((m) => m.requestHash.toLowerCase()));
+      const unmatched: ParsedContact[] = [];
+      for (const pc of contactsParsed) {
+        const anyMatched = pc.hashes.some((h) => matchedHashes.has(h.toLowerCase()));
+        if (!anyMatched) unmatched.push(pc);
+      }
+      setUnmatchedContacts(unmatched);
+      setPhase('results');
     } catch (e) {
       Alert.alert('Sync failed', e instanceof Error ? e.message : 'Try again later.');
-    } finally {
-      setSyncing(false);
+      setPhase('intro');
     }
-  };
+  }, [user?.uid]);
 
-  const onConnect = async (row: MatchRow) => {
-    if (!user?.uid) return;
-    setConnectingUid(row.uid);
-    try {
-      const outcome = await createDirectFriendshipFromSearch({ currentUid: user.uid, otherUid: row.uid });
-      setMatches((prev) => prev.filter((x) => x.uid !== row.uid));
-      if (outcome === 'created') {
-        Alert.alert('Connected', `You and ${row.displayName} are now friends.`);
+  const onAllowAccess = useCallback(async () => {
+    const { status } = await Contacts.requestPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert(
+        'Contacts access',
+        Platform.OS === 'ios'
+          ? 'To find friends from your phone book, open Settings → Split → Contacts and turn on access.'
+          : 'To find friends from your phone book, open Settings → Apps → Split → Permissions and allow Contacts.',
+        [
+          { text: 'Not now', style: 'cancel' },
+          { text: 'Open Settings', onPress: openAppSettings },
+        ]
+      );
+      return;
+    }
+    await runContactSync();
+  }, [runContactSync]);
+
+  const onConnect = useCallback(
+    async (row: PhoneHashMatch) => {
+      if (!user?.uid) return;
+      setConnectingUid(row.uid);
+      try {
+        const outcome = await createDirectFriendshipFromSearch({
+          currentUid: user.uid,
+          otherUid: row.uid,
+          connectedVia: 'contacts',
+        });
+        if (outcome === 'created') {
+          Alert.alert('Connected', `You and ${row.displayName} are now friends.`);
+        }
+        setMatches((prev) => prev.filter((m) => m.uid !== row.uid));
+      } catch (e) {
+        Alert.alert('Could not connect', e instanceof Error ? e.message : 'Try again.');
+      } finally {
+        setConnectingUid(null);
       }
+    },
+    [user?.uid]
+  );
+
+  const onConnectAll = useCallback(async () => {
+    if (!user?.uid) return;
+    const seen = new Set<string>();
+    const toConnect: PhoneHashMatch[] = [];
+    for (const m of matches) {
+      if (seen.has(m.uid)) continue;
+      seen.add(m.uid);
+      if (!friendUids.has(m.uid)) toConnect.push(m);
+    }
+    if (toConnect.length === 0) return;
+    const uids = new Set(toConnect.map((m) => m.uid));
+    setConnectAllBusy(true);
+    try {
+      for (const m of toConnect) {
+        await createDirectFriendshipFromSearch({
+          currentUid: user.uid,
+          otherUid: m.uid,
+          connectedVia: 'contacts',
+        });
+      }
+      setMatches((prev) => prev.filter((m) => !uids.has(m.uid)));
+      Alert.alert('Connected', `You’re now connected with ${toConnect.length} people.`);
     } catch (e) {
       Alert.alert('Could not connect', e instanceof Error ? e.message : 'Try again.');
     } finally {
-      setConnectingUid(null);
+      setConnectAllBusy(false);
     }
-  };
+  }, [user?.uid, matches, friendUids]);
+
+  const onInviteOne = useCallback(async () => {
+    if (!user?.uid) return;
+    setInviteBusy(true);
+    try {
+      const [splits, friends] = await Promise.all([
+        countActiveSubscriptionsForUser(user.uid),
+        countFriendshipsForUser(user.uid),
+      ]);
+      const inviteId = await createPendingInvite({
+        creatorUid: user.uid,
+        connectedVia: 'direct_invite',
+        senderActiveSplits: splits,
+        senderFriendCount: friends,
+      });
+      await Share.share({ message: buildInviteShareMessage(inviteId) });
+    } catch (e) {
+      Alert.alert('Could not share invite', e instanceof Error ? e.message : 'Try again.');
+    } finally {
+      setInviteBusy(false);
+    }
+  }, [user?.uid]);
+
+  const onInviteAll = useCallback(async () => {
+    await onInviteOne();
+  }, [onInviteOne]);
+
+  const dedupedMatches = useMemo(() => {
+    const seen = new Set<string>();
+    let out: PhoneHashMatch[] = [];
+    for (const m of matches) {
+      if (seen.has(m.uid)) continue;
+      seen.add(m.uid);
+      out.push(m);
+    }
+    return out;
+  }, [matches]);
 
   return (
     <View style={styles.root}>
@@ -179,103 +277,189 @@ export default function FriendsContactsScreen() {
         <Text style={styles.pageTitle}>Find from contacts</Text>
       </LinearGradient>
 
-      <ScrollView
-        style={styles.body}
-        contentContainerStyle={{
-          paddingHorizontal: 24,
-          paddingTop: 20,
-          paddingBottom: insets.bottom + 32,
-        }}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.permIcon}>
-          <Ionicons name="people-outline" size={32} color={C.purple} />
+      {phase === 'scanning' ? (
+        <View style={styles.scanningWrap}>
+          <ActivityIndicator size="large" color={C.purple} />
+          <Text style={styles.scanningTxt}>Checking contacts…</Text>
         </View>
-        <Text style={styles.headline}>Find your people</Text>
-        <Text style={styles.bodyTxt}>
-          We’ll check which of your contacts are already on mySplit. Phone numbers are hashed on
-          device; only hashes are stored in your account for matching.
-        </Text>
-
-        <View style={styles.bullets}>
-          <Bullet text="Phone numbers are hashed before leaving your device" />
-          <Bullet text="Contact names are stored with hashes so you can see who matched" />
-          <Bullet text="Matches use the phone number registered on mySplit" />
-        </View>
-
-        {syncing ? (
-          <View style={styles.syncBox}>
-            <ActivityIndicator color={C.purple} />
-            <Text style={styles.syncTxt}>Syncing contacts…</Text>
-          </View>
-        ) : null}
-
-        {doneOnce && !syncing ? (
-          <View style={styles.resultsBox}>
-            <Text style={styles.resultsTitle}>On mySplit</Text>
-            {matches.length === 0 ? (
-              <Text style={styles.resultsEmpty}>
-                No matches yet. Friends need to add the same phone number to mySplit to appear here.
+      ) : (
+        <ScrollView
+          style={styles.body}
+          contentContainerStyle={{
+            paddingHorizontal: 18,
+            paddingTop: phase === 'results' ? 12 : 20,
+            paddingBottom: insets.bottom + 32,
+          }}
+          showsVerticalScrollIndicator={false}
+        >
+          {phase === 'intro' ? (
+            <>
+              <View style={styles.permIcon}>
+                <Ionicons name="people" size={32} color={C.purple} />
+              </View>
+              <Text style={styles.headline}>Find your people</Text>
+              <Text style={styles.bodyTxt}>
+                We&apos;ll check which of your contacts are already on mySplit.
               </Text>
-            ) : (
-              matches.map((m) => {
-                const av = getFriendAvatarColors(m.uid);
-                const ini = initialsFromName(m.displayName);
-                return (
-                  <View key={m.uid} style={styles.matchRow}>
-                    {m.avatarUrl ? (
-                      <Image source={{ uri: m.avatarUrl }} style={styles.matchAv} />
-                    ) : (
-                      <View style={[styles.matchAv, { backgroundColor: av.backgroundColor }]}>
-                        <Text style={[styles.matchAvTxt, { color: av.color }]}>{ini}</Text>
-                      </View>
-                    )}
-                    <View style={styles.matchMid}>
-                      <Text style={styles.matchName} numberOfLines={1}>
-                        {m.displayName}
-                      </Text>
-                    </View>
-                    <Pressable
-                      onPress={() => void onConnect(m)}
-                      disabled={connectingUid === m.uid}
-                      style={({ pressed }) => [
-                        styles.connectBtn,
-                        pressed && styles.connectBtnPressed,
-                        connectingUid === m.uid && styles.connectBtnDisabled,
-                      ]}
-                    >
-                      {connectingUid === m.uid ? (
-                        <ActivityIndicator size="small" color="#fff" />
-                      ) : (
-                        <Text style={styles.connectBtnTxt}>Connect</Text>
-                      )}
-                    </Pressable>
-                  </View>
-                );
-              })
-            )}
-          </View>
-        ) : null}
 
-        <Pressable
-          onPress={() => void onAllow()}
-          disabled={syncing}
-          style={({ pressed }) => [styles.primaryBtn, pressed && styles.primaryBtnPressed, syncing && { opacity: 0.7 }]}
-          accessibilityRole="button"
-          accessibilityLabel="Allow access to contacts"
-        >
-          <Text style={styles.primaryBtnTxt}>
-            {doneOnce ? 'Sync contacts again' : 'Allow access to contacts'}
-          </Text>
-        </Pressable>
-        <Pressable
-          onPress={() => router.back()}
-          style={({ pressed }) => [styles.secondaryBtn, pressed && styles.secondaryBtnPressed]}
-          accessibilityRole="button"
-        >
-          <Text style={styles.secondaryBtnTxt}>Not now</Text>
-        </Pressable>
-      </ScrollView>
+              <View style={styles.bullets}>
+                <Bullet text="Phone numbers are hashed before leaving your device" />
+                <Bullet text="Your contacts are never stored on our servers" />
+                <Bullet text="Non-mySplit contacts are immediately discarded" />
+              </View>
+            </>
+          ) : null}
+
+          {phase === 'results' ? (
+            <>
+              <View style={styles.sectionHeaderRow}>
+                <Text style={styles.resultsSectionTitle}>Already on mySplit</Text>
+                {dedupedMatches.filter((m) => !friendUids.has(m.uid)).length > 1 ? (
+                  <Pressable
+                    onPress={() => void onConnectAll()}
+                    disabled={connectAllBusy}
+                    style={styles.sectionAction}
+                  >
+                    <Text style={styles.sectionActionTxt}>
+                      {connectAllBusy ? '…' : 'Connect all'}
+                    </Text>
+                  </Pressable>
+                ) : null}
+              </View>
+              {dedupedMatches.length === 0 ? (
+                <Text style={styles.resultsEmpty}>
+                  No one from your contacts is on mySplit yet. Invite them below.
+                </Text>
+              ) : (
+                dedupedMatches.map((m) => {
+                  const av = getFriendAvatarColors(m.uid);
+                  const ini = initialsFromName(m.displayName);
+                  const friend = friendUids.has(m.uid);
+                  return (
+                    <View key={m.uid} style={styles.matchRow}>
+                      {m.avatarUrl ? (
+                        <Image source={{ uri: m.avatarUrl }} style={styles.matchAv} />
+                      ) : (
+                        <View style={[styles.matchAv, { backgroundColor: av.backgroundColor }]}>
+                          <Text style={[styles.matchAvTxt, { color: av.color }]}>{ini}</Text>
+                        </View>
+                      )}
+                      <View style={styles.matchMid}>
+                        <Text style={styles.matchName} numberOfLines={1}>
+                          {m.displayName}
+                        </Text>
+                        <Text style={styles.matchSub} numberOfLines={1}>
+                          {m.username} · In your contacts
+                        </Text>
+                      </View>
+                      {friend ? (
+                        <View style={styles.friendsPill}>
+                          <Text style={styles.friendsPillTxt}>Friends ✓</Text>
+                        </View>
+                      ) : (
+                        <Pressable
+                          onPress={() => void onConnect(m)}
+                          disabled={connectingUid === m.uid}
+                          style={({ pressed }) => [
+                            styles.connectBtn,
+                            pressed && styles.connectBtnPressed,
+                            connectingUid === m.uid && styles.connectBtnDisabled,
+                          ]}
+                        >
+                          {connectingUid === m.uid ? (
+                            <ActivityIndicator size="small" color="#fff" />
+                          ) : (
+                            <Text style={styles.connectBtnTxt}>Connect</Text>
+                          )}
+                        </Pressable>
+                      )}
+                    </View>
+                  );
+                })
+              )}
+
+              <View style={[styles.sectionHeaderRow, styles.sectionSpaced]}>
+                <Text style={styles.resultsSectionTitle}>Not on mySplit yet</Text>
+                {unmatchedContacts.length > 1 ? (
+                  <Pressable
+                    onPress={() => void onInviteAll()}
+                    disabled={inviteBusy}
+                    style={styles.sectionAction}
+                  >
+                    <Text style={styles.sectionActionTxt}>{inviteBusy ? '…' : 'Invite all'}</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+              {unmatchedContacts.length === 0 ? (
+                <Text style={styles.resultsEmpty}>Everyone with a phone number is already here.</Text>
+              ) : (
+                unmatchedContacts.map((c) => {
+                  const ini = initialsFromName(c.name);
+                  return (
+                    <View key={c.id} style={styles.matchRow}>
+                      <View style={[styles.matchAv, { backgroundColor: '#E8E6E1' }]}>
+                        <Text style={[styles.matchAvTxt, { color: C.muted }]}>{ini}</Text>
+                      </View>
+                      <View style={styles.matchMid}>
+                        <Text style={styles.matchName} numberOfLines={1}>
+                          {c.name}
+                        </Text>
+                        <Text style={styles.matchSub} numberOfLines={1}>
+                          In your contacts
+                        </Text>
+                      </View>
+                      <Pressable
+                        onPress={() => void onInviteOne()}
+                        disabled={inviteBusy}
+                        style={({ pressed }) => [styles.inviteBtn, pressed && styles.inviteBtnPressed]}
+                      >
+                        <Text style={styles.inviteBtnTxt}>Invite</Text>
+                      </Pressable>
+                    </View>
+                  );
+                })
+              )}
+
+              <Pressable
+                onPress={() => void runContactSync()}
+                style={({ pressed }) => [styles.secondarySync, pressed && styles.secondarySyncPressed]}
+              >
+                <Ionicons name="refresh-outline" size={18} color={C.purple} />
+                <Text style={styles.secondarySyncTxt}>Sync contacts again</Text>
+              </Pressable>
+            </>
+          ) : null}
+
+          {phase === 'intro' ? (
+            <>
+              <Pressable
+                onPress={() => void onAllowAccess()}
+                style={({ pressed }) => [styles.primaryBtn, pressed && styles.primaryBtnPressed]}
+                accessibilityRole="button"
+                accessibilityLabel="Allow access to contacts"
+              >
+                <Text style={styles.primaryBtnTxt}>Allow access to contacts</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => router.back()}
+                style={({ pressed }) => [styles.secondaryBtn, pressed && styles.secondaryBtnPressed]}
+                accessibilityRole="button"
+              >
+                <Text style={styles.secondaryBtnTxt}>Not now</Text>
+              </Pressable>
+            </>
+          ) : null}
+
+          {phase === 'results' ? (
+            <Pressable
+              onPress={() => router.back()}
+              style={({ pressed }) => [styles.secondaryBtn, pressed && styles.secondaryBtnPressed, styles.doneBtn]}
+            >
+              <Text style={styles.secondaryBtnTxt}>Done</Text>
+            </Pressable>
+          ) : null}
+        </ScrollView>
+      )}
     </View>
   );
 }
@@ -302,16 +486,16 @@ const bulletStyles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: '#E1F5EE',
+    backgroundColor: C.greenTint,
     alignItems: 'center',
     justifyContent: 'center',
   },
   txt: {
     flex: 1,
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '500',
     color: C.text,
-    lineHeight: 17,
+    lineHeight: 19,
   },
 });
 
@@ -344,11 +528,22 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: C.sheetBg,
   },
+  scanningWrap: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+    gap: 14,
+  },
+  scanningTxt: {
+    fontSize: 15,
+    color: C.muted,
+  },
   permIcon: {
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#EEEDFE',
+    backgroundColor: C.purpleTint,
     alignItems: 'center',
     justifyContent: 'center',
     alignSelf: 'center',
@@ -367,7 +562,7 @@ const styles = StyleSheet.create({
     color: C.muted,
     textAlign: 'center',
     lineHeight: 20,
-    marginBottom: 22,
+    marginBottom: 18,
   },
   bullets: {
     backgroundColor: '#F8F7F4',
@@ -376,30 +571,36 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     marginBottom: 22,
   },
-  syncBox: {
+  sectionHeaderRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    marginBottom: 18,
+    justifyContent: 'space-between',
+    marginBottom: 10,
   },
-  syncTxt: {
-    fontSize: 13,
-    color: C.muted,
+  sectionSpaced: {
+    marginTop: 22,
   },
-  resultsBox: {
-    marginBottom: 18,
-  },
-  resultsTitle: {
+  resultsSectionTitle: {
     fontSize: 11,
     fontWeight: '600',
     color: C.muted,
     letterSpacing: 0.6,
     textTransform: 'uppercase',
-    marginBottom: 10,
+  },
+  sectionAction: {
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+  },
+  sectionActionTxt: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: C.purple,
   },
   resultsEmpty: {
     fontSize: 13,
     color: C.muted,
     lineHeight: 20,
+    marginBottom: 8,
   },
   matchRow: {
     flexDirection: 'row',
@@ -427,6 +628,18 @@ const styles = StyleSheet.create({
   },
   matchMid: { flex: 1, minWidth: 0 },
   matchName: { fontSize: 15, fontWeight: '600', color: C.text },
+  matchSub: { fontSize: 12, color: C.muted, marginTop: 3 },
+  friendsPill: {
+    backgroundColor: C.greenTint,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+  },
+  friendsPillTxt: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: C.green,
+  },
   connectBtn: {
     backgroundColor: C.purple,
     paddingHorizontal: 14,
@@ -438,6 +651,32 @@ const styles = StyleSheet.create({
   connectBtnPressed: { opacity: 0.92 },
   connectBtnDisabled: { opacity: 0.7 },
   connectBtnTxt: { color: '#fff', fontWeight: '600', fontSize: 13 },
+  inviteBtn: {
+    borderWidth: 1,
+    borderColor: C.purple,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 10,
+    minWidth: 72,
+    alignItems: 'center',
+  },
+  inviteBtnPressed: { opacity: 0.88 },
+  inviteBtnTxt: { color: C.purple, fontWeight: '600', fontSize: 13 },
+  secondarySync: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 16,
+    marginBottom: 8,
+    paddingVertical: 12,
+  },
+  secondarySyncPressed: { opacity: 0.75 },
+  secondarySyncTxt: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: C.purple,
+  },
   primaryBtn: {
     backgroundColor: C.purple,
     borderRadius: 14,
@@ -466,5 +705,8 @@ const styles = StyleSheet.create({
   secondaryBtnTxt: {
     fontSize: 14,
     color: C.muted,
+  },
+  doneBtn: {
+    marginTop: 8,
   },
 });

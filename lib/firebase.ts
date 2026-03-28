@@ -2,6 +2,7 @@ import { getApp, getApps, initializeApp, type FirebaseApp, type FirebaseOptions 
 import { initializeAuth, getAuth, getReactNativePersistence, type Auth } from 'firebase/auth';
 import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage';
 import { getFirestore, type Firestore } from 'firebase/firestore';
+import { getFunctions, type Functions } from 'firebase/functions';
 import { getStorage, type FirebaseStorage } from 'firebase/storage';
 
 function readEnv(key: string): string | undefined {
@@ -68,4 +69,10 @@ export function getFirebaseFirestore(): Firestore | null {
 export function getFirebaseStorage(): FirebaseStorage | null {
   const app = getFirebaseApp();
   return app ? getStorage(app) : null;
+}
+
+/** Callable HTTPS functions (same region as `functions` deployment, e.g. `us-central1`). */
+export function getFirebaseFunctions(region = 'us-central1'): Functions | null {
+  const app = getFirebaseApp();
+  return app ? getFunctions(app, region) : null;
 }
