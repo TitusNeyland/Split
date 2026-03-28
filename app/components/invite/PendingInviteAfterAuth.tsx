@@ -49,6 +49,14 @@ export default function PendingInviteAfterAuth() {
         await acceptPendingInvite(pending, user.uid);
         await setPendingInviteId(null);
 
+        if (invite.splitId) {
+          router.replace({
+            pathname: '/split-added',
+            params: { subscriptionId: invite.splitId },
+          });
+          return;
+        }
+
         const sender = await fetchUserProfileForInvite(invite.createdBy);
         const name = sender?.displayName?.trim() || 'your friend';
         router.replace('/friends');

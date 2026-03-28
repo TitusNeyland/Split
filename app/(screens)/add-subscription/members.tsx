@@ -1,5 +1,4 @@
-import React, { useCallback, useMemo, useState, type ReactNode } from 'react';
-;
+import React, { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   View,
   Text,
@@ -11,7 +10,10 @@ import {
   FlatList,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
+  Image,
 } from 'react-native';
+import { onAuthStateChanged, type User } from 'firebase/auth';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -30,6 +32,11 @@ import {
   percentTotalIsExactly100,
 } from '../../../lib/subscription/addSubscriptionSplitMath';
 import { getServiceIconBackgroundColor } from '../../components/shared/ServiceIcon';
+import { getFirebaseAuth, isFirebaseConfigured } from '../../../lib/firebase';
+import { searchUsersForFriendConnect, type FriendSearchUserRow } from '../../../lib/friends/userSearchFirestore';
+import { getFriendAvatarColors } from '../../../lib/friends/friendAvatar';
+import { normalizeInviteEmail } from '../../../lib/friends/friendSystemFirestore';
+import { initialsFromName } from '../../../lib/profile';
 
 const C = {
   purple: '#534AB7',
@@ -56,6 +63,8 @@ export type WizardMember = {
   isOwner: boolean;
   /** Not on the app yet — slot reserved until they join and add payment. */
   invitePending?: boolean;
+  /** Set when the invite was created from an email-shaped search query. */
+  pendingInviteEmail?: string;
 };
 
 const TITUS: WizardMember = {
@@ -69,42 +78,47 @@ const TITUS: WizardMember = {
 
 type SheetFriend = Omit<WizardMember, 'isOwner' | 'invitePending'> & {
   mutualSubscriptionsCount: number;
+  avatarUrl?: string | null;
 };
 
-const MOCK_FRIENDS: SheetFriend[] = [
-  {
-    memberId: 'friend-alex',
-    displayName: 'Alex L.',
-    initials: 'AL',
-    avatarBg: '#E1F5EE',
-    avatarColor: '#0F6E56',
-    mutualSubscriptionsCount: 2,
-  },
-  {
-    memberId: 'friend-sam',
-    displayName: 'Sam M.',
-    initials: 'SM',
-    avatarBg: '#FAECE7',
-    avatarColor: '#993C1D',
+function useDebouncedValue<T>(value: T, ms: number): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(value), ms);
+    return () => clearTimeout(t);
+  }, [value, ms]);
+  return debounced;
+}
+
+function friendSearchRowToSheetFriend(row: FriendSearchUserRow): SheetFriend {
+  const { backgroundColor, color } = getFriendAvatarColors(row.uid);
+  return {
+    memberId: row.uid,
+    displayName: row.displayName,
+    initials: initialsFromName(row.displayName),
+    avatarBg: backgroundColor,
+    avatarColor: color,
     mutualSubscriptionsCount: 0,
-  },
-  {
-    memberId: 'friend-taylor',
-    displayName: 'Taylor K.',
-    initials: 'TK',
-    avatarBg: '#E6F1FB',
-    avatarColor: '#1a5f8a',
-    mutualSubscriptionsCount: 5,
-  },
-  {
-    memberId: 'friend-riley',
-    displayName: 'Riley P.',
-    initials: 'RP',
-    avatarBg: '#E8E4FF',
-    avatarColor: '#4338CA',
-    mutualSubscriptionsCount: 1,
-  },
-];
+    avatarUrl: row.avatarUrl,
+  };
+}
+
+function memberIdForPendingInvite(raw: string): string {
+  const n = normalizeInviteEmail(raw);
+  const slug = n.replace(/[^a-z0-9]/g, '').slice(0, 40) || 'invite';
+  return `invite-email-${slug}`;
+}
+
+function initialsForPendingInvite(raw: string): string {
+  const t = raw.trim();
+  if (!t) return '?';
+  if (t.includes('@')) {
+    const local = t.split('@')[0] ?? '';
+    const fromName = initialsFromName(local.replace(/[._]/g, ' '));
+    return fromName || '✉';
+  }
+  return initialsFromName(t) || '?';
+}
 
 const METHODS: {
   id: SplitMethod;
@@ -163,6 +177,18 @@ export default function AddSubscriptionMembersScreen() {
   ]);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [friendQuery, setFriendQuery] = useState('');
+  const [searchUser, setSearchUser] = useState<User | null>(() => getFirebaseAuth()?.currentUser ?? null);
+  const debouncedFriendQuery = useDebouncedValue(friendQuery, 300);
+  const [searchResults, setSearchResults] = useState<FriendSearchUserRow[]>([]);
+  const [searchingFriends, setSearchingFriends] = useState(false);
+  const searchReq = useRef(0);
+
+  useEffect(() => {
+    if (!isFirebaseConfigured()) return;
+    const auth = getFirebaseAuth();
+    if (!auth) return;
+    return onAuthStateChanged(auth, setSearchUser);
+  }, []);
 
   const n = members.length;
 
@@ -390,18 +416,54 @@ export default function AddSubscriptionMembersScreen() {
     setFriendQuery('');
   }, []);
 
-  const inviteSearchNameToSplit = useCallback(
-    (name: string) => {
-      const trim = name.trim();
-      if (!trim) return;
-      closeMemberPicker();
-      router.push({
-        pathname: '/invite-share',
-        params: { suggestedName: trim },
+  const searchUid = searchUser?.uid ?? null;
+
+  useEffect(() => {
+    const q = debouncedFriendQuery.trim();
+    if (q.length < 3 || !searchUid || !isFirebaseConfigured()) {
+      setSearchResults([]);
+      setSearchingFriends(false);
+      return;
+    }
+
+    const id = ++searchReq.current;
+    setSearchingFriends(true);
+
+    void searchUsersForFriendConnect({ currentUid: searchUid, searchText: q })
+      .then((rows) => {
+        if (searchReq.current !== id) return;
+        setSearchResults(rows);
+      })
+      .catch(() => {
+        if (searchReq.current !== id) return;
+        setSearchResults([]);
+      })
+      .finally(() => {
+        if (searchReq.current !== id) return;
+        setSearchingFriends(false);
       });
-    },
-    [closeMemberPicker, router],
-  );
+  }, [debouncedFriendQuery, searchUid]);
+
+  const inviteQueryToSplit = useCallback(() => {
+    const trim = friendQuery.trim();
+    if (!trim) return;
+    if (members.some((m) => m.memberId === memberIdForPendingInvite(trim))) {
+      closeMemberPicker();
+      return;
+    }
+    const emailRaw = trim.includes('@') ? normalizeInviteEmail(trim) : undefined;
+    appendMemberCore({
+      memberId: memberIdForPendingInvite(trim),
+      displayName: trim,
+      initials: initialsForPendingInvite(trim),
+      avatarBg: C.purpleTint,
+      avatarColor: C.purple,
+      isOwner: false,
+      invitePending: true,
+      pendingInviteEmail: emailRaw,
+    });
+    closeMemberPicker();
+  }, [friendQuery, members, appendMemberCore, closeMemberPicker]);
 
   const validationBarVisible = mode === 'customPercent';
   const canContinue =
@@ -425,6 +487,7 @@ export default function AddSubscriptionMembersScreen() {
       percent: displayPercents[i] ?? 0,
       amountCents: rowCents[i] ?? 0,
       invitePending: m.invitePending === true,
+      pendingInviteEmail: m.pendingInviteEmail,
     }));
     const payload = encodeURIComponent(JSON.stringify({ members: reviewMembers }));
     router.push({
@@ -444,12 +507,13 @@ export default function AddSubscriptionMembersScreen() {
     });
   };
 
-  const friendsForSheet = useMemo(() => {
-    const q = friendQuery.trim().toLowerCase();
-    return MOCK_FRIENDS.filter(
-      (f) => q === '' || f.displayName.toLowerCase().includes(q),
-    );
-  }, [friendQuery]);
+  const friendsForSheet = useMemo(
+    () => searchResults.map(friendSearchRowToSheetFriend),
+    [searchResults],
+  );
+
+  const showSearchEmptyState =
+    friendQuery.trim().length >= 3 && !searchingFriends && friendsForSheet.length === 0;
 
   const addedMemberIds = useMemo(() => new Set(members.map((m) => m.memberId)), [members]);
 
@@ -669,19 +733,35 @@ export default function AddSubscriptionMembersScreen() {
               style={styles.sheetList}
               keyboardShouldPersistTaps="handled"
               ListEmptyComponent={
-                friendQuery.trim() ? (
-                  <Pressable
-                    style={styles.sheetEmptyInvite}
-                    onPress={() => inviteSearchNameToSplit(friendQuery.trim())}
-                    accessibilityRole="button"
-                    accessibilityLabel={`No friends found, invite ${friendQuery.trim()} to mySplit`}
-                  >
-                    <Text style={styles.sheetEmptyInviteTxt}>
-                      No friends found · Invite {friendQuery.trim()} to mySplit
+                friendQuery.trim().length < 3 ? (
+                  <Text style={styles.sheetEmpty}>Type at least 3 characters to search people on mySplit.</Text>
+                ) : searchingFriends ? (
+                  <View style={styles.sheetEmpty}>
+                    <ActivityIndicator color={C.purple} />
+                  </View>
+                ) : showSearchEmptyState ? (
+                  <View style={styles.sheetEmptyCenter}>
+                    <View style={styles.sheetEmptyIconCircle}>
+                      <Ionicons name="search" size={28} color={C.muted} />
+                    </View>
+                    <Text style={styles.sheetEmptyTitle}>No one found</Text>
+                    <Text style={styles.sheetEmptyBody}>
+                      {`${friendQuery.trim()} isn't on mySplit yet. Invite them to join this split.`}
                     </Text>
-                  </Pressable>
+                    <Pressable
+                      style={styles.sheetInviteSplitBtn}
+                      onPress={inviteQueryToSplit}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Invite ${friendQuery.trim()} to this split`}
+                    >
+                      <Ionicons name="share-outline" size={20} color="#fff" />
+                      <Text style={styles.sheetInviteSplitBtnTxt}>
+                        {`Invite ${friendQuery.trim()} to this split`}
+                      </Text>
+                    </Pressable>
+                  </View>
                 ) : (
-                  <Text style={styles.sheetEmpty}>No friends yet.</Text>
+                  <Text style={styles.sheetEmpty}>No matches.</Text>
                 )
               }
               ListFooterComponent={
@@ -718,11 +798,21 @@ export default function AddSubscriptionMembersScreen() {
                     }
                   >
                     <View style={styles.sheetAvatarWrap}>
-                      <View style={[styles.memberAv, { backgroundColor: item.avatarBg }]}>
-                        <Text style={[styles.memberAvTxt, { color: item.avatarColor }]}>
-                          {item.initials}
-                        </Text>
-                      </View>
+                      {item.avatarUrl ? (
+                        <View style={[styles.memberAv, styles.sheetFriendPhotoWrap]}>
+                          <Image
+                            source={{ uri: item.avatarUrl }}
+                            style={styles.sheetFriendImg}
+                            accessibilityLabel=""
+                          />
+                        </View>
+                      ) : (
+                        <View style={[styles.memberAv, { backgroundColor: item.avatarBg }]}>
+                          <Text style={[styles.memberAvTxt, { color: item.avatarColor }]}>
+                            {item.initials}
+                          </Text>
+                        </View>
+                      )}
                       {added ? (
                         <View style={styles.sheetAddedBadge} accessibilityLabel="Selected for split">
                           <Ionicons name="checkmark" size={14} color="#fff" />
@@ -1114,16 +1204,57 @@ const styles = StyleSheet.create({
     paddingVertical: 20,
     textAlign: 'center',
   },
-  sheetEmptyInvite: {
-    paddingVertical: 18,
+  sheetEmptyCenter: {
+    alignItems: 'center',
+    paddingVertical: 16,
     paddingHorizontal: 8,
   },
-  sheetEmptyInviteTxt: {
+  sheetEmptyIconCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#E8E6E1',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
+  sheetEmptyTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: C.text,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  sheetEmptyBody: {
     fontSize: 15,
-    fontWeight: '600',
-    color: C.purple,
+    color: C.muted,
     textAlign: 'center',
     lineHeight: 22,
+    marginBottom: 18,
+  },
+  sheetInviteSplitBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    backgroundColor: C.purple,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 14,
+    alignSelf: 'stretch',
+  },
+  sheetInviteSplitBtnTxt: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  sheetFriendPhotoWrap: {
+    overflow: 'hidden',
+  },
+  sheetFriendImg: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
   },
   friendRow: {
     flexDirection: 'row',

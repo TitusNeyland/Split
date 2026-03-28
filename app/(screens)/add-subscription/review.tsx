@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Alert,
   Modal,
+  Share,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -23,6 +24,8 @@ import {
   type WizardMemberRow,
   type WizardSplitMethod,
 } from '../../../lib/subscription/createSubscriptionWizardFirestore';
+import { attachSplitInvitesToSubscription } from '../../../lib/subscription/splitInviteAttachments';
+import { buildSplitInviteShareMessage } from '../../../lib/friends/inviteLinks';
 import {
   billingWhenForSentence,
   formatFirstChargeDateLong,
@@ -67,6 +70,10 @@ function parseMembersJson(raw: string | undefined): ReviewMember[] {
       amountCents:
         typeof m.amountCents === 'number' && Number.isFinite(m.amountCents) ? m.amountCents : 0,
       invitePending: m.invitePending === true,
+      pendingInviteEmail:
+        typeof m.pendingInviteEmail === 'string' && m.pendingInviteEmail.trim()
+          ? m.pendingInviteEmail.trim().toLowerCase()
+          : undefined,
     }));
   } catch {
     return [];
@@ -298,7 +305,19 @@ export default function AddSubscriptionReviewScreen() {
         members,
       };
       const id = await createSubscriptionFromWizard(input);
+      const splitInviteIds = await attachSplitInvitesToSubscription(id, input);
       await runSubscriptionWizardSideEffects(id, input);
+      if (splitInviteIds.length > 0) {
+        const subName = planName || serviceName || 'Subscription';
+        const body = splitInviteIds
+          .map((invId) => buildSplitInviteShareMessage(subName, invId))
+          .join('\n\n');
+        try {
+          await Share.share({ message: body });
+        } catch {
+          /* user dismissed share sheet */
+        }
+      }
       navigateToSplitCreated();
     } catch {
       Alert.alert('Something went wrong · please try again');

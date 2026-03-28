@@ -29,6 +29,7 @@ import { formatMemberSince, initialsFromName } from '../../../lib/profile';
 import { openAppStoreDownload } from '../../../lib/storeLinks';
 import { setPendingInviteId } from '../../../lib/friends/pendingInviteStorage';
 import { buildInviteUrl } from '../../../lib/friends/inviteLinks';
+import { Timestamp } from 'firebase/firestore';
 
 function daysLeft(invite: FirestoreInvite): number {
   const ex = invite.expiresAt;
@@ -139,7 +140,14 @@ export default function AcceptInviteScreen() {
     setAccepting(true);
     try {
       await acceptPendingInvite(inviteId, user.uid);
-      router.replace('/friends');
+      if (invite.splitId) {
+        router.replace({
+          pathname: '/split-added',
+          params: { subscriptionId: invite.splitId },
+        });
+      } else {
+        router.replace('/friends');
+      }
     } catch (e) {
       Alert.alert('Could not connect', e instanceof Error ? e.message : 'Try again later.');
     } finally {
