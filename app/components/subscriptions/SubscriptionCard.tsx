@@ -1,5 +1,4 @@
 import React from 'react';
-;
 import { View, Text, StyleSheet, Pressable, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { ServiceIcon } from '../shared/ServiceIcon';
@@ -167,7 +166,12 @@ export function SubscriptionCard({
 
       <View style={styles.main}>
         <View style={styles.topRow}>
-          <ServiceIcon serviceName={serviceName} size={iconSize} style={styles.serviceIconTile} />
+          <ServiceIcon
+            serviceName={serviceName}
+            size={iconSize}
+            style={styles.serviceIconTile}
+            listEndedMuted={Boolean(splitEndedActions)}
+          />
           <View style={styles.info}>
             <Text style={[styles.name, { color: nameColor }]}>{name}</Text>
             <Text style={styles.cycle}>{cycleLine}</Text>

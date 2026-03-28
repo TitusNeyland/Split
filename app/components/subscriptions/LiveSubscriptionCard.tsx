@@ -6,6 +6,7 @@ import { useSubscriptionPriceBanner } from '../../../lib/subscription/useSubscri
 import {
   buildSubscriptionCardBase,
   extractPriceBannerFields,
+  getOwnerId,
   lastSeenMsForSubscription,
   normalizeSubscriptionStatus,
 } from '../../../lib/subscription/subscriptionToCardModel';
@@ -17,6 +18,10 @@ type Props = {
   viewerAvatarUrl: string | null;
   lastSeenPriceMap: Record<string, { toMillis?: () => number }> | null | undefined;
   muted?: boolean;
+  /** Subscriptions list: restart without navigating to detail first. */
+  onEndedRestart?: (doc: MemberSubscriptionDoc) => void;
+  /** Subscriptions list: delete after confirmation. */
+  onEndedDelete?: (doc: MemberSubscriptionDoc) => void;
 };
 
 export function LiveSubscriptionCard({
@@ -25,6 +30,8 @@ export function LiveSubscriptionCard({
   viewerAvatarUrl,
   lastSeenPriceMap,
   muted,
+  onEndedRestart,
+  onEndedDelete,
 }: Props) {
   const router = useRouter();
   const splitEnded = normalizeSubscriptionStatus(doc.status) === 'ended';
@@ -57,10 +64,16 @@ export function LiveSubscriptionCard({
 
   const goDetail = () => router.push(`/subscription/${doc.id}`);
 
+  const isOwner = Boolean(viewerUid && getOwnerId(doc) === viewerUid);
+
   const onRestartSplit = () =>
-    Alert.alert('Restart split', 'This will be available when subscription management is connected.');
+    onEndedRestart
+      ? onEndedRestart(doc)
+      : Alert.alert('Restart split', 'This will be available when subscription management is connected.');
   const onDeleteSplit = () =>
-    Alert.alert('Delete', 'This will be available when subscription management is connected.');
+    onEndedDelete
+      ? onEndedDelete(doc)
+      : Alert.alert('Delete', 'This will be available when subscription management is connected.');
 
   return (
     <SubscriptionCard
@@ -68,7 +81,7 @@ export function LiveSubscriptionCard({
       faded={splitEnded}
       hideEditSplit={splitEnded}
       splitEndedActions={
-        splitEnded
+        splitEnded && isOwner
           ? {
               onRestart: onRestartSplit,
               onDelete: onDeleteSplit,

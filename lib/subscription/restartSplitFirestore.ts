@@ -62,6 +62,9 @@ export async function restartSubscriptionSplit(params: {
       body: title,
     });
   } catch (e) {
-    console.warn('notifySplitRestarted:', e);
+    const code = e && typeof e === 'object' && 'code' in e ? String((e as { code: string }).code) : '';
+    if (code !== 'functions/not-found') {
+      console.warn('notifySplitRestarted:', e);
+    }
   }
 }

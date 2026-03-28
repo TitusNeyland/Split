@@ -148,22 +148,32 @@ service cloud.firestore {
 
     // --- Rest of app (align with client modules under lib/) ---
     match /subscriptions/{subscriptionId} {
+      /** Client uses `members` (legacy) and/or `memberUids` (see memberSubscriptionsFirestore.ts). */
+      function subscriptionMemberData(data) {
+        return (data.keys().hasAny(['members']) && request.auth.uid in data.members)
+          || (data.keys().hasAny(['memberUids']) && request.auth.uid in data.memberUids);
+      }
+
       allow read: if request.auth != null
-        && request.auth.uid in resource.data.members;
+        && subscriptionMemberData(resource.data);
       allow create: if request.auth != null
         && request.auth.uid == request.resource.data.ownerUid
-        && request.auth.uid in request.resource.data.members;
+        && subscriptionMemberData(request.resource.data);
       allow update, delete: if request.auth != null
-        && request.auth.uid in resource.data.members;
+        && subscriptionMemberData(resource.data);
 
       match /billing_cycles/{cycleId} {
         allow read, write: if request.auth != null
-          && request.auth.uid in get(/databases/$(database)/documents/subscriptions/$(subscriptionId)).data.members;
+          && subscriptionMemberData(
+            get(/databases/$(database)/documents/subscriptions/$(subscriptionId)).data
+          );
       }
 
       match /split_change_log/{entryId} {
         allow read, write: if request.auth != null
-          && request.auth.uid in get(/databases/$(database)/documents/subscriptions/$(subscriptionId)).data.members;
+          && subscriptionMemberData(
+            get(/databases/$(database)/documents/subscriptions/$(subscriptionId)).data
+          );
       }
     }
 
