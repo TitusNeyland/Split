@@ -109,6 +109,7 @@ type HomeRecentActivityItem = {
   iconBg: string;
   iconColor: string;
   serviceIconMuted?: boolean;
+  friendAvatar?: { initials: string; imageUrl?: string | null };
   viewerAvatarUrl?: string | null;
 };
 
@@ -191,6 +192,7 @@ export default function HomeScreen() {
           iconBg: x.iconBg,
           iconColor: x.iconColor,
           serviceIconMuted: x.serviceIconMuted,
+          friendAvatar: x.friendAvatar,
         }))
       );
     });
@@ -730,6 +732,14 @@ export default function HomeScreen() {
                         source={{ uri: item.viewerAvatarUrl }}
                         style={styles.actAvatarImg}
                         accessibilityLabel="You"
+                      />
+                    </View>
+                  ) : item.friendAvatar ? (
+                    <View style={styles.actIcoWrap}>
+                      <UserAvatarCircle
+                        size={38}
+                        initials={item.friendAvatar.initials}
+                        imageUrl={item.friendAvatar.imageUrl}
                       />
                     </View>
                   ) : item.serviceMark ? (

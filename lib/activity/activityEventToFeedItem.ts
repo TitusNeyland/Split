@@ -39,6 +39,16 @@ function shortBrandName(fullName: string): string {
   return t.split(/\s+/)[0] ?? t;
 }
 
+function initialsFromDisplayName(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) {
+    const a = parts[0][0] ?? '';
+    const b = parts[parts.length - 1][0] ?? '';
+    return `${a}${b}`.toUpperCase() || '?';
+  }
+  return (parts[0] || '?').slice(0, 2).toUpperCase();
+}
+
 function humanizeFailure(code: string): string {
   const m: Record<string, string> = {
     card_declined: 'Card declined',
@@ -79,7 +89,13 @@ export type ActivityFeedKind =
   | 'split_ended'
   | 'split_restarted'
   | 'split_percentage_updated'
-  | 'split_price_updated';
+  | 'split_price_updated'
+  | 'friend_connected'
+  | 'friend_invite_accepted'
+  | 'billing_cycle_complete'
+  | 'billing_cycle_partial'
+  | 'auto_charge_enabled'
+  | 'auto_charge_disabled';
 
 export type ActivityBadgeVariant = 'green' | 'amber' | 'red' | 'purple' | 'gray' | 'blue';
 
@@ -119,6 +135,8 @@ export type ActivityFeedRow = {
   joinSubscriptionId?: string;
   /** Muted / desaturated service tile */
   serviceIconMuted?: boolean;
+  /** Friend events: show actor avatar (initials or photo). */
+  friendAvatar?: { initials: string; imageUrl?: string | null };
 };
 
 /**
@@ -533,6 +551,156 @@ export function activityEventToFeedRow(
                   : `${c.oldPct ?? '—'}% → ${c.newPct ?? '—'}%`,
             })),
           ],
+        },
+        _activityCreatedAtMs: createdMs,
+      };
+    }
+    case 'friend_connected': {
+      const actor = event.actorName?.trim() || 'Someone';
+      const fu = typeof meta.friendUsername === 'string' ? meta.friendUsername.trim() : '';
+      const handle = fu ? (fu.startsWith('@') ? fu : `@${fu}`) : '';
+      const uid = typeof meta.friendUid === 'string' ? meta.friendUid : event.actorUid;
+      return {
+        id: event.id,
+        kind: 'friend_connected',
+        friendLinkIds: uid ? [uid] : undefined,
+        friendAvatar: {
+          initials: initialsFromDisplayName(actor),
+          imageUrl: event.actorAvatarUrl ?? null,
+        },
+        icon: 'person-outline',
+        iconBg: '#EEEDFE',
+        iconColor: C.purple,
+        title: `${actor} connected with you`,
+        sub: handle || 'New connection',
+        time,
+        amountColor: C.text,
+        badge: 'Connected',
+        badgeVariant: 'purple',
+        _activityCreatedAtMs: createdMs,
+      };
+    }
+    case 'friend_invite_accepted': {
+      const actor = event.actorName?.trim() || 'Someone';
+      const uid = typeof meta.friendUid === 'string' ? meta.friendUid : event.actorUid;
+      return {
+        id: event.id,
+        kind: 'friend_invite_accepted',
+        friendLinkIds: uid ? [uid] : undefined,
+        friendAvatar: {
+          initials: initialsFromDisplayName(actor),
+          imageUrl: event.actorAvatarUrl ?? null,
+        },
+        icon: 'person-outline',
+        iconBg: '#E1F5EE',
+        iconColor: C.green,
+        title: `${actor} accepted your invite`,
+        sub: 'You are now connected',
+        time,
+        amountColor: C.text,
+        badge: 'Connected',
+        badgeVariant: 'green',
+        _activityCreatedAtMs: createdMs,
+      };
+    }
+    case 'billing_cycle_complete': {
+      const memberCount =
+        typeof meta.memberCount === 'number' && Number.isFinite(meta.memberCount) ? meta.memberCount : 0;
+      const totalStr = amountStr || formatMoneyCents(amountCents ?? 0);
+      const cm = cycleMonth ?? 'This cycle';
+      return {
+        id: event.id,
+        kind: 'billing_cycle_complete',
+        serviceMark,
+        icon: 'checkmark-circle-outline',
+        iconBg: '#E1F5EE',
+        iconColor: C.green,
+        title: `${brand} fully collected`,
+        sub:
+          memberCount > 0
+            ? `All ${memberCount} members paid · ${totalStr} total`
+            : `All paid · ${totalStr} total`,
+        time,
+        amount: totalStr || undefined,
+        amountColor: C.green,
+        badge: 'Complete',
+        badgeVariant: 'green',
+        detail: {
+          rows: [
+            { label: 'Cycle', value: cm },
+            { label: 'Collected', value: totalStr },
+          ],
+        },
+        _activityCreatedAtMs: createdMs,
+      };
+    }
+    case 'billing_cycle_partial': {
+      const paidCount =
+        typeof meta.paidCount === 'number' && Number.isFinite(meta.paidCount) ? meta.paidCount : 0;
+      const totalCount =
+        typeof meta.totalCount === 'number' && Number.isFinite(meta.totalCount) ? meta.totalCount : 0;
+      const outstanding =
+        typeof meta.outstanding === 'number' && Number.isFinite(meta.outstanding) ? meta.outstanding : 0;
+      const cm = cycleMonth ?? 'Cycle';
+      const monthWord = cm.split(/\s+/)[0] ?? cm;
+      return {
+        id: event.id,
+        kind: 'billing_cycle_partial',
+        serviceMark,
+        icon: 'alert-circle-outline',
+        iconBg: '#FAEEDA',
+        iconColor: '#854F0B',
+        title: `${monthWord} cycle closed · ${brand}`,
+        sub: `${paidCount} of ${totalCount} paid · ${formatMoneyCents(outstanding)} outstanding`,
+        time,
+        amountColor: C.orange,
+        badge: 'Partial',
+        badgeVariant: 'amber',
+        detail: {
+          rows: [
+            { label: 'Cycle', value: cm },
+            { label: 'Outstanding', value: formatMoneyCents(outstanding), valueAccent: 'amber' },
+          ],
+        },
+        _activityCreatedAtMs: createdMs,
+      };
+    }
+    case 'auto_charge_enabled': {
+      const actor = event.actorName?.trim() || 'Someone';
+      return {
+        id: event.id,
+        kind: 'auto_charge_enabled',
+        icon: 'flash-outline',
+        iconBg: '#E1F5EE',
+        iconColor: C.green,
+        title: `Auto-charge enabled · ${subName}`,
+        sub: 'Members will be charged automatically',
+        time,
+        amountColor: C.text,
+        badge: 'Auto-charge',
+        badgeVariant: 'green',
+        detail: {
+          rows: [{ label: 'Enabled by', value: actor }],
+        },
+        _activityCreatedAtMs: createdMs,
+      };
+    }
+    case 'auto_charge_disabled': {
+      const actor = event.actorName?.trim() || 'Someone';
+      return {
+        id: event.id,
+        kind: 'auto_charge_disabled',
+        icon: 'flash-off-outline',
+        iconBg: '#F0EEE9',
+        iconColor: C.muted,
+        title: `Auto-charge disabled · ${subName}`,
+        sub: 'Payments are now manual',
+        time,
+        amountColor: C.muted,
+        badge: 'Manual',
+        badgeVariant: 'gray',
+        detail: {
+          rows: [{ label: 'Changed by', value: actor }],
         },
         _activityCreatedAtMs: createdMs,
       };
