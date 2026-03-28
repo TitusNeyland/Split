@@ -116,6 +116,8 @@ export type ServiceIconProps = {
   style?: StyleProp<ViewStyle>;
   /** Subscription detail “ended” hero: neutral tile + muted glyph. */
   endedDimmed?: boolean;
+  /** Subscriptions list ended card: gray tile (#F0EEE9) + gray glyph (#888780). */
+  listEndedMuted?: boolean;
 };
 
 const BASE_SIZE = 40;
@@ -124,8 +126,16 @@ const GLYPH_RATIO = 0.58;
 
 const ENDED_BG = 'rgba(255,255,255,0.08)';
 const ENDED_GLYPH = 'rgba(255,255,255,0.3)';
+const LIST_ENDED_BG = '#F0EEE9';
+const LIST_ENDED_GLYPH = '#888780';
 
-export function ServiceIcon({ serviceName, size = BASE_SIZE, style, endedDimmed }: ServiceIconProps) {
+export function ServiceIcon({
+  serviceName,
+  size = BASE_SIZE,
+  style,
+  endedDimmed,
+  listEndedMuted,
+}: ServiceIconProps) {
   const { glyph, fallbackLetter, backgroundColor, iconColor } = useMemo(
     () => resolveServiceIcon(serviceName),
     [serviceName],
@@ -133,8 +143,8 @@ export function ServiceIcon({ serviceName, size = BASE_SIZE, style, endedDimmed 
   const fontSize = (BASE_FONT * size) / BASE_SIZE * (fallbackLetter.length >= 2 ? 0.82 : 1);
   const borderRadius = size * 0.28;
   const glyphSize = Math.round(size * GLYPH_RATIO);
-  const tileBg = endedDimmed ? ENDED_BG : backgroundColor;
-  const glyphColor = endedDimmed ? ENDED_GLYPH : iconColor;
+  const tileBg = listEndedMuted ? LIST_ENDED_BG : endedDimmed ? ENDED_BG : backgroundColor;
+  const glyphColor = listEndedMuted ? LIST_ENDED_GLYPH : endedDimmed ? ENDED_GLYPH : iconColor;
 
   return (
     <View

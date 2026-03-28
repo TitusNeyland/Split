@@ -274,7 +274,15 @@ function HuluOverdueCard() {
   );
 }
 
-function XboxEndedCard({ userAvatarUrl }: { userAvatarUrl: string | null }) {
+function XboxEndedCard({
+  userAvatarUrl,
+  onRestart,
+  onDelete,
+}: {
+  userAvatarUrl: string | null;
+  onRestart: () => void;
+  onDelete: () => void;
+}) {
   const router = useRouter();
   const goDetail = () => router.push('/subscription/demo-xbox-ended');
   return (
@@ -282,7 +290,7 @@ function XboxEndedCard({ userAvatarUrl }: { userAvatarUrl: string | null }) {
       serviceName="Xbox Game Pass"
       name="Xbox Game Pass"
       nameColor={C.muted}
-      cycleLine="Ended · 2 members"
+      cycleLine="Ended Feb 2026 · 2 members"
       totalAmount="$19.99"
       totalAmountColor={C.muted}
       perPersonAmount="$9.99/person"
@@ -306,10 +314,8 @@ function XboxEndedCard({ userAvatarUrl }: { userAvatarUrl: string | null }) {
       faded
       hideEditSplit
       splitEndedActions={{
-        onRestart: () =>
-          Alert.alert('Restart split', 'This will be available when subscription management is connected.'),
-        onDelete: () =>
-          Alert.alert('Delete', 'This will be available when subscription management is connected.'),
+        onRestart,
+        onDelete,
       }}
       onCardPress={goDetail}
       onEditSplitPress={goDetail}
@@ -317,7 +323,16 @@ function XboxEndedCard({ userAvatarUrl }: { userAvatarUrl: string | null }) {
   );
 }
 
-export function SubscriptionsDemoPanel({ filter }: { filter: FilterId }) {
+export function SubscriptionsDemoPanel({
+  filter,
+  onDemoEndedRestart,
+  onDemoEndedDelete,
+}: {
+  filter: FilterId;
+  onDemoEndedRestart?: () => void;
+  onDemoEndedDelete?: () => void;
+}) {
+  const router = useRouter();
   const { avatarUrl: userAvatarUrl } = useProfileAvatarUrl();
 
   if (filter === 'active') {
@@ -344,12 +359,31 @@ export function SubscriptionsDemoPanel({ filter }: { filter: FilterId }) {
     );
   }
   if (filter === 'ended') {
+    const onRestart =
+      onDemoEndedRestart ??
+      (() =>
+        Alert.alert('Restart split', 'This will be available when subscription management is connected.'));
+    const onDelete =
+      onDemoEndedDelete ??
+      (() => Alert.alert('Delete', 'This will be available when subscription management is connected.'));
     return (
       <View style={styles.panel}>
         <View style={styles.sh}>
           <Text style={styles.shTitle}>Ended splits</Text>
         </View>
-        <XboxEndedCard userAvatarUrl={userAvatarUrl} />
+        <XboxEndedCard userAvatarUrl={userAvatarUrl} onRestart={onRestart} onDelete={onDelete} />
+        <View style={styles.endedPromptCard}>
+          <Text style={styles.endedPromptTitle}>Want to start a new split?</Text>
+          <Text style={styles.endedPromptSub}>Restart an ended one or add a new subscription</Text>
+          <Pressable
+            style={styles.endedPromptBtn}
+            accessibilityRole="button"
+            accessibilityLabel="Add subscription"
+            onPress={() => router.push('/add-subscription')}
+          >
+            <Text style={styles.endedPromptBtnTxt}>+ Add subscription</Text>
+          </Pressable>
+        </View>
       </View>
     );
   }
@@ -625,5 +659,39 @@ const styles = StyleSheet.create({
     color: C.muted,
     textAlign: 'center',
     lineHeight: 22,
+  },
+  endedPromptCard: {
+    backgroundColor: '#fff',
+    borderRadius: 18,
+    borderWidth: 0.5,
+    borderColor: C.border,
+    paddingHorizontal: 18,
+    paddingVertical: 18,
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  endedPromptTitle: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: C.text,
+    marginBottom: 6,
+  },
+  endedPromptSub: {
+    fontSize: 14,
+    color: C.muted,
+    lineHeight: 20,
+    marginBottom: 14,
+  },
+  endedPromptBtn: {
+    alignSelf: 'flex-start',
+    backgroundColor: C.purple,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 22,
+  },
+  endedPromptBtnTxt: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
   },
 });

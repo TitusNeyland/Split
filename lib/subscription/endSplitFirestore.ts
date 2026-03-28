@@ -35,7 +35,10 @@ export async function endSubscriptionSplit(params: {
       body: title,
     });
   } catch (e) {
-    // Callable may not be deployed yet; subscription still ended.
-    console.warn('notifySplitEnded:', e);
+    // Callable may not be deployed (`functions/not-found`); subscription still ended.
+    const code = e && typeof e === 'object' && 'code' in e ? String((e as { code: string }).code) : '';
+    if (code !== 'functions/not-found') {
+      console.warn('notifySplitEnded:', e);
+    }
   }
 }

@@ -341,6 +341,49 @@ function memberCountForSubscriptionCard(data: Record<string, unknown>): number {
   return Array.isArray(members) ? members.length : 0;
 }
 
+/** For ended list sub-label: exclude invite-pending rows when `splitMemberShares` exists. */
+function memberCountForEndedSubLabel(data: Record<string, unknown>): number {
+  const shares = getSplitShares(data);
+  if (shares.length > 0) {
+    return shares.filter((s) => !(s as { invitePending?: boolean }).invitePending).length;
+  }
+  const members = data.members;
+  return Array.isArray(members) ? members.length : 0;
+}
+
+export function subscriptionEndedAtMillis(raw: unknown): number | null {
+  if (raw == null) return null;
+  if (typeof raw === 'object' && raw !== null && 'toMillis' in raw) {
+    const fn = (raw as { toMillis?: () => number }).toMillis;
+    if (typeof fn === 'function') {
+      const ms = fn.call(raw);
+      return typeof ms === 'number' && Number.isFinite(ms) ? ms : null;
+    }
+  }
+  if (typeof raw === 'object' && raw !== null && 'seconds' in raw) {
+    const s = (raw as { seconds: number }).seconds;
+    if (typeof s === 'number' && Number.isFinite(s)) return s * 1000;
+  }
+  return null;
+}
+
+/** e.g. "Mar 2026" for ended subscription sub-label. */
+export function formatEndedAtMonthYear(data: Record<string, unknown>): string {
+  const ms = subscriptionEndedAtMillis(data.endedAt);
+  if (ms == null) return '';
+  return new Date(ms).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+}
+
+function formatEndedListCycleLine(data: Record<string, unknown>, nMembers: number): string {
+  const monthYear = formatEndedAtMonthYear(data);
+  const memberPart =
+    nMembers > 0 ? `${nMembers} member${nMembers === 1 ? '' : 's'}` : '';
+  if (monthYear && memberPart) return `Ended ${monthYear} · ${memberPart}`;
+  if (monthYear) return `Ended ${monthYear}`;
+  if (memberPart) return `Ended · ${memberPart}`;
+  return 'Ended';
+}
+
 export function buildSubscriptionCardBase(
   doc: { id: string } & Record<string, unknown>,
   viewerUid: string,
@@ -364,9 +407,9 @@ export function buildSubscriptionCardBase(
   const isComplete = totalCents > 0 && collected >= totalCents;
   const muted = Boolean(options?.muted || splitEnded);
 
-  const nMembers = memberCountForSubscriptionCard(data);
-  const endedCycleLine =
-    nMembers > 0 ? `Ended · ${nMembers} member${nMembers === 1 ? '' : 's'}` : 'Ended';
+  const endedCycleLine = splitEnded
+    ? formatEndedListCycleLine(data, memberCountForEndedSubLabel(data))
+    : '';
 
   return {
     serviceName: serviceNameForIcon(data),
