@@ -1,23 +1,28 @@
 import React, { useEffect, useState } from 'react';
-;
 import { View, Text, StyleSheet, Pressable, ActivityIndicator, Modal } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { useRouter } from 'expo-router';
 import { InviteShareSheetPanel } from './InviteShareSheetPanel';
 import { getFirebaseAuth, isFirebaseConfigured } from '../../../lib/firebase';
-import { createPendingInvite } from '../../../lib/friends/friendSystemFirestore';
+import {
+  countActiveSubscriptionsForUser,
+  countFriendshipsForUser,
+  createPendingInvite,
+} from '../../../lib/friends/friendSystemFirestore';
 import { buildInviteShareMessage, buildInviteUrl } from '../../../lib/friends/inviteLinks';
 
 type Props = {
   visible: boolean;
   onClose: () => void;
+  /** Skip creation and show share for this id (e.g. after resending an invite). */
+  prefilledInviteId?: string | null;
 };
 
 /**
  * Bottom-sheet style invite flow (same behavior as `/invite-share`) for use on the Friends hub.
  */
-export default function FriendsInviteModal({ visible, onClose }: Props) {
+export default function FriendsInviteModal({ visible, onClose, prefilledInviteId = null }: Props) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [authReady, setAuthReady] = useState(false);
@@ -54,15 +59,27 @@ export default function FriendsInviteModal({ visible, onClose }: Props) {
   }, [visible]);
 
   useEffect(() => {
-    if (!visible || !authReady || !user?.uid || fatalError || createError) return;
+    if (!visible || !authReady || !user?.uid || fatalError) return;
+    if (prefilledInviteId) {
+      setInviteId(prefilledInviteId);
+      setCreating(false);
+      return;
+    }
+    if (createError) return;
     let cancelled = false;
     (async () => {
       setCreating(true);
       setCreateError(null);
       try {
+        const [splits, friends] = await Promise.all([
+          countActiveSubscriptionsForUser(user.uid),
+          countFriendshipsForUser(user.uid),
+        ]);
         const id = await createPendingInvite({
           creatorUid: user.uid,
           connectedVia: 'direct_invite',
+          senderActiveSplits: splits,
+          senderFriendCount: friends,
         });
         if (!cancelled) setInviteId(id);
       } catch (e) {
@@ -76,7 +93,7 @@ export default function FriendsInviteModal({ visible, onClose }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [visible, authReady, user?.uid, fatalError, createError]);
+  }, [visible, authReady, user?.uid, fatalError, createError, prefilledInviteId]);
 
   const inviteUrl = inviteId ? buildInviteUrl(inviteId) : '';
   const shareMessage = inviteId ? buildInviteShareMessage(inviteId) : '';

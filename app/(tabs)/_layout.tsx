@@ -1,12 +1,9 @@
 import React from 'react';
-;
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { SubscriptionsProvider } from '../contexts/SubscriptionsContext';
 
 export default function TabLayout() {
   return (
-    <SubscriptionsProvider>
     <Tabs
       screenOptions={{
         tabBarActiveTintColor: '#534AB7',
@@ -66,7 +63,6 @@ export default function TabLayout() {
         }}
       />
     </Tabs>
-    </SubscriptionsProvider>
   );
 }
 

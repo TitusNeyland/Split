@@ -22,6 +22,8 @@ import { getFirebaseFirestore } from '../firebase';
 
 export const FRIENDSHIPS_COLLECTION = 'friendships';
 export const INVITES_COLLECTION = 'invites';
+/** Doc id = SHA-256 hex of E.164 phone; readable by any signed-in user for contact matching. */
+export const CONTACT_PHONE_INDEX_COLLECTION = 'contact_phone_index';
 
 export type FriendshipConnectedVia =
   | 'split_invite'
@@ -58,6 +60,9 @@ export type FirestoreInvite = {
   status: InviteStatus;
   acceptedBy?: string;
   acceptedAt?: Timestamp;
+  /** Snapshot at invite creation for the accept screen (invitee cannot query sender's data). */
+  senderActiveSplits?: number;
+  senderFriendCount?: number;
 };
 
 /** `users/{uid}/contacts/{docId}` — doc id is usually `phoneHash` for dedup. */
@@ -109,6 +114,9 @@ export type CreatePendingInviteInput = {
   recipientE164?: string;
   recipientEmailRaw?: string;
   connectedVia?: FriendshipConnectedVia;
+  /** Stored on the invite doc for recipients who cannot read the sender's collections. */
+  senderActiveSplits?: number;
+  senderFriendCount?: number;
 };
 
 /**
@@ -143,6 +151,12 @@ export async function createPendingInvite(input: CreatePendingInviteInput): Prom
   }
   if (input.recipientEmailRaw) {
     payload.recipientEmail = normalizeInviteEmail(input.recipientEmailRaw);
+  }
+  if (typeof input.senderActiveSplits === 'number' && Number.isFinite(input.senderActiveSplits)) {
+    payload.senderActiveSplits = Math.max(0, Math.round(input.senderActiveSplits));
+  }
+  if (typeof input.senderFriendCount === 'number' && Number.isFinite(input.senderFriendCount)) {
+    payload.senderFriendCount = Math.max(0, Math.round(input.senderFriendCount));
   }
 
   await setDoc(ref, payload);
@@ -345,4 +359,99 @@ export async function upsertUserContact(opts: {
     },
     { merge: true }
   );
+}
+
+export type ContactPhoneIndexDoc = {
+  uid: string;
+  displayName: string;
+  avatarUrl: string | null;
+  updatedAt?: Timestamp;
+};
+
+/** Registers this device's phone hash so contact discovery can find this user (first-write wins per hash). */
+export async function upsertContactPhoneIndexForUser(opts: {
+  uid: string;
+  phoneE164: string;
+  displayName: string;
+  avatarUrl: string | null;
+}): Promise<void> {
+  const db = getFirebaseFirestore();
+  if (!db) throw new Error('Firestore is not configured.');
+  const hash = await sha256HexUtf8(opts.phoneE164.trim());
+  const ref = doc(db, CONTACT_PHONE_INDEX_COLLECTION, hash);
+  await setDoc(
+    ref,
+    {
+      uid: opts.uid,
+      displayName: opts.displayName.trim() || 'mySplit user',
+      avatarUrl: opts.avatarUrl ?? null,
+      updatedAt: serverTimestamp(),
+    } as ContactPhoneIndexDoc,
+    { merge: true }
+  );
+}
+
+/**
+ * Looks up other users who registered the same phone hash (see `upsertContactPhoneIndexForUser`).
+ */
+export async function lookupUsersByPhoneHashes(
+  hashes: string[],
+  excludeUid: string
+): Promise<{ uid: string; displayName: string; avatarUrl: string | null }[]> {
+  const db = getFirebaseFirestore();
+  if (!db || hashes.length === 0) return [];
+  const uniq = [...new Set(hashes)].filter(Boolean);
+  const out: { uid: string; displayName: string; avatarUrl: string | null }[] = [];
+  const seenUids = new Set<string>();
+  await Promise.all(
+    uniq.map(async (hash) => {
+      const snap = await getDoc(doc(db, CONTACT_PHONE_INDEX_COLLECTION, hash));
+      if (!snap.exists()) return;
+      const d = snap.data() as ContactPhoneIndexDoc;
+      const uid = typeof d.uid === 'string' ? d.uid : '';
+      if (!uid || uid === excludeUid) return;
+      if (seenUids.has(uid)) return;
+      seenUids.add(uid);
+      out.push({
+        uid,
+        displayName: typeof d.displayName === 'string' && d.displayName.trim() ? d.displayName : 'Friend',
+        avatarUrl: typeof d.avatarUrl === 'string' ? d.avatarUrl : null,
+      });
+    })
+  );
+  return out;
+}
+
+/** Active `subscriptions` docs (memberUids or members contains uid, status active). */
+export async function countActiveSubscriptionsForUser(uid: string): Promise<number> {
+  const db = getFirebaseFirestore();
+  if (!db) return 0;
+  try {
+    const q1 = query(collection(db, 'subscriptions'), where('memberUids', 'array-contains', uid));
+    const q2 = query(collection(db, 'subscriptions'), where('members', 'array-contains', uid));
+    const [s1, s2] = await Promise.all([getDocs(q1), getDocs(q2)]);
+    const seen = new Set<string>();
+    let n = 0;
+    for (const d of [...s1.docs, ...s2.docs]) {
+      if (seen.has(d.id)) continue;
+      seen.add(d.id);
+      const st = String((d.data() as { status?: string }).status ?? 'active').toLowerCase();
+      if (st === 'active') n++;
+    }
+    return n;
+  } catch {
+    return 0;
+  }
+}
+
+export async function countFriendshipsForUser(uid: string): Promise<number> {
+  const db = getFirebaseFirestore();
+  if (!db) return 0;
+  try {
+    const q = query(collection(db, FRIENDSHIPS_COLLECTION), where('users', 'array-contains', uid));
+    const snap = await getDocs(q);
+    return snap.size;
+  } catch {
+    return 0;
+  }
 }

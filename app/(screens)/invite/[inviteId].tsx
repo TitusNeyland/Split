@@ -1,5 +1,4 @@
 import React, { useCallback, useEffect, useState } from 'react';
-;
 import {
   View,
   Text,
@@ -270,11 +269,15 @@ export default function AcceptInviteScreen() {
         </View>
         <View style={styles.statsRow}>
           <View style={styles.stat}>
-            <Text style={styles.statVal}>—</Text>
+            <Text style={styles.statVal}>
+              {invite.senderActiveSplits != null ? String(invite.senderActiveSplits) : '—'}
+            </Text>
             <Text style={styles.statLbl}>Active splits</Text>
           </View>
           <View style={styles.stat}>
-            <Text style={styles.statVal}>—</Text>
+            <Text style={styles.statVal}>
+              {invite.senderFriendCount != null ? String(invite.senderFriendCount) : '—'}
+            </Text>
             <Text style={styles.statLbl}>Friends</Text>
           </View>
           <View style={styles.stat}>
