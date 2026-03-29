@@ -1,14 +1,16 @@
-import React, { useMemo, useState } from 'react';
-;
-import { View, Text, StyleSheet, Pressable, Image } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { View, Text, StyleSheet, Pressable, Image, ActivityIndicator } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { CURRENT_USER_AVATAR, getFriendAvatarColors } from '../../../lib/friends/friendAvatar';
+import { getFirebaseFirestore } from '../../../lib/firebase';
+import { useHomeFriendDirectory } from '../../../lib/home/useFriendUidsFromFirestore';
+import { useSubscriptions } from '../../contexts/SubscriptionsContext';
 import {
-  PROFILE_FRIEND_BALANCES,
-  PROFILE_TOTAL_FRIEND_COUNT,
+  buildProfileFriendBalanceRowsFromSubscriptions,
   computeNetBarTotals,
-  getProfileFriendStackEntries,
+  getStackEntriesFromProfileRows,
   type ProfileFriendBalanceRow,
 } from '../../../lib/profile';
 
@@ -31,6 +33,8 @@ type Props = {
   userInitials: string;
   /** Current user profile photo from Firestore `avatarUrl`. */
   userAvatarUrl?: string | null;
+  /** Logged-in user id; when set, friend count is loaded from Firestore. */
+  uid: string | null;
 };
 
 function NetBalanceBar({ owedToYou, youOwe }: { owedToYou: number; youOwe: number }) {
@@ -190,12 +194,60 @@ function BalanceRow({
   );
 }
 
-export default function ProfileFriendsBalancesCard({ userInitials, userAvatarUrl }: Props) {
+export default function ProfileFriendsBalancesCard({ userInitials, userAvatarUrl, uid }: Props) {
   const [expanded, setExpanded] = useState(false);
-  const { owedToYou, youOwe } = useMemo(() => computeNetBarTotals(PROFILE_FRIEND_BALANCES), []);
-  const stackEntries = useMemo(() => getProfileFriendStackEntries(), []);
-  const visibleStack = stackEntries.slice(0, STACK_SHOW);
-  const overflow = Math.max(0, PROFILE_TOTAL_FRIEND_COUNT - visibleStack.length);
+  const [friendsCount, setFriendsCount] = useState<number | null>(null);
+  const { subscriptions, loading: subscriptionsLoading } = useSubscriptions();
+  const { friendUids, displayNameByUid, loading: friendDirectoryLoading } = useHomeFriendDirectory(uid);
+
+  useEffect(() => {
+    if (!uid) {
+      setFriendsCount(null);
+      return;
+    }
+    const db = getFirebaseFirestore();
+    if (!db) {
+      setFriendsCount(null);
+      return;
+    }
+    const q = query(collection(db, 'friendships'), where('users', 'array-contains', uid));
+    const unsub = onSnapshot(
+      q,
+      (snapshot) => {
+        setFriendsCount(snapshot.size);
+      },
+      () => {
+        setFriendsCount(0);
+      }
+    );
+    return unsub;
+  }, [uid]);
+
+  const profileRows = useMemo(() => {
+    if (!uid) return [];
+    return buildProfileFriendBalanceRowsFromSubscriptions(
+      uid,
+      subscriptions,
+      friendUids,
+      displayNameByUid
+    );
+  }, [uid, subscriptions, friendUids, displayNameByUid]);
+
+  const { owedToYou, youOwe } = useMemo(() => computeNetBarTotals(profileRows), [profileRows]);
+
+  const visibleStack = useMemo(
+    () => getStackEntriesFromProfileRows(profileRows).slice(0, STACK_SHOW),
+    [profileRows]
+  );
+
+  const balancesLoading = Boolean(uid && (subscriptionsLoading || friendDirectoryLoading));
+  const overflow =
+    friendsCount === null ? 0 : Math.max(0, friendsCount - visibleStack.length);
+
+  const friendsCountA11y =
+    friendsCount === null
+      ? 'loading'
+      : `${friendsCount} ${friendsCount === 1 ? 'friend' : 'friends'}`;
 
   const openFriendActivity = (id: string) => {
     router.push({ pathname: '/activity', params: { friendId: id } });
@@ -212,7 +264,7 @@ export default function ProfileFriendsBalancesCard({ userInitials, userAvatarUrl
           onPress={() => router.push('/friends')}
           style={({ pressed }) => [styles.headerMain, pressed && styles.rowPressed]}
           accessibilityRole="button"
-          accessibilityLabel={`Friends, ${PROFILE_TOTAL_FRIEND_COUNT} friends. Open friends hub`}
+          accessibilityLabel={`Friends, ${friendsCountA11y}. Open friends hub`}
         >
           <View style={styles.rowIconPurple}>
             <Ionicons name="people-outline" size={21} color={C.purple} />
@@ -239,7 +291,10 @@ export default function ProfileFriendsBalancesCard({ userInitials, userAvatarUrl
           accessibilityLabel={expanded ? 'Collapse friend balances' : 'Expand friend balances'}
           accessibilityState={{ expanded }}
         >
-          <Text style={styles.friendCountTxt}>{PROFILE_TOTAL_FRIEND_COUNT} friends</Text>
+          <Text style={styles.friendCountTxt}>
+            {friendsCount === null ? '—' : friendsCount}{' '}
+            {friendsCount === 1 ? 'friend' : 'friends'}
+          </Text>
           <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={20} color="#C8C6C0" />
         </Pressable>
       </View>
@@ -249,19 +304,33 @@ export default function ProfileFriendsBalancesCard({ userInitials, userAvatarUrl
           <View style={styles.netBarWrap}>
             <NetBalanceBar owedToYou={owedToYou} youOwe={youOwe} />
           </View>
-          {PROFILE_FRIEND_BALANCES.map((row, i) => (
-            <View key={row.id}>
-              {i > 0 ? <View style={styles.rowDividerInset} /> : null}
-              <View style={styles.expandedRowPad}>
-                <BalanceRow
-                  row={row}
-                  userInitials={userInitials}
-                  userAvatarUrl={userAvatarUrl}
-                  onPress={() => openFriendActivity(row.id)}
-                />
-              </View>
+          {balancesLoading ? (
+            <View style={styles.expandedLoadingWrap}>
+              <ActivityIndicator size="small" color={C.purple} />
             </View>
-          ))}
+          ) : profileRows.length === 0 ? (
+            <View style={styles.expandedEmptyWrap}>
+              <Text style={styles.expandedEmptyTxt}>
+                {!uid
+                  ? 'Balances appear when you sign in.'
+                  : 'No shared subscription balances with friends yet.'}
+              </Text>
+            </View>
+          ) : (
+            profileRows.map((row, i) => (
+              <View key={row.id}>
+                {i > 0 ? <View style={styles.rowDividerInset} /> : null}
+                <View style={styles.expandedRowPad}>
+                  <BalanceRow
+                    row={row}
+                    userInitials={userInitials}
+                    userAvatarUrl={userAvatarUrl}
+                    onPress={() => openFriendActivity(row.id)}
+                  />
+                </View>
+              </View>
+            ))
+          )}
         </>
       ) : null}
 
@@ -533,5 +602,24 @@ const styles = StyleSheet.create({
   expandedRowPad: {
     paddingHorizontal: 14,
     paddingVertical: 11,
+  },
+  expandedLoadingWrap: {
+    paddingVertical: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#F0EEE9',
+  },
+  expandedEmptyWrap: {
+    paddingVertical: 22,
+    paddingHorizontal: 18,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#F0EEE9',
+  },
+  expandedEmptyTxt: {
+    fontSize: 14,
+    color: C.muted,
+    textAlign: 'center',
+    lineHeight: 20,
   },
 });
