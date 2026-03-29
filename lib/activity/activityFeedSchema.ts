@@ -35,7 +35,6 @@ export type ActivityEventType =
   | 'split_member_joined'
   | 'split_member_removed'
   | 'split_ended'
-  | 'split_restarted'
   | 'split_percentage_updated'
   | 'split_price_updated'
   // Friends

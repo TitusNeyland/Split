@@ -120,9 +120,7 @@ export function EndSplitConfirmSheet({
               <Ionicons name="close" size={30} color={C.red} />
             </View>
             <Text style={styles.title}>End this split?</Text>
-            <Text style={styles.sub}>
-              Billing stops immediately. History and settings are saved — you can restart anytime.
-            </Text>
+            <Text style={styles.sub}>Billing stops immediately. Your history is saved.</Text>
 
             <View style={styles.infoCard}>
               <View style={styles.infoRow}>

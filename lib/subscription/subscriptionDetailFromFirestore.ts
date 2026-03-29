@@ -24,6 +24,7 @@ import {
   isInviteSlotExpired,
   isShareRowPendingInvite,
   normalizeSubscriptionStatus,
+  subscriptionEndedAtMillis,
 } from './subscriptionToCardModel';
 
 type ShareRow = {
@@ -222,6 +223,11 @@ export function mapFirestoreSubscriptionToDetailModel(
 
   const autoCharge = data.autoCharge === true ? 'on' : 'off';
   const lifecycleStatus = normalizeSubscriptionStatus(data.status) === 'ended' ? 'ended' : 'active';
+  const endedMs = subscriptionEndedAtMillis(data.endedAt);
+  const endedOnLabel =
+    lifecycleStatus === 'ended' && endedMs != null
+      ? formatFirstChargeDateLong(new Date(endedMs))
+      : undefined;
 
   const allPaid = activeMembersTotalCents > 0 && collectedCents >= activeMembersTotalCents;
   const history: SubscriptionHistoryCycle[] = [
@@ -269,6 +275,7 @@ export function mapFirestoreSubscriptionToDetailModel(
     payerName: isOwner ? undefined : payerName,
     autoCharge,
     lifecycleStatus,
+    endedOnLabel,
     members,
     paidMemberCount,
     collectedCents,

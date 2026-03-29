@@ -18,7 +18,6 @@ export const ACTIVITY_ROW_CONFIG = {
   split_member_joined: { icon: 'person_green', badge: 'joined_green' },
   split_member_removed: { icon: 'person_gray', badge: 'none' },
   split_ended: { icon: 'service', badge: 'ended_gray' },
-  split_restarted: { icon: 'service', badge: 'restarted_purple' },
   split_percentage_updated: { icon: 'edit', badge: 'updated_purple' },
   split_price_updated: { icon: 'service', badge: 'price_amber' },
   friend_connected: { icon: 'avatar', badge: 'connected_purple' },

@@ -80,9 +80,8 @@ export type SubscriptionCardProps = {
   hideEditSplit?: boolean;
   /** Roster members still on pending invite (amber pill on Active tab cards). */
   pendingInviteCount?: number;
-  /** Ended split: Restart + Delete row (hides edit split). */
+  /** Ended split: Delete only (hides edit split). */
   splitEndedActions?: {
-    onRestart: () => void;
     onDelete: () => void;
   };
   /** Visual de-emphasis for ended splits on list cards. */
@@ -299,14 +298,6 @@ export function SubscriptionCard({
       {splitEndedActions ? (
         <View style={styles.endedActionsRow}>
           <Pressable
-            style={styles.endedRestartBtn}
-            onPress={splitEndedActions.onRestart}
-            accessibilityRole="button"
-            accessibilityLabel="Restart split"
-          >
-            <Text style={styles.endedRestartTxt}>Restart split</Text>
-          </Pressable>
-          <Pressable
             style={styles.endedDeleteBtn}
             onPress={splitEndedActions.onDelete}
             accessibilityRole="button"
@@ -356,21 +347,8 @@ const styles = StyleSheet.create({
   },
   endedActionsRow: {
     flexDirection: 'row',
-    gap: 8,
     paddingHorizontal: 13,
     paddingBottom: 11,
-  },
-  endedRestartBtn: {
-    flex: 1,
-    paddingVertical: 8,
-    borderRadius: 10,
-    backgroundColor: '#EEEDFE',
-    alignItems: 'center',
-  },
-  endedRestartTxt: {
-    fontSize: 11,
-    fontWeight: '500',
-    color: C.purple,
   },
   endedDeleteBtn: {
     flex: 1,

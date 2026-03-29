@@ -21,7 +21,6 @@ export const ACTIVITY_FILTER_SPLITS: ActivityEventType[] = [
   'split_member_joined',
   'split_member_removed',
   'split_ended',
-  'split_restarted',
   'split_percentage_updated',
   'split_price_updated',
   'billing_cycle_complete',
@@ -37,7 +36,11 @@ export const ACTIVITY_FILTER_FRIENDS: ActivityEventType[] = [
 ];
 
 const PAY_SET = new Set<string>(ACTIVITY_FILTER_PAYMENTS);
-const SPL_SET = new Set<string>(ACTIVITY_FILTER_SPLITS);
+const SPL_SET = new Set<string>([
+  ...ACTIVITY_FILTER_SPLITS,
+  /** Legacy Firestore events (no longer emitted). */
+  'split_restarted',
+]);
 const FR_SET = new Set<string>(ACTIVITY_FILTER_FRIENDS);
 
 export type ActivityFilterTabId = 'all' | 'payments' | 'splits' | 'friends';
