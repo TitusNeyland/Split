@@ -17,6 +17,7 @@ const C = {
   amberBanner: '#FDE68A',
   amberBannerText: '#78350F',
   amberOk: '#B45309',
+  redMuted: '#A32D2D',
 };
 
 export type SubscriptionCardMember = {
@@ -28,6 +29,8 @@ export type SubscriptionCardMember = {
   avatarUrl?: string | null;
   /** Pending invite slot — dashed pip + clock icon. */
   pending?: boolean;
+  /** Expired invite slot — dashed pip + alert styling. */
+  inviteExpired?: boolean;
 };
 
 export type SubscriptionCardProps = {
@@ -92,17 +95,26 @@ function MemberPip({
   color,
   avatarUrl,
   pending,
+  inviteExpired,
 }: {
   initials: string;
   backgroundColor: string;
   color: string;
   avatarUrl?: string | null;
   pending?: boolean;
+  inviteExpired?: boolean;
 }) {
   if (avatarUrl) {
     return (
       <View style={[styles.pip, styles.pipPhoto]}>
         <Image source={{ uri: avatarUrl }} style={styles.pipImg} accessibilityLabel="Member photo" />
+      </View>
+    );
+  }
+  if (inviteExpired) {
+    return (
+      <View style={styles.pipInviteExpired} accessibilityLabel="Expired invite">
+        <Ionicons name="alert-circle-outline" size={12} color={C.redMuted} style={styles.pipPendingIcon} />
       </View>
     );
   }
@@ -227,6 +239,7 @@ export function SubscriptionCard({
                 color={m.color}
                 avatarUrl={m.avatarUrl}
                 pending={m.pending}
+                inviteExpired={m.inviteExpired}
               />
             ))}
           </View>
@@ -533,6 +546,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: -6,
     opacity: 0.72,
+  },
+  pipInviteExpired: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    borderColor: '#E8B4B4',
+    backgroundColor: '#FCEBEB',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: -6,
+    opacity: 0.88,
   },
   pipPendingIcon: {
     opacity: 0.85,

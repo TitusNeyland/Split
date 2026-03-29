@@ -24,6 +24,8 @@ export type SubscriptionDetailMember = {
   cycleStatus: CyclePaymentStatus;
   /** Not on app yet — split-specific invite outstanding */
   invitePending?: boolean;
+  /** Roster/slot expired before acceptance (scheduled job). */
+  inviteExpired?: boolean;
   inviteId?: string;
   pendingInviteEmail?: string | null;
   /** Roster `email` when present (pending invite display). */

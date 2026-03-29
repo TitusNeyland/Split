@@ -28,8 +28,10 @@ export async function removePendingSplitInvite(opts: {
     const idx = shares.findIndex((s) => s && (s as { inviteId?: string }).inviteId === opts.inviteId);
     if (idx < 0) throw new Error('Invite slot not found.');
 
-    const oldShare = shares[idx] as { memberId?: string; invitePending?: boolean };
-    if (!oldShare.invitePending) throw new Error('This member is not a pending invite.');
+    const oldShare = shares[idx] as { memberId?: string; invitePending?: boolean; inviteExpired?: boolean };
+    const isUnfilledInviteSlot =
+      oldShare.invitePending === true || oldShare.inviteExpired === true;
+    if (!isUnfilledInviteSlot) throw new Error('This row is not a pending or expired invite slot.');
 
     const oldMemberId = typeof oldShare.memberId === 'string' ? oldShare.memberId : '';
     shares.splice(idx, 1);

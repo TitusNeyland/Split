@@ -24,6 +24,8 @@ type CardMemberPip = {
   avatarUrl?: string | null;
   /** Invite pending slot; dashed pip + clock icon. */
   pending?: boolean;
+  /** Expired invite slot; dashed pip + alert styling. */
+  inviteExpired?: boolean;
 };
 
 type StatusPill = {
@@ -159,6 +161,8 @@ type ShareRow = {
   amountCents?: number;
   percent?: number;
   invitePending?: boolean;
+  /** Set when roster slot expired (job) or share marked expired. */
+  inviteExpired?: boolean;
   role?: string;
 };
 
@@ -176,23 +180,37 @@ function getRosterMemberStatusByMemberId(data: Record<string, unknown>): Map<str
   return map;
 }
 
-/** True when this share row is an invite slot that has not been accepted yet. */
+/** Roster or share row indicates this invite slot expired before acceptance. */
+export function isInviteSlotExpired(data: Record<string, unknown>, s: ShareRow): boolean {
+  if (s.role === 'owner') return false;
+  if (s.inviteExpired === true) return true;
+  const id = String(s.memberId ?? '');
+  return getRosterMemberStatusByMemberId(data).get(id) === 'expired';
+}
+
+/** True when this share row is a pending (non-expired) invite slot. */
 export function isShareRowPendingInvite(data: Record<string, unknown>, s: ShareRow): boolean {
   if (s.role === 'owner') return false;
+  if (isInviteSlotExpired(data, s)) return false;
   if (s.invitePending === true) return true;
   const id = String(s.memberId ?? '');
   return getRosterMemberStatusByMemberId(data).get(id) === 'pending';
 }
 
+/** Pending or expired invite slot — excluded from billing progress denominator/collected. */
+export function isShareRowUnfilledInviteSlot(data: Record<string, unknown>, s: ShareRow): boolean {
+  return isShareRowPendingInvite(data, s) || isInviteSlotExpired(data, s);
+}
+
 /**
- * Sum of amountCents on non-pending share rows (pending invite slots excluded from progress math).
+ * Sum of amountCents on filled member share rows (pending/expired invite slots excluded).
  */
 export function getActiveMembersTotalCents(data: Record<string, unknown>): number {
   const shares = getSplitShares(data);
   if (shares.length === 0) return getTotalCents(data);
   let sum = 0;
   for (const s of shares) {
-    if (isShareRowPendingInvite(data, s as ShareRow)) continue;
+    if (isShareRowUnfilledInviteSlot(data, s as ShareRow)) continue;
     const amt =
       typeof s.amountCents === 'number' && Number.isFinite(s.amountCents) ? Math.round(s.amountCents) : 0;
     sum += amt;
@@ -206,7 +224,7 @@ export function collectedCentsActiveMembersOnly(data: Record<string, unknown>): 
   if (shares.length > 0) {
     let sum = 0;
     for (const s of shares) {
-      if (isShareRowPendingInvite(data, s as ShareRow)) continue;
+      if (isShareRowUnfilledInviteSlot(data, s as ShareRow)) continue;
       const id = String(s.memberId ?? '');
       if (!id) continue;
       const st = String(statusMap[id] ?? '').toLowerCase();
@@ -236,7 +254,7 @@ export function getViewerShareCents(data: Record<string, unknown>, viewerUid: st
     if (
       viewerUid &&
       ownerId === viewerUid &&
-      hasInvitePendingInShares(shares as { role?: string; invitePending?: boolean }[])
+      hasInvitePendingInShares(shares as { role?: string; invitePending?: boolean; inviteExpired?: boolean }[])
     ) {
       return Math.round(total);
     }
@@ -364,6 +382,7 @@ export function buildMemberPips(
   return shares.map((s, i) => {
     const id = String(s.memberId ?? i);
     const pending = isShareRowPendingInvite(data, s as ShareRow);
+    const inviteExpired = isInviteSlotExpired(data, s as ShareRow);
     const initials =
       typeof s.initials === 'string' && s.initials.trim()
         ? s.initials.trim().slice(0, 2).toUpperCase()
@@ -377,6 +396,7 @@ export function buildMemberPips(
       color,
       avatarUrl: id === viewerUid ? viewerAvatarUrl : null,
       pending,
+      inviteExpired,
     };
   });
 }
@@ -422,7 +442,10 @@ function memberCountForSubscriptionCard(data: Record<string, unknown>): number {
 function memberCountForEndedSubLabel(data: Record<string, unknown>): number {
   const shares = getSplitShares(data);
   if (shares.length > 0) {
-    return shares.filter((s) => !(s as { invitePending?: boolean }).invitePending).length;
+    return shares.filter((s) => {
+      const row = s as { invitePending?: boolean; inviteExpired?: boolean };
+      return !row.invitePending && !row.inviteExpired;
+    }).length;
   }
   const members = data.members;
   return Array.isArray(members) ? members.length : 0;
