@@ -84,6 +84,7 @@ export type ActivityFeedKind =
   | 'split_invite_sent'
   | 'split_invite_accepted'
   | 'split_invite_declined'
+  | 'split_invite_expired'
   | 'split_member_joined'
   | 'split_member_removed'
   | 'split_ended'
@@ -395,6 +396,29 @@ export function activityEventToFeedRow(
         amountColor: C.muted,
         badge: 'Declined',
         badgeVariant: 'gray',
+        _activityCreatedAtMs: createdMs,
+      };
+    }
+    case 'split_invite_expired': {
+      const inviteeName =
+        typeof meta.inviteeName === 'string' && meta.inviteeName.trim()
+          ? meta.inviteeName.trim()
+          : 'Member';
+      const first = inviteeName.split(/\s+/)[0] ?? inviteeName;
+      return {
+        id: event.id,
+        kind: 'split_invite_expired',
+        serviceMark,
+        icon: 'time-outline',
+        iconBg: '#FAEEDA',
+        iconColor: C.orange,
+        title: `${first}'s invite to ${brand} expired`,
+        sub: 'Invite someone else',
+        time,
+        amountColor: C.muted,
+        badge: 'Expired',
+        badgeVariant: 'amber',
+        joinSubscriptionId: typeof event.subscriptionId === 'string' ? event.subscriptionId : undefined,
         _activityCreatedAtMs: createdMs,
       };
     }

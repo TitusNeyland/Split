@@ -350,8 +350,9 @@ function stringifyFcmData(data) {
 
 /**
  * Sends a mySplit notification to all session tokens for `uid`. Respects `notificationPreferences`.
+ * @param {{ title?: string }} [opts]
  */
-async function sendMySplitPushToUser(db, uid, body, dataPayload) {
+async function sendMySplitPushToUser(db, uid, body, dataPayload, opts) {
   const recipientDoc = await db.collection('users').doc(uid).get();
   const prefs = recipientDoc.data()?.notificationPreferences;
   if (prefs && prefs.notificationsEnabled === false) return;
@@ -364,6 +365,8 @@ async function sendMySplitPushToUser(db, uid, body, dataPayload) {
   });
 
   const data = stringifyFcmData(dataPayload);
+  const title =
+    opts && typeof opts.title === 'string' && opts.title.trim() ? opts.title.trim() : 'mySplit';
 
   await Promise.all(
     [...tokens].map((token) =>
@@ -371,7 +374,7 @@ async function sendMySplitPushToUser(db, uid, body, dataPayload) {
         .messaging()
         .send({
           token,
-          notification: { title: 'mySplit', body },
+          notification: { title, body },
           data,
         })
         .catch((e) => {
@@ -379,6 +382,137 @@ async function sendMySplitPushToUser(db, uid, body, dataPayload) {
         })
     )
   );
+}
+
+/** Real Firebase Auth uids only (skip invite-email-* placeholders). */
+function isLikelyFirebaseUidForInvite(uid) {
+  if (typeof uid !== 'string' || uid.length < 20) return false;
+  if (uid.startsWith('invite-')) return false;
+  return /^[a-zA-Z0-9]+$/.test(uid);
+}
+
+function invitedAtToMillis(invitedAt) {
+  if (!invitedAt) return null;
+  if (typeof invitedAt.toMillis === 'function') return invitedAt.toMillis();
+  if (typeof invitedAt.seconds === 'number') return invitedAt.seconds * 1000;
+  return null;
+}
+
+/**
+ * Push + activity feed + bell for one pending invitee once `inviteId` exists on the share row.
+ */
+async function notifySplitInvitePendingMember(db, subId, after, memberUid, inviteId) {
+  const ownerUid = after.ownerUid;
+  if (typeof ownerUid !== 'string' || !ownerUid || memberUid === ownerUid) return;
+  if (!isLikelyFirebaseUidForInvite(memberUid)) return;
+  if (typeof inviteId !== 'string' || !inviteId.trim()) return;
+
+  const shares = Array.isArray(after.splitMemberShares) ? after.splitMemberShares : [];
+  const row = shares.find((s) => s && s.memberId === memberUid);
+  const memberShare = row && typeof row.amountCents === 'number' ? row.amountCents : 0;
+
+  let memberPercentage;
+  const roster = Array.isArray(after.members) ? after.members : [];
+  const rm = roster.find((m) => m && typeof m === 'object' && m.uid === memberUid);
+  if (rm && typeof rm.percentage === 'number' && Number.isFinite(rm.percentage)) {
+    memberPercentage = rm.percentage;
+  }
+
+  const subscriptionName = subscriptionLabelFromData(after);
+  const serviceIdSlug = slugifyServiceIdFromName(subscriptionName);
+
+  const ownerDoc = await db.collection('users').doc(ownerUid).get();
+  const od = ownerDoc.data() || {};
+  const ownerName =
+    typeof od.displayName === 'string' && od.displayName.trim() ? od.displayName.trim() : 'Someone';
+  const ownerAvatarUrl = typeof od.avatarUrl === 'string' ? od.avatarUrl : null;
+
+  const pushTitle = `${ownerName} invited you to ${subscriptionName}`;
+  const pushBody = `Your share would be $${(memberShare / 100).toFixed(2)}/month · Tap to accept or decline`;
+
+  try {
+    await sendMySplitPushToUser(
+      db,
+      memberUid,
+      pushBody,
+      {
+        type: 'split_invite',
+        subscriptionId: subId,
+        inviteId,
+      },
+      { title: pushTitle }
+    );
+  } catch (e) {
+    console.warn('notifySplitInvitePendingMember: push failed', memberUid, e?.message || e);
+  }
+
+  const expiresAt = admin.firestore.Timestamp.fromMillis(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+  try {
+    await appendActivityEvent(db, memberUid, {
+      type: 'split_invite_received',
+      actorUid: ownerUid,
+      actorName: ownerName,
+      actorAvatarUrl: ownerAvatarUrl,
+      subscriptionId: subId,
+      subscriptionName,
+      serviceId: serviceIdSlug,
+      amount: memberShare,
+      metadata: {
+        inviterUid: ownerUid,
+        inviteId,
+        memberPercentage,
+        expiresAt,
+      },
+    });
+  } catch (e) {
+    console.warn('notifySplitInvitePendingMember: activity failed', memberUid, e?.message || e);
+  }
+
+  try {
+    await db
+      .collection('users')
+      .doc(memberUid)
+      .collection('notifications')
+      .add({
+        type: 'split_invite',
+        title: pushTitle,
+        body: `Your share · $${(memberShare / 100).toFixed(2)}/month`,
+        read: false,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        deepLink: `/subscription/${subId}`,
+        subscriptionId: subId,
+        serviceId: serviceIdSlug,
+        metadata: {
+          inviterUid: ownerUid,
+          inviteId,
+          memberShare,
+          memberPercentage,
+          subscriptionId: subId,
+          subscriptionName,
+          serviceId: serviceIdSlug,
+        },
+      });
+    await incrementUnreadNotificationCount(db, memberUid);
+  } catch (e) {
+    console.warn('notifySplitInvitePendingMember: notification doc failed', memberUid, e?.message || e);
+  }
+
+  const inviteeName =
+    row && typeof row.displayName === 'string' && row.displayName.trim()
+      ? row.displayName.trim()
+      : await getUserDisplayName(db, memberUid);
+  try {
+    await appendActivityEvent(db, ownerUid, {
+      type: 'split_invite_sent',
+      subscriptionId: subId,
+      subscriptionName,
+      serviceId: serviceIdSlug,
+      metadata: { inviteeUid: memberUid, inviteeName, userShareCents: memberShare, inviteId },
+    });
+  } catch (e) {
+    console.warn('notifySplitInvitePendingMember: owner activity failed', e?.message || e);
+  }
 }
 
 /**
@@ -577,105 +711,9 @@ exports.onFriendshipCreatedActivityFeed = onDocumentCreated('friendships/{friend
 });
 
 /**
- * Writes split_invite in-app notifications for the given uids (caller excludes owner).
- * @param {FirebaseFirestore.Firestore} db
- * @param {string} subId
- * @param {Record<string, unknown>} after
- * @param {string[]} newUids
- */
-async function sendSplitInviteInAppNotifications(db, subId, after, newUids) {
-  const ownerUid = after.ownerUid;
-  if (typeof ownerUid !== 'string' || !ownerUid) return;
-  if (!newUids.length) return;
-
-  const ownerDoc = await db.collection('users').doc(ownerUid).get();
-  const od = ownerDoc.data() || {};
-  const inviterName =
-    typeof od.displayName === 'string' && od.displayName.trim() ? od.displayName.trim() : 'Someone';
-  const inviterAvatarUrl = typeof od.avatarUrl === 'string' ? od.avatarUrl : null;
-  const serviceName =
-    typeof after.serviceName === 'string' && after.serviceName.trim()
-      ? after.serviceName.trim()
-      : typeof after.planName === 'string' && after.planName.trim()
-        ? after.planName.trim()
-        : 'Subscription';
-  const serviceId =
-    typeof after.serviceId === 'string' && after.serviceId.trim()
-      ? after.serviceId.trim()
-      : serviceName;
-  const shares = Array.isArray(after.splitMemberShares) ? after.splitMemberShares : [];
-
-  for (const newUid of newUids) {
-    if (newUid === ownerUid) continue;
-    const row = shares.find((s) => s && s.memberId === newUid);
-    const userShare = row && typeof row.amountCents === 'number' ? row.amountCents : 0;
-    try {
-      await db.collection('users').doc(newUid).collection('notifications').add({
-        type: 'split_invite',
-        title: `${inviterName} invited you to ${serviceName}`,
-        body: `Your share is $${(userShare / 100).toFixed(2)}/month`,
-        read: false,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        deepLink: `/subscription/${subId}`,
-        metadata: {
-          inviterUid: ownerUid,
-          inviterName,
-          inviterAvatarUrl,
-          subscriptionId: subId,
-          subscriptionName: serviceName,
-          serviceId,
-          userShare,
-          billingCycle: typeof after.billingCycle === 'string' ? after.billingCycle : 'monthly',
-        },
-      });
-      await incrementUnreadNotificationCount(db, newUid);
-    } catch (e) {
-      console.warn('sendSplitInviteInAppNotifications: failed for', newUid, e?.message || e);
-    }
-
-    try {
-      const slugId = slugifyServiceIdFromName(serviceName);
-      await appendActivityEvent(db, newUid, {
-        type: 'split_invite_received',
-        subscriptionId: subId,
-        subscriptionName: serviceName,
-        serviceId: slugId,
-        actorUid: ownerUid,
-        actorName: inviterName,
-        actorAvatarUrl: inviterAvatarUrl,
-        amount: userShare,
-        metadata: {
-          inviterUid: ownerUid,
-          userShareCents: userShare,
-          billingCycle: typeof after.billingCycle === 'string' ? after.billingCycle : 'monthly',
-        },
-      });
-    } catch (e) {
-      console.warn('sendSplitInviteInAppNotifications: activity split_invite_received failed', newUid, e?.message || e);
-    }
-
-    const inviteeName =
-      row && typeof row.displayName === 'string' && row.displayName.trim()
-        ? row.displayName.trim()
-        : await getUserDisplayName(db, newUid);
-    try {
-      const slugId = slugifyServiceIdFromName(serviceName);
-      await appendActivityEvent(db, ownerUid, {
-        type: 'split_invite_sent',
-        subscriptionId: subId,
-        subscriptionName: serviceName,
-        serviceId: slugId,
-        metadata: { inviteeUid: newUid, inviteeName, userShareCents: userShare },
-      });
-    } catch (e) {
-      console.warn('sendSplitInviteInAppNotifications: activity split_invite_sent failed', ownerUid, e?.message || e);
-    }
-  }
-}
-
-/**
  * New subscription docs (wizard create) only fire `onDocumentCreated`, not `onDocumentUpdated`.
- * Notify every non-owner member on create.
+ * Split-invite push / activity / bell are sent from {@link exports.onSubscriptionSplitInviteNotifications}
+ * after the client attaches `inviteId` to each pending share row.
  */
 exports.onSubscriptionCreatedSplitInviteInAppNotify = onDocumentCreated(
   'subscriptions/{subscriptionId}',
@@ -683,15 +721,8 @@ exports.onSubscriptionCreatedSplitInviteInAppNotify = onDocumentCreated(
     const snap = event.data;
     if (!snap) return;
     const after = snap.data();
-    const afterUids = Array.isArray(after.memberUids) ? after.memberUids : [];
-    const ownerUid = after.ownerUid;
-    if (typeof ownerUid !== 'string' || !ownerUid) return;
     const subId = event.params.subscriptionId;
-    const newUids = afterUids.filter((uid) => typeof uid === 'string' && uid && uid !== ownerUid);
     const db = admin.firestore();
-    if (newUids.length > 0) {
-      await sendSplitInviteInAppNotifications(db, subId, after, newUids);
-    }
     if (after.autoCharge === true) {
       try {
         await writeAutoChargeActivity(db, subId, after, true);
@@ -703,22 +734,39 @@ exports.onSubscriptionCreatedSplitInviteInAppNotify = onDocumentCreated(
 );
 
 /**
- * In-app notification when `memberUids` gains new uids after the doc already exists (later roster edits).
+ * When `splitMemberShares` gains or changes `inviteId` on an invite-pending row, notify that member
+ * (push + activity + bell). Runs after `attachSplitInvitesToSubscription`; also covers resend (new inviteId).
  */
-exports.onSubscriptionMemberAddedInAppNotify = onDocumentUpdated('subscriptions/{subscriptionId}', async (event) => {
+exports.onSubscriptionSplitInviteNotifications = onDocumentUpdated('subscriptions/{subscriptionId}', async (event) => {
   const before = event.data.before.exists ? event.data.before.data() : {};
   const after = event.data.after.data();
   if (!after) return;
-  const beforeUids = new Set(Array.isArray(before.memberUids) ? before.memberUids : []);
-  const afterUids = Array.isArray(after.memberUids) ? after.memberUids : [];
   const ownerUid = after.ownerUid;
   if (typeof ownerUid !== 'string' || !ownerUid) return;
   const subId = event.params.subscriptionId;
-  const newUids = afterUids.filter((uid) => typeof uid === 'string' && uid && !beforeUids.has(uid));
-  if (newUids.length === 0) return;
 
+  const beforeShares = Array.isArray(before.splitMemberShares) ? before.splitMemberShares : [];
+  const afterShares = Array.isArray(after.splitMemberShares) ? after.splitMemberShares : [];
   const db = admin.firestore();
-  await sendSplitInviteInAppNotifications(db, subId, after, newUids);
+
+  for (const share of afterShares) {
+    if (!share || share.role === 'owner' || !share.invitePending) continue;
+    const mid = typeof share.memberId === 'string' ? share.memberId : '';
+    if (!mid || mid === ownerUid) continue;
+    if (!isLikelyFirebaseUidForInvite(mid)) continue;
+    const inviteId = typeof share.inviteId === 'string' ? share.inviteId : '';
+    if (!inviteId) continue;
+
+    const prev = beforeShares.find((s) => s && s.memberId === mid);
+    const prevInviteId = prev && typeof prev.inviteId === 'string' ? prev.inviteId : '';
+    if (prevInviteId === inviteId) continue;
+
+    try {
+      await notifySplitInvitePendingMember(db, subId, after, mid, inviteId);
+    } catch (e) {
+      console.warn('onSubscriptionSplitInviteNotifications: failed', mid, e?.message || e);
+    }
+  }
 });
 
 /**
@@ -1677,6 +1725,178 @@ exports.advanceBillingCycles = onSchedule('every day 02:00', async () => {
     await Promise.all(snap.docs.map((subDoc) => advanceOneCycle(db, subDoc, now)));
 
     if (snap.docs.length < 100) break;
+    startAfter = snap.docs[snap.docs.length - 1];
+  }
+});
+
+const INVITE_PENDING_MS = 7 * 24 * 60 * 60 * 1000;
+
+async function markInviteDocExpired(db, inviteId) {
+  if (typeof inviteId !== 'string' || !inviteId.trim()) return;
+  try {
+    await db.collection('invites').doc(inviteId).update({ status: 'expired' });
+  } catch (e) {
+    console.warn('markInviteDocExpired:', inviteId, e?.message || e);
+  }
+}
+
+/**
+ * Daily: roster slots still `pending` after 7 days → `expired`; notify owner (push + activity + bell).
+ */
+exports.expirePendingSplitInvites = onSchedule('every day 03:00', async () => {
+  const db = admin.firestore();
+  const nowMs = Date.now();
+  let startAfter = null;
+
+  while (true) {
+    let q = db
+      .collection('subscriptions')
+      .where('status', '==', 'active')
+      .orderBy(admin.firestore.FieldPath.documentId())
+      .limit(80);
+    if (startAfter) q = q.startAfter(startAfter);
+
+    const snap = await q.get();
+    if (snap.empty) break;
+
+    for (const doc of snap.docs) {
+      const data = doc.data();
+      const members = Array.isArray(data.members) ? data.members : [];
+      if (members.length === 0 || typeof members[0] !== 'object') continue;
+
+      const ownerUid = typeof data.ownerUid === 'string' ? data.ownerUid : '';
+      if (!ownerUid) continue;
+
+      const shares = Array.isArray(data.splitMemberShares)
+        ? data.splitMemberShares.map((s) => (s && typeof s === 'object' ? { ...s } : s))
+        : [];
+      const newMembers = members.map((m) => (m && typeof m === 'object' ? { ...m } : m));
+      const mps = { ...(data.memberPaymentStatus || {}) };
+
+      const expiredSlots = [];
+      for (let i = 0; i < newMembers.length; i++) {
+        const m = newMembers[i];
+        if (!m || typeof m !== 'object') continue;
+        if (m.memberStatus !== 'pending') continue;
+        const t0 = invitedAtToMillis(m.invitedAt);
+        if (t0 == null) continue;
+        if (nowMs - t0 < INVITE_PENDING_MS) continue;
+
+        const inviteId = typeof m.inviteId === 'string' ? m.inviteId : '';
+        const uid = typeof m.uid === 'string' ? m.uid : '';
+        const shareRow =
+          shares.find((s) => s && inviteId && s.inviteId === inviteId) ||
+          shares.find((s) => s && uid && s.memberId === uid);
+        const displayName =
+          shareRow && typeof shareRow.displayName === 'string' && shareRow.displayName.trim()
+            ? shareRow.displayName.trim()
+            : 'Member';
+        const memberId = shareRow && typeof shareRow.memberId === 'string' ? shareRow.memberId : uid;
+        expiredSlots.push({ index: i, inviteId, uid, displayName, memberId });
+      }
+
+      if (expiredSlots.length === 0) continue;
+
+      for (const slot of expiredSlots) {
+        newMembers[slot.index] = {
+          ...newMembers[slot.index],
+          memberStatus: 'expired',
+        };
+      }
+
+      for (const s of shares) {
+        if (!s) continue;
+        const hit = expiredSlots.some(
+          (slot) =>
+            (slot.inviteId && s.inviteId === slot.inviteId) ||
+            (slot.uid && s.memberId === slot.uid) ||
+            (slot.memberId && s.memberId === slot.memberId)
+        );
+        if (hit) {
+          s.invitePending = false;
+          s.inviteExpired = true;
+        }
+      }
+
+      for (const slot of expiredSlots) {
+        const mid = slot.memberId || slot.uid;
+        if (mid && mps[mid] === 'invited_pending') delete mps[mid];
+      }
+
+      try {
+        await doc.ref.update({
+          members: newMembers,
+          splitMemberShares: shares,
+          memberPaymentStatus: mps,
+          splitUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      } catch (e) {
+        console.warn('expirePendingSplitInvites: update failed', doc.id, e?.message || e);
+        continue;
+      }
+
+      const subName = subscriptionLabelFromData(data);
+      const serviceIdSlug = slugifyServiceIdFromName(subName);
+
+      for (const slot of expiredSlots) {
+        if (slot.inviteId) await markInviteDocExpired(db, slot.inviteId);
+        const first = slot.displayName.split(/\s+/)[0] || slot.displayName;
+        const body = `${first}'s invite to ${subName} expired · invite someone else?`;
+        try {
+          await sendMySplitPushToUser(
+            db,
+            ownerUid,
+            body,
+            {
+              type: 'split_invite_expired',
+              subscriptionId: doc.id,
+              inviteId: slot.inviteId || '',
+              memberUid: slot.uid || '',
+            },
+            { title: 'mySplit' }
+          );
+        } catch (e) {
+          console.warn('expirePendingSplitInvites: owner push failed', e?.message || e);
+        }
+
+        try {
+          await appendActivityEvent(db, ownerUid, {
+            type: 'split_invite_expired',
+            subscriptionId: doc.id,
+            subscriptionName: subName,
+            serviceId: serviceIdSlug,
+            metadata: {
+              inviteeName: slot.displayName,
+              inviteId: slot.inviteId || '',
+            },
+          });
+        } catch (e) {
+          console.warn('expirePendingSplitInvites: owner activity failed', e?.message || e);
+        }
+
+        try {
+          await db.collection('users').doc(ownerUid).collection('notifications').add({
+            type: 'split_invite_expired',
+            title: `${first}'s invite to ${subName} expired`,
+            body: 'Invite someone else · Open to manage',
+            read: false,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            deepLink: `/subscription/${doc.id}`,
+            subscriptionId: doc.id,
+            serviceId: serviceIdSlug,
+            metadata: {
+              inviteeName: slot.displayName,
+              inviteId: slot.inviteId || '',
+            },
+          });
+          await incrementUnreadNotificationCount(db, ownerUid);
+        } catch (e) {
+          console.warn('expirePendingSplitInvites: owner notification failed', e?.message || e);
+        }
+      }
+    }
+
+    if (snap.docs.length < 80) break;
     startAfter = snap.docs[snap.docs.length - 1];
   }
 });

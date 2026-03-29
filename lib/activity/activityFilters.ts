@@ -16,6 +16,7 @@ export const ACTIVITY_FILTER_SPLITS: ActivityEventType[] = [
   'split_invite_sent',
   'split_invite_accepted',
   'split_invite_declined',
+  'split_invite_expired',
   'split_member_joined',
   'split_member_removed',
   'split_ended',
