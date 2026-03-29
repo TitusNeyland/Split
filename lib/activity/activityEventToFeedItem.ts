@@ -134,6 +134,8 @@ export type ActivityFeedRow = {
   _reminderTap?: { subscriptionId: string; memberUid: string };
   /** Navigate to subscription detail (split invite). */
   joinSubscriptionId?: string;
+  /** Firestore `invites/{id}` — required to accept via Cloud Function merge. */
+  joinInviteId?: string;
   /** Muted / desaturated service tile */
   serviceIconMuted?: boolean;
   /** Friend events: show actor avatar (initials or photo). */
@@ -309,6 +311,8 @@ export function activityEventToFeedRow(
             : undefined;
       const shareStr = userShareCents != null ? formatMoneyCents(userShareCents) : '';
       const subId = event.subscriptionId;
+      const inviteId =
+        typeof meta.inviteId === 'string' && meta.inviteId.trim() ? meta.inviteId.trim() : undefined;
       return {
         id: event.id,
         kind: 'split_invite_received',
@@ -325,6 +329,7 @@ export function activityEventToFeedRow(
         badge: 'Join',
         badgeVariant: 'purple',
         joinSubscriptionId: typeof subId === 'string' && subId ? subId : undefined,
+        joinInviteId: inviteId,
         _activityCreatedAtMs: createdMs,
       };
     }

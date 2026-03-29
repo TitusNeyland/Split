@@ -31,6 +31,7 @@ import {
 } from '../../lib/activity/activityFilters';
 import { resolveActivityRoute } from '../../lib/activity/activityNavigation';
 import { sendPaymentReminderCallable } from '../../lib/activity/sendPaymentReminderCallable';
+import { acceptPendingInvite } from '../../lib/friends/friendSystemFirestore';
 
 type IonIconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -219,6 +220,7 @@ type ActivityFeedItem = {
   _activityCreatedAtMs?: number;
   _reminderTap?: { subscriptionId: string; memberUid: string };
   joinSubscriptionId?: string;
+  joinInviteId?: string;
   serviceIconMuted?: boolean;
   friendAvatar?: { initials: string; imageUrl?: string | null };
   /** Raw Firestore event type — drives filter tabs. */
@@ -350,8 +352,8 @@ type ActivityItemRowProps = {
   /** Receipts filter: tap row opens receipt detail instead of inline drawer. */
   receiptNavigateMode: boolean;
   onReceiptPress: () => void;
-  /** Split invite row: open subscription to join. */
-  onJoinSplitPress?: (subscriptionId: string) => void;
+  /** Split invite row: accept invite then open subscription. */
+  onJoinSplitPress?: (subscriptionId: string, inviteId?: string) => void;
   /** Primary row tap: mark read + navigate (or expand detail when no route). */
   onActivityPress?: () => void;
 };
@@ -451,7 +453,7 @@ function ActivityItemRow({
           ) : null}
           {item.joinSubscriptionId && onJoinSplitPress ? (
             <Pressable
-              onPress={() => onJoinSplitPress(item.joinSubscriptionId!)}
+              onPress={() => onJoinSplitPress(item.joinSubscriptionId!, item.joinInviteId)}
               style={styles.joinSplitPill}
               accessibilityRole="button"
               accessibilityLabel="Join split"
@@ -896,14 +898,26 @@ export default function ActivityScreen() {
                     }}
                     receiptNavigateMode={false}
                     onReceiptPress={() => router.push(`/receipt/${item.id}`)}
-                    onJoinSplitPress={(subscriptionId) => {
-                      if (uid) {
+                    onJoinSplitPress={async (subscriptionId, inviteId) => {
+                      if (!uid) return;
+                      const trimmed = typeof inviteId === 'string' ? inviteId.trim() : '';
+                      if (!trimmed) {
+                        Alert.alert(
+                          'Unable to join',
+                          'This invite is missing its link. Open the invite from your notification or use the invite URL.',
+                        );
+                        return;
+                      }
+                      try {
+                        await acceptPendingInvite(trimmed, uid);
                         void markActivityDocumentRead(uid, item.id).catch(() => {});
                         setLiveFeedItems((prev) =>
                           prev.map((i) => (i.id === item.id ? { ...i, read: true } : i)),
                         );
+                        router.push({ pathname: '/subscription/[id]', params: { id: subscriptionId } });
+                      } catch (e) {
+                        Alert.alert('Could not join', e instanceof Error ? e.message : 'Try again.');
                       }
-                      router.push({ pathname: '/subscription/[id]', params: { id: subscriptionId } });
                     }}
                   />
                 ))}

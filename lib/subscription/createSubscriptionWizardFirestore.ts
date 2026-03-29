@@ -141,7 +141,8 @@ export async function createSubscriptionFromWizard(
         percentage: pct,
         fixedAmount: m.amountCents,
         splitMethod: sm,
-        acceptedAt: serverTimestamp(),
+        // Firestore forbids serverTimestamp() inside array elements; use client Timestamp.
+        acceptedAt: Timestamp.now(),
       };
     }
     const row: Record<string, unknown> = {
@@ -150,7 +151,7 @@ export async function createSubscriptionFromWizard(
       percentage: pct,
       fixedAmount: m.amountCents,
       splitMethod: sm,
-      invitedAt: serverTimestamp(),
+      invitedAt: Timestamp.now(),
     };
     if (id) row.uid = id;
     if (m.invitePending && typeof m.pendingInviteEmail === 'string' && m.pendingInviteEmail.trim()) {

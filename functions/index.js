@@ -198,6 +198,77 @@ function syncOwnerShareForPendingInvites(shares, totalCents, roster) {
   return list;
 }
 
+/** Mirrors client `parseBillingDayParam` monthly patterns (see `billingDayFormat.ts`). */
+function parseBillingDayFromLabel(label) {
+  if (typeof label !== 'string' || !label.trim()) return null;
+  const t = label.trim();
+  const everyMatch = t.match(/^every\s+(\d{1,2})(?:st|nd|th|rd)?$/i);
+  if (everyMatch) {
+    const day = parseInt(everyMatch[1], 10);
+    if (day >= 1 && day <= 31) return day;
+  }
+  const monthlyMatch = t.match(/^(\d{1,2})(?:st|nd|th|rd)?\s+of\s+each\s+month$/i);
+  if (monthlyMatch) {
+    const day = parseInt(monthlyMatch[1], 10);
+    if (day >= 1 && day <= 31) return day;
+  }
+  const plain = t.match(/^(\d{1,2})$/);
+  if (plain) {
+    const day = parseInt(plain[1], 10);
+    if (day >= 1 && day <= 31) return day;
+  }
+  return null;
+}
+
+/**
+ * Option A: if billing day for this month is still in the future, first obligation is this cycle;
+ * otherwise it starts next cycle.
+ */
+function computeFirstChargeObligationStartsNextCycle(subData) {
+  const day = parseBillingDayFromLabel(subData?.billingDayLabel) ?? 1;
+  const today = new Date();
+  const billingDate = new Date(today.getFullYear(), today.getMonth(), day);
+  const firstCycleIsThisMonth = billingDate > today;
+  return !firstCycleIsThisMonth;
+}
+
+async function writeSplitInviteAcceptedActivities(db, subscriptionId, acceptedBy, createdBy, inviteId) {
+  const subSnap = await db.collection('subscriptions').doc(subscriptionId).get();
+  const sub = subSnap.data() || {};
+  const shares = Array.isArray(sub.splitMemberShares) ? sub.splitMemberShares : [];
+  const row = shares.find((s) => s && s.memberId === acceptedBy);
+  const shareCents = row && typeof row.amountCents === 'number' ? row.amountCents : 0;
+  const subName = subscriptionLabelFromData(sub);
+  const slugId = slugifyServiceIdFromName(subName);
+  const ownerName = await getUserDisplayName(db, createdBy);
+  const accepterName = await getUserDisplayName(db, acceptedBy);
+  try {
+    await appendActivityEvent(db, acceptedBy, {
+      type: 'split_invite_accepted',
+      subscriptionId,
+      subscriptionName: subName,
+      serviceId: slugId,
+      amount: shareCents,
+      metadata: { ownerUid: createdBy, ownerName, inviteId },
+    });
+  } catch (e) {
+    console.warn('writeSplitInviteAcceptedActivities: member', e?.message || e);
+  }
+  try {
+    await appendActivityEvent(db, createdBy, {
+      type: 'split_member_joined',
+      subscriptionId,
+      subscriptionName: subName,
+      serviceId: slugId,
+      actorUid: acceptedBy,
+      actorName: accepterName,
+      metadata: { newMemberUid: acceptedBy, newMemberShare: shareCents, inviteId },
+    });
+  } catch (e) {
+    console.warn('writeSplitInviteAcceptedActivities: owner', e?.message || e);
+  }
+}
+
 async function mergeSplitInviteMember(db, subscriptionId, inviteId, acceptedBy) {
   const subRef = db.collection('subscriptions').doc(subscriptionId);
   const userRef = db.collection('users').doc(acceptedBy);
@@ -246,12 +317,14 @@ async function mergeSplitInviteMember(db, subscriptionId, inviteId, acceptedBy) 
       membersRoster = rawMembers.map((m) => (m && typeof m === 'object' ? { ...m } : {}));
       const mIdx = membersRoster.findIndex((m) => m && m.inviteId === inviteId);
       if (mIdx >= 0) {
+        const obligationNext = computeFirstChargeObligationStartsNextCycle(data);
         membersRoster[mIdx] = {
           ...membersRoster[mIdx],
           uid: acceptedBy,
           memberStatus: 'active',
           acceptedAt: admin.firestore.FieldValue.serverTimestamp(),
           paymentStatus: 'pending',
+          firstChargeObligationStartsNextCycle: obligationNext,
           inviteId: admin.firestore.FieldValue.delete(),
           inviteExpiresAt: admin.firestore.FieldValue.delete(),
         };
@@ -266,10 +339,8 @@ async function mergeSplitInviteMember(db, subscriptionId, inviteId, acceptedBy) 
     if (!activeMemberUids.includes(acceptedBy)) activeMemberUids.push(acceptedBy);
 
     const mps = { ...(data.memberPaymentStatus || {}) };
-    if (mps[oldMemberId] === 'invited_pending') {
-      delete mps[oldMemberId];
-      mps[acceptedBy] = 'pending';
-    }
+    delete mps[oldMemberId];
+    mps[acceptedBy] = 'pending';
 
     const totalCents =
       typeof data.totalCents === 'number' && Number.isFinite(data.totalCents) ? data.totalCents : 0;
@@ -294,23 +365,23 @@ async function mergeSplitInviteMember(db, subscriptionId, inviteId, acceptedBy) 
   });
 }
 
-async function sendSplitInviteAcceptedNotification(db, recipientUid, subscriptionId, createdBy) {
+/** Push to the split owner: "[Accepter] accepted your invite to [Subscription]". */
+async function sendSplitInviteAcceptedNotification(db, ownerUid, subscriptionId, acceptedBy) {
   const subSnap = await db.collection('subscriptions').doc(subscriptionId).get();
-  const serviceName =
-    typeof subSnap.data()?.serviceName === 'string' && subSnap.data().serviceName.trim()
-      ? subSnap.data().serviceName.trim()
-      : 'a split';
-  const creatorDoc = await db.collection('users').doc(createdBy).get();
-  const dn = creatorDoc.data()?.displayName;
-  const senderName = typeof dn === 'string' && dn.trim() ? dn.trim() : 'Someone';
+  const sub = subSnap.data() || {};
+  const serviceName = subscriptionLabelFromData(sub);
+  const accepterDoc = await db.collection('users').doc(acceptedBy).get();
+  const ad = accepterDoc.data() || {};
+  const accepterName =
+    typeof ad.displayName === 'string' && ad.displayName.trim() ? ad.displayName.trim() : 'Someone';
 
-  const recipientDoc = await db.collection('users').doc(recipientUid).get();
+  const recipientDoc = await db.collection('users').doc(ownerUid).get();
   const prefs = recipientDoc.data()?.notificationPreferences;
   if (prefs && prefs.notificationsEnabled === false) return;
 
-  const body = `${senderName} added you to ${serviceName}`;
+  const body = `${accepterName} accepted your invite to ${serviceName}`;
 
-  const sessionsSnap = await db.collection('users').doc(recipientUid).collection('sessions').get();
+  const sessionsSnap = await db.collection('users').doc(ownerUid).collection('sessions').get();
   const tokens = new Set();
   sessionsSnap.docs.forEach((d) => {
     const t = d.data().fcmToken;
@@ -327,7 +398,7 @@ async function sendSplitInviteAcceptedNotification(db, recipientUid, subscriptio
           data: {
             type: 'split_invite_accepted',
             subscriptionId,
-            inviterUid: createdBy,
+            acceptedByUid: acceptedBy,
           },
         })
         .catch((e) => {
@@ -566,7 +637,12 @@ exports.onInviteAccepted = onDocumentUpdated('invites/{inviteId}', async (event)
       console.warn('onInviteAccepted: mergeSplitInviteMember failed', e?.message || e);
     }
     try {
-      await sendSplitInviteAcceptedNotification(db, acceptedBy, splitId, createdBy);
+      await writeSplitInviteAcceptedActivities(db, splitId, acceptedBy, createdBy, inviteId);
+    } catch (e) {
+      console.warn('onInviteAccepted: writeSplitInviteAcceptedActivities failed', e?.message || e);
+    }
+    try {
+      await sendSplitInviteAcceptedNotification(db, createdBy, splitId, acceptedBy);
     } catch (e) {
       console.warn('onInviteAccepted: sendSplitInviteAcceptedNotification failed', e?.message || e);
     }
@@ -1044,46 +1120,8 @@ exports.onSubscriptionSplitLifecycleActivity = onDocumentUpdated('subscriptions/
     }
   }
 
-  let inviteAccepted = false;
-  for (const aShare of aShares) {
-    if (!aShare || typeof aShare !== 'object') continue;
-    const uid = aShare.memberId;
-    if (!uid || uid === ownerUid) continue;
-    const bShare = bShares.find((s) => s && s.memberId === uid);
-    const wasInvite = bShare?.invitePending === true || bMps[uid] === 'invited_pending';
-    const nowJoined = aShare.invitePending === false && aMps[uid] === 'pending';
-    if (wasInvite && nowJoined) {
-      inviteAccepted = true;
-      const memberName = await getUserDisplayName(db, uid);
-      const amountCents = typeof aShare.amountCents === 'number' ? aShare.amountCents : 0;
-      const ownerName = await getUserDisplayName(db, ownerUid);
-      try {
-        await appendActivityEvent(db, uid, {
-          type: 'split_invite_accepted',
-          subscriptionId: subId,
-          subscriptionName: subName,
-          serviceId: slugId,
-          amount: amountCents,
-          metadata: { ownerUid, ownerName },
-        });
-      } catch (e) {
-        console.warn('split_invite_accepted', e?.message || e);
-      }
-      try {
-        await appendActivityEvent(db, ownerUid, {
-          type: 'split_member_joined',
-          subscriptionId: subId,
-          subscriptionName: subName,
-          serviceId: slugId,
-          actorUid: uid,
-          actorName: memberName,
-          metadata: { newMemberUid: uid, newMemberShare: amountCents },
-        });
-      } catch (e) {
-        console.warn('split_member_joined', e?.message || e);
-      }
-    }
-  }
+  /* split_invite_accepted / split_member_joined are written in onInviteAccepted after merge
+   * (subscription diff cannot reliably match when pending share memberId changes to accepter). */
 
   const beforePc = before.priceChangedAt;
   const afterPc = after.priceChangedAt;
@@ -1126,7 +1164,7 @@ exports.onSubscriptionSplitLifecycleActivity = onDocumentUpdated('subscriptions/
     }
   }
 
-  if (inviteAccepted || priceChanged) return;
+  if (priceChanged) return;
 
   const editedBy = after.splitLastEditedByUid;
   if (typeof editedBy !== 'string' || !editedBy) return;
@@ -1749,11 +1787,8 @@ exports.expirePendingSplitInvites = onSchedule('every day 03:00', async () => {
   let startAfter = null;
 
   while (true) {
-    let q = db
-      .collection('subscriptions')
-      .where('status', '==', 'active')
-      .orderBy(admin.firestore.FieldPath.documentId())
-      .limit(80);
+    /** Order by document ID only — avoids a composite index (status + __name__) that Firestore rejects as unnecessary. */
+    let q = db.collection('subscriptions').orderBy(admin.firestore.FieldPath.documentId()).limit(80);
     if (startAfter) q = q.startAfter(startAfter);
 
     const snap = await q.get();
@@ -1761,6 +1796,8 @@ exports.expirePendingSplitInvites = onSchedule('every day 03:00', async () => {
 
     for (const doc of snap.docs) {
       const data = doc.data();
+      if (String(data.status ?? '').toLowerCase() !== 'active') continue;
+
       const members = Array.isArray(data.members) ? data.members : [];
       if (members.length === 0 || typeof members[0] !== 'object') continue;
 

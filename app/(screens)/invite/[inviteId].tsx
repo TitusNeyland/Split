@@ -141,10 +141,7 @@ export default function AcceptInviteScreen() {
     try {
       await acceptPendingInvite(inviteId, user.uid);
       if (invite.splitId) {
-        router.replace({
-          pathname: '/split-added',
-          params: { subscriptionId: invite.splitId },
-        });
+        router.replace({ pathname: '/subscription/[id]', params: { id: invite.splitId } });
       } else {
         router.replace('/friends');
       }
