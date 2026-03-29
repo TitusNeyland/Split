@@ -43,6 +43,11 @@ export type SplitInviteDeclineNotice = {
   inviteId?: string;
 };
 
+export type OwnerMemberLeftBanner = {
+  leaverDisplayName: string;
+  shareCents: number;
+};
+
 export type SubscriptionDetailModel = {
   id: string;
   serviceName: string;
@@ -56,6 +61,10 @@ export type SubscriptionDetailModel = {
   lifecycleStatus?: 'active' | 'ended';
   /** Formatted from `endedAt` when status is ended (e.g. "Mar 29, 2026"). */
   endedOnLabel?: string;
+  /** Owner: show after a member voluntarily leaves. */
+  ownerMemberLeftBanner?: OwnerMemberLeftBanner | null;
+  /** Owner: custom/fixed split no longer sums to 100% after a member left. */
+  customSplitNeedsRebalance?: boolean;
   members: SubscriptionDetailMember[];
   paidMemberCount: number;
   collectedCents: number;

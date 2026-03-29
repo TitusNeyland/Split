@@ -88,6 +88,8 @@ export type ActivityFeedKind =
   | 'split_invite_expired'
   | 'split_member_joined'
   | 'split_member_removed'
+  | 'split_left'
+  | 'split_member_left'
   | 'split_ended'
   | 'split_percentage_updated'
   | 'split_price_updated'
@@ -487,6 +489,42 @@ export function activityEventToFeedRow(
         amountColor: C.muted,
         badge: 'Removed',
         badgeVariant: 'gray',
+        _activityCreatedAtMs: createdMs,
+      };
+    }
+    case 'split_left': {
+      return {
+        id: event.id,
+        kind: 'split_left',
+        serviceMark,
+        icon: 'log-out-outline',
+        iconBg: '#F0EEE9',
+        iconColor: C.muted,
+        title: `You left ${brand}`,
+        sub: 'You will not be charged for future cycles',
+        time,
+        amountColor: C.text,
+        badge: 'Left',
+        badgeVariant: 'gray',
+        _activityCreatedAtMs: createdMs,
+      };
+    }
+    case 'split_member_left': {
+      const actor = event.actorName?.trim() || 'Someone';
+      return {
+        id: event.id,
+        kind: 'split_member_left',
+        serviceMark,
+        friendLinkIds: event.actorUid ? [event.actorUid] : undefined,
+        icon: 'person-outline',
+        iconBg: '#FAEEDA',
+        iconColor: '#854F0B',
+        title: `${actor} left ${brand}`,
+        sub: 'They will not be charged for future cycles',
+        time,
+        amountColor: C.text,
+        badge: 'Member left',
+        badgeVariant: 'amber',
         _activityCreatedAtMs: createdMs,
       };
     }

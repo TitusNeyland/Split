@@ -10,6 +10,7 @@ import {
 import { initialsFromName } from '../profile/profile';
 import type {
   CyclePaymentStatus,
+  OwnerMemberLeftBanner,
   SplitInviteDeclineNotice,
   SubscriptionDetailEditorMember,
   SubscriptionDetailMember,
@@ -264,6 +265,28 @@ export function mapFirestoreSubscriptionToDetailModel(
     if (parsed.length > 0) splitInviteDeclineNotices = parsed;
   }
 
+  let ownerMemberLeftBanner: OwnerMemberLeftBanner | null | undefined;
+  const rawBanner = data.ownerMemberLeftBanner;
+  if (
+    isOwner &&
+    rawBanner &&
+    typeof rawBanner === 'object' &&
+    rawBanner !== null
+  ) {
+    const o = rawBanner as Record<string, unknown>;
+    const leaverDisplayName =
+      typeof o.leaverDisplayName === 'string' && o.leaverDisplayName.trim()
+        ? o.leaverDisplayName.trim()
+        : '';
+    const shareCents =
+      typeof o.shareCents === 'number' && Number.isFinite(o.shareCents) ? Math.round(o.shareCents) : 0;
+    if (leaverDisplayName) {
+      ownerMemberLeftBanner = { leaverDisplayName, shareCents };
+    }
+  }
+
+  const customSplitNeedsRebalance = isOwner && data.customSplitNeedsRebalance === true;
+
   return {
     id,
     serviceName: serviceNameForIcon,
@@ -276,6 +299,8 @@ export function mapFirestoreSubscriptionToDetailModel(
     autoCharge,
     lifecycleStatus,
     endedOnLabel,
+    ownerMemberLeftBanner,
+    customSplitNeedsRebalance,
     members,
     paidMemberCount,
     collectedCents,

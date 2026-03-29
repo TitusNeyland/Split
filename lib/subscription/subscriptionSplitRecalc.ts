@@ -9,6 +9,7 @@ export type SubscriptionMemberRosterRow = {
   email?: string;
   inviteId?: string;
   memberStatus?: string;
+  leftAt?: unknown;
   paymentStatus?: string | null;
   /** True when first share payment applies next billing cycle (see Option A). */
   firstChargeObligationStartsNextCycle?: boolean;

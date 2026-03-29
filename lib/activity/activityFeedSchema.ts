@@ -34,6 +34,10 @@ export type ActivityEventType =
   | 'split_invite_expired'
   | 'split_member_joined'
   | 'split_member_removed'
+  /** Member voluntarily left (their feed). */
+  | 'split_left'
+  /** Owner: someone left voluntarily. */
+  | 'split_member_left'
   | 'split_ended'
   | 'split_percentage_updated'
   | 'split_price_updated'

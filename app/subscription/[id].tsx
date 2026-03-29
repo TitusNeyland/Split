@@ -38,7 +38,13 @@ import { useViewerFirstName } from '../hooks/useViewerFirstName';
 import { EndSplitConfirmSheet } from '../components/subscriptions/EndSplitConfirmSheet';
 import { endSubscriptionSplit } from '../../lib/subscription/endSplitFirestore';
 import { formatSettingsPercentsLine, membersOwingBeforeEndSplit } from '../../lib/subscription/endSplitHelpers';
-import { setPendingEndSplitToast } from '../../lib/subscription/endSplitNavigationToast';
+import {
+  setPendingEndSplitToast,
+  setPendingSubscriptionsTabToast,
+} from '../../lib/subscription/endSplitNavigationToast';
+import { LeaveSplitConfirmSheet } from '../components/subscriptions/LeaveSplitConfirmSheet';
+import { leaveSubscriptionSplit } from '../../lib/subscription/leaveSplitFirestore';
+import { clearOwnerMemberLeftBanner } from '../../lib/subscription/clearOwnerMemberLeftBannerFirestore';
 import { clearSplitInviteDeclineNotices } from '../../lib/subscription/splitInviteDeclineNoticesFirestore';
 import { removePendingSplitInvite } from '../../lib/subscription/removePendingSplitInviteFirestore';
 
@@ -139,6 +145,8 @@ export default function SubscriptionDetailScreen() {
   const [removeBusyId, setRemoveBusyId] = useState<string | null>(null);
   const [endSplitSheetOpen, setEndSplitSheetOpen] = useState(false);
   const [endSplitBusy, setEndSplitBusy] = useState(false);
+  const [leaveSheetOpen, setLeaveSheetOpen] = useState(false);
+  const [leaveBusy, setLeaveBusy] = useState(false);
 
   const demoDetail = useMemo(() => {
     if (!SUBSCRIPTIONS_DEMO_MODE || !subscriptionId) return null;
@@ -239,6 +247,67 @@ export default function SubscriptionDetailScreen() {
       setEndSplitBusy(false);
     }
   }, [detail, firebaseUid, profileDisplayName, subscriptionId, router]);
+
+  const viewerMemberRow = useMemo(() => {
+    if (!detail || !firebaseUid) return null;
+    return detail.members.find((m) => m.memberId === firebaseUid) ?? null;
+  }, [detail, firebaseUid]);
+
+  const leaveSplitSheetModel = useMemo(() => {
+    if (!detail || detail.isOwner || !firebaseUid) return null;
+    const m = viewerMemberRow;
+    if (!m || m.invitePending || m.inviteExpired) return null;
+    const ownerName = detail.payerName?.trim() || 'Owner';
+    const cycleNote =
+      m.cycleStatus === 'paid'
+        ? 'This cycle is marked paid on your account.'
+        : m.cycleStatus === 'overdue'
+          ? 'You have an overdue balance for this billing cycle.'
+          : 'You have a pending balance for this billing cycle.';
+    const owed =
+      m.cycleStatus === 'pending' || m.cycleStatus === 'overdue'
+        ? { amountFormatted: fmtCents(m.amountCents) }
+        : null;
+    return {
+      subscriptionName: detail.displayName,
+      yourShareMonthlyFormatted: fmtCents(m.amountCents),
+      currentCycleNote: cycleNote,
+      ownerName,
+      owedWarning: owed,
+    };
+  }, [detail, firebaseUid, viewerMemberRow]);
+
+  const handleLeaveSplitPress = () => {
+    if (!leaveSplitSheetModel) return;
+    setLeaveSheetOpen(true);
+  };
+
+  const handleConfirmLeaveSplit = useCallback(async () => {
+    if (!detail || detail.isOwner || !firebaseUid) return;
+    setLeaveBusy(true);
+    try {
+      if (!SUBSCRIPTIONS_DEMO_MODE) {
+        await leaveSubscriptionSplit({ subscriptionId: subscriptionId.trim(), memberUid: firebaseUid });
+      }
+      setLeaveSheetOpen(false);
+      setPendingSubscriptionsTabToast(`You left ${detail.displayName}`, 'active', 'success');
+      router.replace('/(tabs)/subscriptions');
+    } catch (e) {
+      Alert.alert('Could not leave split', e instanceof Error ? e.message : 'Try again.');
+    } finally {
+      setLeaveBusy(false);
+    }
+  }, [detail, firebaseUid, subscriptionId, router]);
+
+  const handleDismissOwnerLeftBanner = useCallback(async () => {
+    if (SUBSCRIPTIONS_DEMO_MODE || !subscriptionId.trim() || !detail?.isOwner) return;
+    try {
+      await clearOwnerMemberLeftBanner(subscriptionId.trim());
+      setDetailRetryKey((k) => k + 1);
+    } catch (e) {
+      Alert.alert('Could not dismiss', e instanceof Error ? e.message : 'Try again.');
+    }
+  }, [subscriptionId, detail?.isOwner]);
 
   const onResendSplitInvite = useCallback(
     async (m: SubscriptionDetailMember) => {
@@ -548,6 +617,39 @@ export default function SubscriptionDetailScreen() {
             </View>
           ) : null}
 
+          {!ended && detail.isOwner && detail.ownerMemberLeftBanner ? (
+            <View style={styles.ownerNoticeBanner} accessibilityRole="summary">
+              <Ionicons name="alert-circle-outline" size={18} color={C.amber} style={styles.ownerNoticeIcon} />
+              <Text style={styles.ownerNoticeTxt} accessibilityRole="text">
+                {`${detail.ownerMemberLeftBanner.leaverDisplayName} left this split · You're now covering their share (${fmtCents(
+                  detail.ownerMemberLeftBanner.shareCents
+                )})`}
+              </Text>
+              <Pressable
+                onPress={() => void handleDismissOwnerLeftBanner()}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Dismiss notice"
+              >
+                <Text style={styles.ownerNoticeDismiss}>Dismiss</Text>
+              </Pressable>
+            </View>
+          ) : null}
+
+          {!ended && detail.isOwner && detail.customSplitNeedsRebalance ? (
+            <Pressable
+              style={styles.ownerRebalanceBanner}
+              onPress={() => setEditorOpen(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Edit split to fix percentages"
+            >
+              <Ionicons name="information-circle-outline" size={18} color={C.amber} style={styles.ownerNoticeIcon} />
+              <Text style={styles.ownerRebalanceTxt}>
+                Percentages no longer add up to 100%. Tap to open Edit split and update the split.
+              </Text>
+            </Pressable>
+          ) : null}
+
           <View style={[styles.card, ended && styles.cardEnded]}>
             <Text style={styles.sectionHeader}>{ended ? 'Final breakdown' : 'Split breakdown'}</Text>
             {detail.members.map((m) => {
@@ -798,7 +900,7 @@ export default function SubscriptionDetailScreen() {
             ))}
           </View>
 
-          {!ended ? (
+          {!ended && (detail.isOwner || leaveSplitSheetModel) ? (
             <View style={styles.actionsBlock}>
               <Text style={styles.manageSectionLbl}>Manage</Text>
               {detail.isOwner ? (
@@ -806,13 +908,15 @@ export default function SubscriptionDetailScreen() {
                   <Text style={styles.actionTextDanger}>End split</Text>
                 </TouchableOpacity>
               ) : (
-                <Pressable
-                  style={[styles.actionBtn, styles.actionBtnDanger]}
-                  onPress={() => onDemoAction('Leave split')}
+                <TouchableOpacity
+                  onPress={handleLeaveSplitPress}
+                  style={styles.actionCard}
+                  activeOpacity={0.75}
                   accessibilityRole="button"
+                  accessibilityLabel="Leave split"
                 >
-                  <Text style={[styles.actionBtnTxt, styles.actionBtnDangerTxt]}>Leave split</Text>
-                </Pressable>
+                  <Text style={styles.actionTextDanger}>Leave split</Text>
+                </TouchableOpacity>
               )}
             </View>
           ) : null}
@@ -878,6 +982,22 @@ export default function SubscriptionDetailScreen() {
           membersNotifiedCount={endSplitSheetModel.membersNotifiedCount}
           pendingWarning={endSplitSheetModel.pendingWarning}
           confirming={endSplitBusy}
+        />
+      ) : null}
+
+      {leaveSplitSheetModel ? (
+        <LeaveSplitConfirmSheet
+          visible={leaveSheetOpen}
+          onClose={() => {
+            if (!leaveBusy) setLeaveSheetOpen(false);
+          }}
+          onConfirm={handleConfirmLeaveSplit}
+          subscriptionName={leaveSplitSheetModel.subscriptionName}
+          yourShareMonthlyFormatted={leaveSplitSheetModel.yourShareMonthlyFormatted}
+          currentCycleNote={leaveSplitSheetModel.currentCycleNote}
+          ownerName={leaveSplitSheetModel.ownerName}
+          owedWarning={leaveSplitSheetModel.owedWarning}
+          confirming={leaveBusy}
         />
       ) : null}
     </View>
@@ -976,6 +1096,49 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: C.muted,
     lineHeight: 18,
+  },
+  ownerNoticeBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    backgroundColor: C.amberBg,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(180, 83, 9, 0.22)',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginBottom: 12,
+  },
+  ownerNoticeIcon: {
+    marginTop: 2,
+  },
+  ownerNoticeTxt: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '500',
+    color: C.amber,
+    lineHeight: 20,
+  },
+  ownerNoticeDismiss: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: C.editLink,
+  },
+  ownerRebalanceBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    backgroundColor: '#F0EEE9',
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginBottom: 12,
+  },
+  ownerRebalanceTxt: {
+    flex: 1,
+    fontSize: 14,
+    color: C.muted,
+    lineHeight: 20,
   },
   splitPipEndedMuted: {
     opacity: 0.7,

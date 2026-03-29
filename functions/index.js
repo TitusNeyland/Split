@@ -1309,6 +1309,12 @@ exports.onSubscriptionSplitLifecycleActivity = onDocumentUpdated('subscriptions/
   const aUids = new Set(Array.isArray(after.memberUids) ? after.memberUids : []);
   const allMemberUids = new Set([...aUids, ownerUid].filter((u) => typeof u === 'string' && u));
 
+  const voluntaryLeaveUid =
+    typeof after.leaveVoluntaryUid === 'string' && after.leaveVoluntaryUid.trim()
+      ? after.leaveVoluntaryUid.trim()
+      : null;
+  const voluntaryHandled = new Set();
+
   for (const rid of bUids) {
     if (aUids.has(rid)) continue;
     if (typeof rid !== 'string' || !rid) continue;
@@ -1317,6 +1323,48 @@ exports.onSubscriptionSplitLifecycleActivity = onDocumentUpdated('subscriptions/
       typeof bShare?.displayName === 'string' && bShare.displayName.trim()
         ? bShare.displayName.trim()
         : await getUserDisplayName(db, rid);
+
+    if (voluntaryLeaveUid && rid === voluntaryLeaveUid) {
+      voluntaryHandled.add(rid);
+      try {
+        await appendActivityEvent(db, rid, {
+          type: 'split_left',
+          subscriptionId: subId,
+          subscriptionName: subName,
+          serviceId: slugId,
+          metadata: {},
+        });
+      } catch (e) {
+        console.warn('split_left', rid, e?.message || e);
+      }
+      try {
+        await appendActivityEvent(db, ownerUid, {
+          type: 'split_member_left',
+          subscriptionId: subId,
+          subscriptionName: subName,
+          serviceId: slugId,
+          actorUid: rid,
+          actorName: removedName,
+          metadata: { leftMemberUid: rid },
+        });
+      } catch (e) {
+        console.warn('split_member_left', ownerUid, e?.message || e);
+      }
+      const pushBody = `${removedName} left your ${subName} split`;
+      try {
+        await sendMySplitPushToUser(
+          db,
+          ownerUid,
+          pushBody,
+          { type: 'split_member_left', subscriptionId: subId },
+          { title: 'mySplit' }
+        );
+      } catch (e) {
+        console.warn('leave split push', e?.message || e);
+      }
+      continue;
+    }
+
     for (const target of [ownerUid, rid]) {
       try {
         await appendActivityEvent(db, target, {
@@ -1331,6 +1379,16 @@ exports.onSubscriptionSplitLifecycleActivity = onDocumentUpdated('subscriptions/
       } catch (e) {
         console.warn('split_member_removed', target, e?.message || e);
       }
+    }
+  }
+
+  if (voluntaryLeaveUid && voluntaryHandled.has(voluntaryLeaveUid)) {
+    try {
+      await db.collection('subscriptions').doc(subId).update({
+        leaveVoluntaryUid: admin.firestore.FieldValue.delete(),
+      });
+    } catch (e) {
+      console.warn('clear leaveVoluntaryUid', e?.message || e);
     }
   }
 

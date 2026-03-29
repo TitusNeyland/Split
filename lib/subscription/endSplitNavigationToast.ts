@@ -1,12 +1,22 @@
 /** One-shot toast + tab switch (consumed on Subscriptions focus). */
 export type SubscriptionsTabFilter = 'active' | 'ended';
 
-type Pending = { message: string; filter: SubscriptionsTabFilter };
+export type SubscriptionsTabToastVariant = 'default' | 'success';
+
+type Pending = {
+  message: string;
+  filter: SubscriptionsTabFilter;
+  variant?: SubscriptionsTabToastVariant;
+};
 
 let pending: Pending | null = null;
 
-export function setPendingSubscriptionsTabToast(message: string, filter: SubscriptionsTabFilter): void {
-  pending = { message, filter };
+export function setPendingSubscriptionsTabToast(
+  message: string,
+  filter: SubscriptionsTabFilter,
+  variant?: SubscriptionsTabToastVariant
+): void {
+  pending = { message, filter, variant: variant ?? 'default' };
 }
 
 export function consumePendingSubscriptionsTabToast(): Pending | null {

@@ -20,6 +20,8 @@ export const ACTIVITY_FILTER_SPLITS: ActivityEventType[] = [
   'split_invite_expired',
   'split_member_joined',
   'split_member_removed',
+  'split_left',
+  'split_member_left',
   'split_ended',
   'split_percentage_updated',
   'split_price_updated',

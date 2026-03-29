@@ -36,7 +36,10 @@ import { SubscriptionCardSkeletonList } from '../components/subscriptions/Subscr
 import { useProfileAvatarUrl } from '../hooks/useProfileAvatarUrl';
 import { useSubscriptions } from '../contexts/SubscriptionsContext';
 import { spacing } from '../../constants/theme';
-import { consumePendingSubscriptionsTabToast } from '../../lib/subscription/endSplitNavigationToast';
+import {
+  consumePendingSubscriptionsTabToast,
+  type SubscriptionsTabToastVariant,
+} from '../../lib/subscription/endSplitNavigationToast';
 import { deleteSubscriptionDocument } from '../../lib/subscription/deleteSubscriptionFirestore';
 
 const C = {
@@ -75,6 +78,7 @@ export default function SubscriptionsScreen() {
     Record<string, { toMillis?: () => number }> | null | undefined
   >(null);
   const [splitEndedToast, setSplitEndedToast] = useState<string | null>(null);
+  const [splitToastVariant, setSplitToastVariant] = useState<SubscriptionsTabToastVariant>('default');
   const splitEndedToastOpacity = useRef(new Animated.Value(0)).current;
 
   const { avatarUrl: userAvatarUrl } = useProfileAvatarUrl();
@@ -86,6 +90,7 @@ export default function SubscriptionsScreen() {
       const pending = consumePendingSubscriptionsTabToast();
       if (!pending) return undefined;
       setFilter(pending.filter);
+      setSplitToastVariant(pending.variant ?? 'default');
       setSplitEndedToast(pending.message);
       splitEndedToastOpacity.setValue(0);
       Animated.timing(splitEndedToastOpacity, {
@@ -474,11 +479,16 @@ export default function SubscriptionsScreen() {
         <Animated.View
           style={[
             styles.toast,
+            splitToastVariant === 'success' && styles.toastSuccess,
             { bottom: Math.max(insets.bottom, 12) + 8, opacity: splitEndedToastOpacity },
           ]}
           pointerEvents="none"
         >
-          <Text style={styles.toastTxt}>{splitEndedToast}</Text>
+          <Text
+            style={[styles.toastTxt, splitToastVariant === 'success' && styles.toastTxtSuccess]}
+          >
+            {splitEndedToast}
+          </Text>
         </Animated.View>
       ) : null}
 
@@ -707,6 +717,12 @@ const styles = StyleSheet.create({
     color: '#fff',
     textAlign: 'center',
     lineHeight: 20,
+  },
+  toastSuccess: {
+    backgroundColor: '#1D9E75',
+  },
+  toastTxtSuccess: {
+    color: '#fff',
   },
   endedPromptCard: {
     backgroundColor: '#fff',
