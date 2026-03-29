@@ -2128,7 +2128,7 @@ exports.expirePendingSplitInvites = onSchedule('every day 03:00', async () => {
               inviteId: slot.inviteId || '',
               memberUid: slot.uid || '',
             },
-            { title: 'mySplit' }
+            { title: `Invite expired · ${subName}` }
           );
         } catch (e) {
           console.warn('expirePendingSplitInvites: owner push failed', e?.message || e);

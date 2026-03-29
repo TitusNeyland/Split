@@ -210,7 +210,7 @@ export default function AcceptInviteScreen() {
         </View>
         <Text style={styles.expiredTitle}>This invite has expired</Text>
         <Text style={styles.expiredBody}>
-          This invite link is no longer valid. Ask {senderName} to send a new one.
+          This invite has expired. Ask {senderName} to send a new one.
         </Text>
         <View style={styles.expiredSenderCard}>
           <Text style={styles.expiredSenderLbl}>Invite was from</Text>

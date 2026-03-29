@@ -9,6 +9,7 @@ export function membersOwingBeforeEndSplit(
     (m) =>
       m.memberId !== currentUid &&
       !m.invitePending &&
+      !m.inviteExpired &&
       (m.cycleStatus === 'pending' || m.cycleStatus === 'overdue')
   );
 }

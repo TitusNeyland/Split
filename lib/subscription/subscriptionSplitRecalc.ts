@@ -17,8 +17,18 @@ export type SubscriptionMemberRosterRow = {
   splitMethod?: string;
 };
 
-export function hasInvitePendingInShares(shares: { role?: string; invitePending?: boolean }[]): boolean {
-  return shares.some((s) => s && s.role !== 'owner' && Boolean(s.invitePending));
+/**
+ * True when any non-owner row is still an unfilled invite slot (pending acceptance or expired).
+ * Owner continues to cover full cost (Option A) until all such slots are resolved or removed.
+ */
+export function hasInvitePendingInShares(shares: {
+  role?: string;
+  invitePending?: boolean;
+  inviteExpired?: boolean;
+}[]): boolean {
+  return shares.some(
+    (s) => s && s.role !== 'owner' && (Boolean(s.invitePending) || Boolean(s.inviteExpired))
+  );
 }
 
 export function applyPlannedAmountsFromMemberRoster(
@@ -53,7 +63,7 @@ export function syncOwnerShareForPendingInvites(
   roster: SubscriptionMemberRosterRow[] | undefined
 ): Record<string, unknown>[] {
   const list = shares.map((x) => ({ ...x }));
-  const arr = list as { role?: string; invitePending?: boolean }[];
+  const arr = list as { role?: string; invitePending?: boolean; inviteExpired?: boolean }[];
   if (hasInvitePendingInShares(arr)) {
     const oi = list.findIndex((x) => x && (x as { role?: string }).role === 'owner');
     if (oi >= 0) {

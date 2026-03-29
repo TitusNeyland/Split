@@ -20,6 +20,7 @@ import {
   getActiveMembersTotalCents,
   getOwnerId,
   getTotalCents,
+  isInviteSlotExpired,
   isShareRowPendingInvite,
   normalizeSubscriptionStatus,
 } from './subscriptionToCardModel';
@@ -34,6 +35,7 @@ type ShareRow = {
   avatarBg?: string;
   avatarColor?: string;
   invitePending?: boolean;
+  inviteExpired?: boolean;
   inviteId?: string;
   pendingInviteEmail?: string;
   inviteExpiresAt?: Timestamp | { toMillis?: () => number };
@@ -145,6 +147,7 @@ export function mapFirestoreSubscriptionToDetailModel(
     } else if (totalCents > 0) {
       percent = Math.round((100 * amountCents) / totalCents);
     }
+    const inviteExpired = isInviteSlotExpired(data, row);
     const invitePending = isShareRowPendingInvite(data, row);
     const pendingInviteEmail =
       typeof row.pendingInviteEmail === 'string' && row.pendingInviteEmail.trim()
@@ -162,6 +165,7 @@ export function mapFirestoreSubscriptionToDetailModel(
       amountCents,
       cycleStatus,
       invitePending,
+      inviteExpired,
       inviteId: typeof row.inviteId === 'string' && row.inviteId ? row.inviteId : undefined,
       pendingInviteEmail,
       rosterEmail,
@@ -181,7 +185,9 @@ export function mapFirestoreSubscriptionToDetailModel(
     };
   });
 
-  const paidMemberCount = members.filter((m) => !m.invitePending && m.cycleStatus === 'paid').length;
+  const paidMemberCount = members.filter(
+    (m) => !m.invitePending && !m.inviteExpired && m.cycleStatus === 'paid'
+  ).length;
   const collectedCents = collectedCentsActiveMembersOnly(data);
   const activeMembersTotalCents = getActiveMembersTotalCents(data);
 
