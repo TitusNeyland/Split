@@ -81,9 +81,76 @@ export function computeNetBarTotals(rows: ProfileFriendBalanceRow[]): {
   return { owedToYou, youOwe };
 }
 
+/**
+ * Profile card expanded rows + net bar from live subscriptions and friendships
+ * (same `computeFriendBalances` ordering as home / friends hub).
+ */
+export function buildProfileFriendBalanceRowsFromSubscriptions(
+  viewerUid: string,
+  subscriptions: MemberSubscriptionDoc[],
+  friendUids: string[],
+  displayNameByUid: Record<string, string>
+): ProfileFriendBalanceRow[] {
+  if (!viewerUid || friendUids.length === 0) return [];
+
+  const balances = computeFriendBalances(subscriptions, viewerUid, friendUids);
+
+  return balances.map((b) => {
+    const name = displayNameByUid[b.friendUid]?.trim() || 'Friend';
+    const initials = initialsFromName(name);
+    const sharedN = countSharedSubscriptionsWithFriend(subscriptions, viewerUid, b.friendUid);
+    const subscriptionCountLabel = `${sharedN} subscription${sharedN === 1 ? '' : 's'}`;
+
+    const they = b.theyOweMeCents / 100;
+    const owe = b.iOweThemCents / 100;
+
+    if (b.sortKey === 2) {
+      return {
+        id: b.friendUid,
+        kind: 'you_owe',
+        counterpartyShortName: name,
+        subscriptionCountLabel,
+        amount: owe,
+      };
+    }
+    if (b.sortKey === 0) {
+      return {
+        id: b.friendUid,
+        kind: 'they_owe_overdue',
+        displayName: name,
+        initials,
+        subLine: 'Payment overdue',
+        subscriptionCountLabel,
+        amount: they,
+      };
+    }
+    if (b.sortKey === 1) {
+      return {
+        id: b.friendUid,
+        kind: 'they_owe_pending',
+        displayName: name,
+        initials,
+        subLine: 'Payment pending',
+        subscriptionCountLabel,
+        amount: they,
+      };
+    }
+    return {
+      id: b.friendUid,
+      kind: 'settled',
+      displayName: name,
+      initials,
+      subLine: 'all clear',
+      subscriptionCountLabel,
+    };
+  });
+}
+
 /** Avatars in collapsed stack (subset of balances + counterparty on you_owe). */
-export function getProfileFriendStackEntries(): { id: string; initials: string }[] {
-  return PROFILE_FRIEND_BALANCES.map((r) => {
+export function getStackEntriesFromProfileRows(
+  rows: ProfileFriendBalanceRow[]
+): { id: string; initials: string }[] {
+  return rows.map((r) => {
     if (r.kind === 'you_owe') {
       const parts = r.counterpartyShortName.trim().split(/\s+/).filter(Boolean);
       const ini =
@@ -94,6 +161,11 @@ export function getProfileFriendStackEntries(): { id: string; initials: string }
     }
     return { id: r.id, initials: r.initials };
   });
+}
+
+/** @deprecated Demo-only; prefer `getStackEntriesFromProfileRows` with live rows. */
+export function getProfileFriendStackEntries(): { id: string; initials: string }[] {
+  return getStackEntriesFromProfileRows(PROFILE_FRIEND_BALANCES);
 }
 
 export function getFriendFilterDisplayName(friendId: string): string {

@@ -10,6 +10,7 @@ import { fmtCents } from '../../lib/subscription/addSubscriptionSplitMath';
 import { useSubscriptionDetailFromFirestore } from '../../lib/subscription/subscriptionDetailFromFirestore';
 import { useFirebaseUid } from '../../lib/auth/useFirebaseUid';
 import { useProfileAvatarUrl } from '../hooks/useProfileAvatarUrl';
+import { useViewerFirstName } from '../hooks/useViewerFirstName';
 
 const C = {
   muted: '#888780',
@@ -23,11 +24,13 @@ export default function SplitAddedScreen() {
   const subscriptionId = typeof params.subscriptionId === 'string' ? params.subscriptionId.trim() : '';
   const firebaseUid = useFirebaseUid();
   const { avatarUrl } = useProfileAvatarUrl();
+  const { firstName: viewerFirstName } = useViewerFirstName();
 
   const { detail, loading, error } = useSubscriptionDetailFromFirestore(
     subscriptionId,
     firebaseUid,
     avatarUrl,
+    viewerFirstName,
     { enabled: Boolean(subscriptionId && firebaseUid) }
   );
 

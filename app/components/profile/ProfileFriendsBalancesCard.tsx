@@ -12,7 +12,7 @@ import {
   computeNetBarTotals,
   getStackEntriesFromProfileRows,
   type ProfileFriendBalanceRow,
-} from '../../../lib/profile';
+} from '../../../lib/profile/profileFriendsBalance';
 
 const C = {
   text: '#1a1a18',

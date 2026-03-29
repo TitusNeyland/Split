@@ -1,4 +1,4 @@
-import type { SubscriptionDetailMember } from './subscriptionDetailDemo';
+import type { SubscriptionDetailMember } from './subscriptionDetailTypes';
 
 /** Non-owner members who still owe for the current cycle (warning only). */
 export function membersOwingBeforeEndSplit(
