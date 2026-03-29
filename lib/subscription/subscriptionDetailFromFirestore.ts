@@ -9,6 +9,7 @@ import {
 } from './billingDayFormat';
 import type {
   CyclePaymentStatus,
+  SplitInviteDeclineNotice,
   SubscriptionDetailEditorMember,
   SubscriptionDetailMember,
   SubscriptionDetailModel,
@@ -183,6 +184,25 @@ export function mapFirestoreSubscriptionToDetailModel(
     },
   ];
 
+  let splitInviteDeclineNotices: SplitInviteDeclineNotice[] | undefined;
+  const rawDeclines = data.splitInviteDeclineNotices;
+  if (Array.isArray(rawDeclines) && rawDeclines.length > 0 && isOwner) {
+    const parsed: SplitInviteDeclineNotice[] = [];
+    for (const row of rawDeclines) {
+      if (!row || typeof row !== 'object') continue;
+      const o = row as Record<string, unknown>;
+      const declinerName =
+        typeof o.declinerName === 'string' && o.declinerName.trim() ? o.declinerName.trim() : '';
+      if (!declinerName) continue;
+      parsed.push({
+        declinerName,
+        declinerUid: typeof o.declinerUid === 'string' ? o.declinerUid : undefined,
+        inviteId: typeof o.inviteId === 'string' ? o.inviteId : undefined,
+      });
+    }
+    if (parsed.length > 0) splitInviteDeclineNotices = parsed;
+  }
+
   return {
     id,
     serviceName: serviceNameForIcon,
@@ -199,6 +219,7 @@ export function mapFirestoreSubscriptionToDetailModel(
     collectedCents,
     editorMembers,
     history,
+    splitInviteDeclineNotices,
   };
 }
 

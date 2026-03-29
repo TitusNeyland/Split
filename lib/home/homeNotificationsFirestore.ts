@@ -19,10 +19,11 @@ import {
   type SubscriptionMemberRosterRow,
   syncOwnerShareForPendingInvites,
 } from '../subscription/subscriptionSplitRecalc';
-import { acceptPendingInvite } from '../friends/friendSystemFirestore';
+import { acceptPendingInvite, declinePendingInvite } from '../friends/friendSystemFirestore';
 
 export type NotificationDocType =
   | 'split_invite'
+  | 'split_invite_declined_by_member'
   | 'split_invite_expired'
   | 'friend_connected'
   | 'payment_received'
@@ -64,6 +65,7 @@ export type AppNotification = {
 
 const PRIORITY: Record<string, number> = {
   split_invite: 0,
+  split_invite_declined_by_member: 0,
   split_invite_expired: 0,
   friend_connected: 1,
   payment_received: 2,
@@ -350,6 +352,27 @@ export async function acceptSplitInviteFromNotification(params: {
 
 export async function declineSplitInviteNotification(uid: string, notificationId: string): Promise<void> {
   await updateNotificationFields(uid, notificationId, { read: true, actioned: 'declined' });
+}
+
+/**
+ * Declines via `invites/{inviteId}` when present (Cloud Function removes pending slot + notifies owner).
+ * Otherwise only marks the notification (legacy).
+ */
+export async function declineSplitInviteFromNotification(params: {
+  uid: string;
+  notificationId: string;
+  metadata: SplitInviteMetadata;
+}): Promise<void> {
+  const db = getFirebaseFirestore();
+  if (!db) throw new Error('Firestore is not configured.');
+  const { uid, notificationId, metadata } = params;
+  if (metadata.inviteId) {
+    await declinePendingInvite(metadata.inviteId, uid);
+  }
+  await updateDoc(doc(db, 'users', uid, 'notifications', notificationId), {
+    read: true,
+    actioned: 'declined',
+  });
 }
 
 export async function markFriendConnectedNotificationRead(uid: string, notificationId: string): Promise<void> {

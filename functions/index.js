@@ -408,6 +408,164 @@ async function sendSplitInviteAcceptedNotification(db, ownerUid, subscriptionId,
   );
 }
 
+/**
+ * Removes pending invitee row from subscription (by inviteId). Owner share recalculates via
+ * syncOwnerShareForPendingInvites. Appends splitInviteDeclineNotices for owner banner.
+ */
+async function removeDeclinedSplitInviteSlot(db, subscriptionId, inviteId, declinedByUid) {
+  const subRef = db.collection('subscriptions').doc(subscriptionId);
+  const declinerName = await getUserDisplayName(db, declinedByUid);
+  await db.runTransaction(async (tx) => {
+    const subSnap = await tx.get(subRef);
+    if (!subSnap.exists) return;
+    const data = subSnap.data();
+    const shares = Array.isArray(data.splitMemberShares) ? [...data.splitMemberShares] : [];
+    const idx = shares.findIndex((s) => s && s.inviteId === inviteId);
+    if (idx < 0) return;
+
+    const oldShare = shares[idx];
+    const oldMemberId = typeof oldShare.memberId === 'string' ? oldShare.memberId : '';
+    shares.splice(idx, 1);
+
+    const rawMembers = data.members;
+    const firstM = Array.isArray(rawMembers) && rawMembers.length > 0 ? rawMembers[0] : undefined;
+    const isObjectRoster =
+      firstM !== undefined && typeof firstM === 'object' && firstM !== null;
+
+    let membersRoster;
+    if (isObjectRoster) {
+      membersRoster = rawMembers.map((m) => (m && typeof m === 'object' ? { ...m } : {}));
+      const mIdx = membersRoster.findIndex((m) => m && m.inviteId === inviteId);
+      if (mIdx >= 0) membersRoster.splice(mIdx, 1);
+    } else {
+      membersRoster = Array.isArray(rawMembers) ? [...rawMembers] : [];
+      const mIdx = membersRoster.findIndex((u) => u === oldMemberId);
+      if (mIdx >= 0) membersRoster.splice(mIdx, 1);
+    }
+
+    let memberUids = Array.isArray(data.memberUids) ? [...data.memberUids] : [];
+    memberUids = memberUids.filter((u) => u !== oldMemberId && u !== declinedByUid);
+
+    let activeMemberUids = Array.isArray(data.activeMemberUids) ? [...data.activeMemberUids] : [];
+    activeMemberUids = activeMemberUids.filter((u) => u !== oldMemberId && u !== declinedByUid);
+
+    const mps = { ...(data.memberPaymentStatus || {}) };
+    delete mps[oldMemberId];
+    delete mps[declinedByUid];
+
+    const totalCents =
+      typeof data.totalCents === 'number' && Number.isFinite(data.totalCents) ? data.totalCents : 0;
+    const syncedShares = isObjectRoster
+      ? syncOwnerShareForPendingInvites(shares, totalCents, membersRoster)
+      : shares;
+
+    const rawNotices = data.splitInviteDeclineNotices;
+    const existingNotices = Array.isArray(rawNotices) ? [...rawNotices] : [];
+    existingNotices.push({
+      declinerName,
+      declinerUid: declinedByUid,
+      inviteId,
+      declinedAt: admin.firestore.Timestamp.now(),
+    });
+    const capped = existingNotices.slice(-20);
+
+    const updatePayload = {
+      splitMemberShares: syncedShares,
+      memberUids,
+      memberPaymentStatus: mps,
+      splitUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      splitInviteDeclineNotices: capped,
+    };
+    if (isObjectRoster) {
+      updatePayload.members = membersRoster;
+      updatePayload.activeMemberUids = activeMemberUids;
+    } else {
+      updatePayload.members = membersRoster;
+    }
+
+    tx.update(subRef, updatePayload);
+  });
+}
+
+async function sendSplitInviteDeclinedPushToOwner(
+  db,
+  ownerUid,
+  subscriptionId,
+  declinedByUid,
+  declinerName,
+  serviceName
+) {
+  const recipientDoc = await db.collection('users').doc(ownerUid).get();
+  const prefs = recipientDoc.data()?.notificationPreferences;
+  if (prefs && prefs.notificationsEnabled === false) return;
+
+  const body = `${declinerName} declined your invite to ${serviceName}`;
+
+  const sessionsSnap = await db.collection('users').doc(ownerUid).collection('sessions').get();
+  const tokens = new Set();
+  sessionsSnap.docs.forEach((d) => {
+    const t = d.data().fcmToken;
+    if (typeof t === 'string' && t.trim()) tokens.add(t.trim());
+  });
+
+  await Promise.all(
+    [...tokens].map((token) =>
+      admin
+        .messaging()
+        .send({
+          token,
+          notification: { title: 'mySplit', body },
+          data: {
+            type: 'split_invite_declined',
+            subscriptionId,
+            declinedByUid,
+          },
+        })
+        .catch((e) => {
+          console.warn('sendSplitInviteDeclinedPushToOwner: FCM send failed', e?.message || e);
+        })
+    )
+  );
+}
+
+async function notifyOwnerSplitInviteDeclinedBell(
+  db,
+  ownerUid,
+  subscriptionId,
+  subscriptionName,
+  declinerName,
+  inviteId
+) {
+  const serviceIdSlug = slugifyServiceIdFromName(subscriptionName);
+  try {
+    await db
+      .collection('users')
+      .doc(ownerUid)
+      .collection('notifications')
+      .add({
+        type: 'split_invite_declined_by_member',
+        title: `${declinerName} declined your invite`,
+        body: `${subscriptionName} · Invite someone else to fill this slot`,
+        read: false,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        deepLink: `/subscription/${subscriptionId}`,
+        subscriptionId,
+        serviceId: serviceIdSlug,
+        metadata: {
+          subscriptionId,
+          subscriptionName,
+          serviceId: serviceIdSlug,
+          inviterUid: ownerUid,
+          declinedMemberName: declinerName,
+          inviteId,
+        },
+      });
+    await incrementUnreadNotificationCount(db, ownerUid);
+  } catch (e) {
+    console.warn('notifyOwnerSplitInviteDeclinedBell', e?.message || e);
+  }
+}
+
 /** FCM `data` fields must be strings. */
 function stringifyFcmData(data) {
   const out = {};
@@ -646,6 +804,83 @@ exports.onInviteAccepted = onDocumentUpdated('invites/{inviteId}', async (event)
     } catch (e) {
       console.warn('onInviteAccepted: sendSplitInviteAcceptedNotification failed', e?.message || e);
     }
+  }
+});
+
+/**
+ * Split invite declined: remove pending slot, notify owner, write activity feeds.
+ * Decliner activity is written here when using inviteId path; skip duplicate from notification trigger.
+ */
+exports.onInviteDeclined = onDocumentUpdated('invites/{inviteId}', async (event) => {
+  const beforeSnap = event.data.before;
+  const afterSnap = event.data.after;
+  if (!beforeSnap.exists || !afterSnap.exists) return;
+
+  const before = beforeSnap.data();
+  const after = afterSnap.data();
+
+  if (before.status === 'declined' || after.status !== 'declined') return;
+
+  const declinedBy = after.declinedBy;
+  const createdBy = after.createdBy;
+  const inviteId = event.params.inviteId;
+  const splitId = typeof after.splitId === 'string' && after.splitId.length > 0 ? after.splitId : null;
+
+  if (!splitId || typeof declinedBy !== 'string' || typeof createdBy !== 'string') return;
+
+  const db = admin.firestore();
+
+  try {
+    await removeDeclinedSplitInviteSlot(db, splitId, inviteId, declinedBy);
+  } catch (e) {
+    console.warn('onInviteDeclined: removeDeclinedSplitInviteSlot failed', e?.message || e);
+  }
+
+  const declinerName = await getUserDisplayName(db, declinedBy);
+  const subSnap = await db.collection('subscriptions').doc(splitId).get();
+  const sub = subSnap.data() || {};
+  const subName = subscriptionLabelFromData(sub);
+  const slugId = slugifyServiceIdFromName(subName);
+  const ownerName = await getUserDisplayName(db, createdBy);
+
+  try {
+    await appendActivityEvent(db, declinedBy, {
+      type: 'split_invite_declined',
+      subscriptionId: splitId,
+      subscriptionName: subName,
+      serviceId: slugId,
+      actorUid: createdBy,
+      actorName: ownerName,
+      metadata: { inviterUid: createdBy, inviteId },
+    });
+  } catch (e) {
+    console.warn('onInviteDeclined: decliner activity', e?.message || e);
+  }
+
+  try {
+    await appendActivityEvent(db, createdBy, {
+      type: 'split_invite_declined_owner',
+      subscriptionId: splitId,
+      subscriptionName: subName,
+      serviceId: slugId,
+      actorUid: declinedBy,
+      actorName: declinerName,
+      metadata: { inviteId, declinerUid: declinedBy },
+    });
+  } catch (e) {
+    console.warn('onInviteDeclined: owner activity', e?.message || e);
+  }
+
+  try {
+    await sendSplitInviteDeclinedPushToOwner(db, createdBy, splitId, declinedBy, declinerName, subName);
+  } catch (e) {
+    console.warn('onInviteDeclined: push failed', e?.message || e);
+  }
+
+  try {
+    await notifyOwnerSplitInviteDeclinedBell(db, createdBy, splitId, subName, declinerName, inviteId);
+  } catch (e) {
+    console.warn('onInviteDeclined: bell failed', e?.message || e);
   }
 });
 
@@ -1020,6 +1255,9 @@ exports.onNotificationSplitInviteDeclinedActivity = onDocumentUpdated(
 
     const userId = event.params.userId;
     const m = after.metadata || {};
+    /* Invite doc decline + onInviteDeclined already wrote split_invite_declined for the decliner. */
+    if (typeof m.inviteId === 'string' && m.inviteId.trim()) return;
+
     const subscriptionId = typeof m.subscriptionId === 'string' ? m.subscriptionId : '';
     const subscriptionName =
       typeof m.subscriptionName === 'string' && m.subscriptionName.trim()

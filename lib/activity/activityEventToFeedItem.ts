@@ -84,6 +84,7 @@ export type ActivityFeedKind =
   | 'split_invite_sent'
   | 'split_invite_accepted'
   | 'split_invite_declined'
+  | 'split_invite_declined_owner'
   | 'split_invite_expired'
   | 'split_member_joined'
   | 'split_member_removed'
@@ -401,6 +402,26 @@ export function activityEventToFeedRow(
         amountColor: C.muted,
         badge: 'Declined',
         badgeVariant: 'gray',
+        _activityCreatedAtMs: createdMs,
+      };
+    }
+    case 'split_invite_declined_owner': {
+      const decliner = event.actorName?.trim() || 'Someone';
+      const first = decliner.split(/\s+/)[0] ?? decliner;
+      return {
+        id: event.id,
+        kind: 'split_invite_declined_owner',
+        friendLinkIds: event.actorUid ? [event.actorUid] : undefined,
+        serviceMark,
+        icon: 'person-remove-outline',
+        iconBg: '#FEF3C7',
+        iconColor: '#B45309',
+        title: `${first} declined your ${brand} invite`,
+        sub: 'Invite someone else to fill this slot',
+        time,
+        amountColor: C.muted,
+        badge: 'Declined',
+        badgeVariant: 'amber',
         _activityCreatedAtMs: createdMs,
       };
     }
