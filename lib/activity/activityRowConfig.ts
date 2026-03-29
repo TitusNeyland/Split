@@ -13,6 +13,7 @@ export const ACTIVITY_ROW_CONFIG = {
   split_invite_sent: { icon: 'service', badge: 'invite_green' },
   split_invite_accepted: { icon: 'service', badge: 'joined_green' },
   split_invite_declined: { icon: 'service', badge: 'declined_gray' },
+  split_invite_expired: { icon: 'service', badge: 'overdue_amber' },
   split_member_joined: { icon: 'person_green', badge: 'joined_green' },
   split_member_removed: { icon: 'person_gray', badge: 'none' },
   split_ended: { icon: 'service', badge: 'ended_gray' },

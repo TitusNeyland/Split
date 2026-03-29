@@ -21,6 +21,7 @@ import {
 
 export type NotificationDocType =
   | 'split_invite'
+  | 'split_invite_expired'
   | 'friend_connected'
   | 'payment_received'
   | 'payment_overdue'
@@ -59,6 +60,7 @@ export type AppNotification = {
 
 const PRIORITY: Record<string, number> = {
   split_invite: 0,
+  split_invite_expired: 0,
   friend_connected: 1,
   payment_received: 2,
   payment_overdue: 2,

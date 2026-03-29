@@ -99,6 +99,14 @@
       ]
     },
     {
+      "collectionGroup": "subscriptions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "payment_intents",
       "queryScope": "COLLECTION",
       "fields": [
