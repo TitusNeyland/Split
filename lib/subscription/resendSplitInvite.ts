@@ -38,10 +38,26 @@ export async function resendSplitInvite(opts: {
     inviteExpiresAt: Timestamp.fromMillis(Date.now() + INVITE_TTL_MS),
   };
 
-  await updateDoc(subRef, {
+  const patch: Record<string, unknown> = {
     splitMemberShares: shares,
     splitUpdatedAt: serverTimestamp(),
-  });
+  };
+
+  const mem = data.members;
+  if (Array.isArray(mem) && mem.length > 0 && typeof mem[0] === 'object' && mem[0] !== null) {
+    const roster = (mem as Record<string, unknown>[]).map((row) => ({ ...row }));
+    const mi = roster.findIndex((m) => String((m as { uid?: string }).uid ?? '') === opts.memberId);
+    if (mi >= 0) {
+      roster[mi] = {
+        ...roster[mi],
+        inviteId: newId,
+        inviteExpiresAt: Timestamp.fromMillis(Date.now() + INVITE_TTL_MS),
+      };
+      patch.members = roster;
+    }
+  }
+
+  await updateDoc(subRef, patch);
 
   return newId;
 }

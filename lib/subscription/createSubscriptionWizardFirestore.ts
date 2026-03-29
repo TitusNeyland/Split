@@ -2,6 +2,7 @@ import { addDoc, collection, serverTimestamp, Timestamp } from 'firebase/firesto
 import { httpsCallable } from 'firebase/functions';
 import { getFirebaseFirestore, getFirebaseFunctions } from '../firebase';
 import { getNextFirstChargeDate } from './billingDayFormat';
+import { hasInvitePendingInShares } from './subscriptionSplitRecalc';
 
 export type WizardSplitMethod = 'equal' | 'custom_percent' | 'fixed_amount' | 'owner_less';
 
@@ -34,6 +35,23 @@ export type CreateSubscriptionWizardInput = {
   members: WizardMemberRow[];
 };
 
+/** Stored on each member row; maps wizard methods to persisted split method. */
+export type StoredMemberSplitMethod = 'equal' | 'custom_percent' | 'fixed' | 'owner_less';
+
+export function splitMethodForMemberRow(w: WizardSplitMethod): StoredMemberSplitMethod {
+  if (w === 'fixed_amount') return 'fixed';
+  if (w === 'owner_less') return 'owner_less';
+  if (w === 'custom_percent') return 'custom_percent';
+  return 'equal';
+}
+
+/** True for real Firebase Auth uids (excludes invite-email-* placeholders). */
+export function isLikelyFirebaseUid(uid: string): boolean {
+  if (!uid || uid.length < 20) return false;
+  if (uid.startsWith('invite-')) return false;
+  return /^[a-zA-Z0-9]+$/.test(uid);
+}
+
 /**
  * After a subscription doc exists: calls `finalizeSubscriptionWizard` to send FCM to members on the
  * split (non-owner, not invite-pending) and a confirmation push to the owner. Stripe PaymentIntents
@@ -63,7 +81,9 @@ export async function runSubscriptionWizardSideEffects(
 
 /**
  * Creates `subscriptions/{id}` plus an initial `billing_cycles` doc.
- * `members` / `memberUids` list every split participant so subscription tab queries resolve.
+ * `memberUids`: real Firebase uids only (owner + on-app invitees) for array-contains queries.
+ * `members`: roster objects with `memberStatus` (owner active; invitees pending until accepted).
+ * `activeMemberUids`: accepted members only (owner alone until invitees accept).
  */
 /** Wizard UI uses a placeholder (e.g. `owner-self`); Firestore rules require the real uid in `members`. */
 export function persistMemberId(m: WizardMemberRow, actorUid: string): string {
@@ -77,6 +97,8 @@ export async function createSubscriptionFromWizard(
   const db = getFirebaseFirestore();
   if (!db) throw new Error('Firestore is not configured.');
 
+  const sm = splitMethodForMemberRow(input.splitMethod);
+
   const splitMemberShares = input.members.map((m) => {
     const id = persistMemberId(m, input.actorUid);
     const row: Record<string, unknown> = {
@@ -88,10 +110,51 @@ export async function createSubscriptionFromWizard(
       initials: m.initials,
       avatarBg: m.avatarBg,
       avatarColor: m.avatarColor,
-      invitePending: Boolean(m.invitePending),
+      /** Every invitee starts pending acceptance (including friends already on the app). */
+      invitePending: m.role !== 'owner',
     };
     if (m.invitePending && typeof m.pendingInviteEmail === 'string' && m.pendingInviteEmail.trim()) {
       row.pendingInviteEmail = m.pendingInviteEmail.trim().toLowerCase();
+    }
+    return row;
+  });
+
+  const shareArr = splitMemberShares as { role?: string; invitePending?: boolean }[];
+  if (hasInvitePendingInShares(shareArr)) {
+    const oi = splitMemberShares.findIndex((s) => s && (s as { role?: string }).role === 'owner');
+    if (oi >= 0) {
+      splitMemberShares[oi] = {
+        ...splitMemberShares[oi],
+        amountCents: input.totalCents,
+      };
+    }
+  }
+
+  const memberRoster: Record<string, unknown>[] = input.members.map((m) => {
+    const id = persistMemberId(m, input.actorUid);
+    const pct = Math.round(m.percent * 100) / 100;
+    if (m.role === 'owner') {
+      return {
+        uid: id,
+        memberStatus: 'active',
+        paymentStatus: 'pending',
+        percentage: pct,
+        fixedAmount: m.amountCents,
+        splitMethod: sm,
+        acceptedAt: serverTimestamp(),
+      };
+    }
+    const row: Record<string, unknown> = {
+      memberStatus: 'pending',
+      paymentStatus: null,
+      percentage: pct,
+      fixedAmount: m.amountCents,
+      splitMethod: sm,
+      invitedAt: serverTimestamp(),
+    };
+    if (id) row.uid = id;
+    if (m.invitePending && typeof m.pendingInviteEmail === 'string' && m.pendingInviteEmail.trim()) {
+      row.email = m.pendingInviteEmail.trim().toLowerCase();
     }
     return row;
   });
@@ -101,16 +164,17 @@ export async function createSubscriptionFromWizard(
     const id = persistMemberId(m, input.actorUid);
     if (m.role === 'owner') {
       memberPaymentStatus[id] = 'owner';
-    } else if (m.invitePending) {
-      memberPaymentStatus[id] = 'invited_pending';
     } else {
-      memberPaymentStatus[id] = 'pending';
+      memberPaymentStatus[id] = 'invited_pending';
     }
   }
 
-  const memberIds = input.members
-    .map((m) => persistMemberId(m, input.actorUid))
-    .filter((id): id is string => Boolean(id));
+  const memberUids: string[] = [input.actorUid];
+  for (const m of input.members) {
+    if (m.role === 'owner') continue;
+    const id = persistMemberId(m, input.actorUid);
+    if (isLikelyFirebaseUid(id)) memberUids.push(id);
+  }
 
   const col = collection(db, 'subscriptions');
   const docRef = await addDoc(col, {
@@ -126,9 +190,9 @@ export async function createSubscriptionFromWizard(
     splitMethod: input.splitMethod,
     splitMemberShares,
     memberPaymentStatus,
-    /** Uid strings for `array-contains` queries; mirrors `members`. */
-    memberUids: memberIds,
-    members: memberIds,
+    memberUids,
+    activeMemberUids: [input.actorUid],
+    members: memberRoster,
     status: 'active',
     createdAt: serverTimestamp(),
     splitUpdatedAt: serverTimestamp(),

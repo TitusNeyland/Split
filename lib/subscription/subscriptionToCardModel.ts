@@ -1,10 +1,12 @@
 import { fmtCents } from './addSubscriptionSplitMath';
 import {
   buildStatusBadge,
+  countPendingMemberAcceptances,
   parseFirestoreBillingCycle,
   subscriptionDisplayName,
   type BillingMemberStatus,
 } from './billingCalendarModel';
+import { hasInvitePendingInShares } from './subscriptionSplitRecalc';
 import {
   formatFirstChargeDateShort,
   getNextFirstChargeDate,
@@ -165,6 +167,14 @@ export function getViewerShareCents(data: Record<string, unknown>, viewerUid: st
   const total = getTotalCents(data);
   const shares = getSplitShares(data);
   if (shares.length > 0) {
+    const ownerId = getOwnerId(data);
+    if (
+      viewerUid &&
+      ownerId === viewerUid &&
+      hasInvitePendingInShares(shares as { role?: string; invitePending?: boolean }[])
+    ) {
+      return Math.round(total);
+    }
     const row = shares.find((s) => String(s.memberId) === viewerUid);
     if (row && typeof row.amountCents === 'number' && Number.isFinite(row.amountCents)) {
       return Math.round(row.amountCents);
@@ -398,7 +408,9 @@ export function buildSubscriptionCardBase(
     typeof data.planName === 'string' ? data.planName : undefined
   );
   const statusMap = extractMemberPaymentStatus(data);
-  const badge = buildStatusBadge(statusMap, viewerUid);
+  const badge = buildStatusBadge(statusMap, viewerUid, {
+    pendingAcceptanceCount: countPendingMemberAcceptances(data),
+  });
   const collected = collectedCentsForSubscription(data);
   const pct = totalCents > 0 ? Math.min(100, Math.round((100 * collected) / totalCents)) : 0;
   const ownerId = getOwnerId(data);

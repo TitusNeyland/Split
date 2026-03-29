@@ -160,6 +160,44 @@ async function writeAutoChargeActivity(db, subId, sub, enabled) {
   });
 }
 
+function hasInvitePendingInShares(shares) {
+  return shares.some((s) => s && s.role !== 'owner' && s.invitePending);
+}
+
+function applyPlannedAmountsFromMemberRoster(shares, roster) {
+  const byUid = new Map();
+  for (const m of roster) {
+    if (m && typeof m === 'object' && typeof m.uid === 'string' && m.uid) {
+      byUid.set(m.uid, m);
+    }
+  }
+  return shares.map((s) => {
+    if (!s || typeof s !== 'object') return s;
+    const ro = byUid.get(s.memberId);
+    if (!ro || typeof ro.fixedAmount !== 'number' || !Number.isFinite(ro.fixedAmount)) return { ...s };
+    const pct =
+      typeof ro.percentage === 'number' && Number.isFinite(ro.percentage)
+        ? Math.round(ro.percentage * 100) / 100
+        : s.percent;
+    return { ...s, amountCents: Math.round(ro.fixedAmount), percent: pct };
+  });
+}
+
+function syncOwnerShareForPendingInvites(shares, totalCents, roster) {
+  const list = shares.map((x) => ({ ...x }));
+  if (hasInvitePendingInShares(list)) {
+    const oi = list.findIndex((x) => x && x.role === 'owner');
+    if (oi >= 0) {
+      list[oi] = { ...list[oi], amountCents: Math.round(totalCents) };
+    }
+    return list;
+  }
+  if (roster && roster.length > 0) {
+    return applyPlannedAmountsFromMemberRoster(list, roster);
+  }
+  return list;
+}
+
 async function mergeSplitInviteMember(db, subscriptionId, inviteId, acceptedBy) {
   const subRef = db.collection('subscriptions').doc(subscriptionId);
   const userRef = db.collection('users').doc(acceptedBy);
@@ -194,21 +232,65 @@ async function mergeSplitInviteMember(db, subscriptionId, inviteId, acceptedBy) 
       pendingInviteEmail: admin.firestore.FieldValue.delete(),
     };
 
-    const memberUids = (data.memberUids || []).map((u) => (u === oldMemberId ? acceptedBy : u));
-    const members = (data.members || []).map((u) => (u === oldMemberId ? acceptedBy : u));
+    let memberUids = Array.isArray(data.memberUids) ? [...data.memberUids] : [];
+    memberUids = memberUids.map((u) => (u === oldMemberId ? acceptedBy : u));
+    if (!memberUids.includes(acceptedBy)) memberUids.push(acceptedBy);
+
+    const rawMembers = data.members;
+    const firstM = Array.isArray(rawMembers) && rawMembers.length > 0 ? rawMembers[0] : undefined;
+    const isObjectRoster =
+      firstM !== undefined && typeof firstM === 'object' && firstM !== null;
+
+    let membersRoster;
+    if (isObjectRoster) {
+      membersRoster = rawMembers.map((m) => (m && typeof m === 'object' ? { ...m } : {}));
+      const mIdx = membersRoster.findIndex((m) => m && m.inviteId === inviteId);
+      if (mIdx >= 0) {
+        membersRoster[mIdx] = {
+          ...membersRoster[mIdx],
+          uid: acceptedBy,
+          memberStatus: 'active',
+          acceptedAt: admin.firestore.FieldValue.serverTimestamp(),
+          paymentStatus: 'pending',
+          inviteId: admin.firestore.FieldValue.delete(),
+          inviteExpiresAt: admin.firestore.FieldValue.delete(),
+        };
+      }
+    } else {
+      membersRoster = (Array.isArray(rawMembers) ? rawMembers : []).map((u) =>
+        u === oldMemberId ? acceptedBy : u
+      );
+    }
+
+    let activeMemberUids = Array.isArray(data.activeMemberUids) ? [...data.activeMemberUids] : [];
+    if (!activeMemberUids.includes(acceptedBy)) activeMemberUids.push(acceptedBy);
+
     const mps = { ...(data.memberPaymentStatus || {}) };
     if (mps[oldMemberId] === 'invited_pending') {
       delete mps[oldMemberId];
       mps[acceptedBy] = 'pending';
     }
 
-    tx.update(subRef, {
-      splitMemberShares: shares,
+    const totalCents =
+      typeof data.totalCents === 'number' && Number.isFinite(data.totalCents) ? data.totalCents : 0;
+    const syncedShares = isObjectRoster
+      ? syncOwnerShareForPendingInvites(shares, totalCents, membersRoster)
+      : shares;
+
+    const updatePayload = {
+      splitMemberShares: syncedShares,
       memberUids,
-      members,
       memberPaymentStatus: mps,
       splitUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
+    };
+    if (isObjectRoster) {
+      updatePayload.members = membersRoster;
+      updatePayload.activeMemberUids = activeMemberUids;
+    } else {
+      updatePayload.members = membersRoster;
+    }
+
+    tx.update(subRef, updatePayload);
   });
 }
 

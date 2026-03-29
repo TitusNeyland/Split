@@ -6,15 +6,15 @@ import { persistMemberId, type CreateSubscriptionWizardInput } from './createSub
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 /**
- * After `createSubscriptionFromWizard`, creates `invites` docs with `splitId` and patches
- * `splitMemberShares` with `inviteId` + `inviteExpiresAt` for each pending (not-on-app) member.
+ * After `createSubscriptionFromWizard`, creates one `invites/{id}` per invitee (with `splitId`) and
+ * patches `splitMemberShares` + `members` roster with `inviteId` + `inviteExpiresAt`.
  */
 export async function attachSplitInvitesToSubscription(
   subscriptionId: string,
   input: CreateSubscriptionWizardInput
 ): Promise<string[]> {
-  const pending = input.members.filter((m) => m.role !== 'owner' && m.invitePending);
-  if (pending.length === 0) return [];
+  const invitees = input.members.filter((m) => m.role !== 'owner');
+  if (invitees.length === 0) return [];
 
   const db = getFirebaseFirestore();
   if (!db) throw new Error('Firestore is not configured.');
@@ -27,11 +27,17 @@ export async function attachSplitInvitesToSubscription(
   const shares = Array.isArray(data.splitMemberShares)
     ? (data.splitMemberShares as Record<string, unknown>[]).map((s) => ({ ...s }))
     : [];
+  const membersRoster = Array.isArray(data.members)
+    ? (data.members as Record<string, unknown>[]).map((row) => ({ ...row }))
+    : [];
 
   const createdIds: string[] = [];
   const inviteExpiresAt = Timestamp.fromMillis(Date.now() + INVITE_TTL_MS);
 
-  for (const m of pending) {
+  for (let i = 0; i < input.members.length; i++) {
+    const m = input.members[i];
+    if (m.role === 'owner') continue;
+
     const memberId = persistMemberId(m, input.actorUid);
     const inviteId = await createPendingInvite({
       creatorUid: input.actorUid,
@@ -49,10 +55,18 @@ export async function attachSplitInvitesToSubscription(
         inviteExpiresAt,
       };
     }
+    if (membersRoster[i] && typeof membersRoster[i] === 'object') {
+      membersRoster[i] = {
+        ...membersRoster[i],
+        inviteId,
+        inviteExpiresAt,
+      };
+    }
   }
 
   await updateDoc(subRef, {
     splitMemberShares: shares,
+    members: membersRoster,
     splitUpdatedAt: serverTimestamp(),
   });
 
