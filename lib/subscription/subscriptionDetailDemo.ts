@@ -61,6 +61,7 @@ export type SubscriptionDetailModel = {
   autoCharge: 'on' | 'off';
   /** Firestore `status`: ended splits are read-only in the UI. */
   lifecycleStatus?: 'active' | 'ended';
+  endedOnLabel?: string;
   members: SubscriptionDetailMember[];
   paidMemberCount: number;
   collectedCents: number;
@@ -374,6 +375,7 @@ export function getDemoSubscriptionDetail(
       billingCycleLabel: 'Monthly',
       nextBillingLabel: 'May 21, 2026',
       lifecycleStatus: 'ended',
+      endedOnLabel: 'Feb 28, 2026',
       totalCents: XBOX_TOTAL,
       isOwner: true,
       autoCharge: 'off',

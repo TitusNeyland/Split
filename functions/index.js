@@ -1286,7 +1286,7 @@ exports.onNotificationSplitInviteDeclinedActivity = onDocumentUpdated(
 );
 
 /**
- * Restart, member removed, invite accepted, price change, split edit (percent/amount).
+ * Member removed, invite accepted, price change, split edit (percent/amount).
  */
 exports.onSubscriptionSplitLifecycleActivity = onDocumentUpdated('subscriptions/{subscriptionId}', async (event) => {
   const before = event.data.before.exists ? event.data.before.data() : {};
@@ -1308,30 +1308,6 @@ exports.onSubscriptionSplitLifecycleActivity = onDocumentUpdated('subscriptions/
   const bUids = new Set(Array.isArray(before.memberUids) ? before.memberUids : []);
   const aUids = new Set(Array.isArray(after.memberUids) ? after.memberUids : []);
   const allMemberUids = new Set([...aUids, ownerUid].filter((u) => typeof u === 'string' && u));
-
-  if (before.status === 'ended' && after.status === 'active') {
-    let billLabel = '';
-    const nb = after.nextBillingAt;
-    if (nb && typeof nb.toDate === 'function') {
-      try {
-        billLabel = nb.toDate().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-      } catch (_) {}
-    }
-    for (const uid of allMemberUids) {
-      try {
-        await appendActivityEvent(db, uid, {
-          type: 'split_restarted',
-          subscriptionId: subId,
-          subscriptionName: subName,
-          serviceId: slugId,
-          metadata: { nextBillingLabel: billLabel },
-        });
-      } catch (e) {
-        console.warn('split_restarted activity', uid, e?.message || e);
-      }
-    }
-    return;
-  }
 
   for (const rid of bUids) {
     if (aUids.has(rid)) continue;

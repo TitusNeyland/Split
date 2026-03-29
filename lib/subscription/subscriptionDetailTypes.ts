@@ -54,6 +54,8 @@ export type SubscriptionDetailModel = {
   payerName?: string;
   autoCharge: 'on' | 'off';
   lifecycleStatus?: 'active' | 'ended';
+  /** Formatted from `endedAt` when status is ended (e.g. "Mar 29, 2026"). */
+  endedOnLabel?: string;
   members: SubscriptionDetailMember[];
   paidMemberCount: number;
   collectedCents: number;

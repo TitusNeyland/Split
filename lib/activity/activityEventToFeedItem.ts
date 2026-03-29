@@ -89,7 +89,6 @@ export type ActivityFeedKind =
   | 'split_member_joined'
   | 'split_member_removed'
   | 'split_ended'
-  | 'split_restarted'
   | 'split_percentage_updated'
   | 'split_price_updated'
   | 'friend_connected'
@@ -512,27 +511,6 @@ export function activityEventToFeedRow(
         _activityCreatedAtMs: createdMs,
       };
     }
-    case 'split_restarted': {
-      const nextBill =
-        typeof meta.nextBillingLabel === 'string' && meta.nextBillingLabel.trim()
-          ? meta.nextBillingLabel.trim()
-          : '';
-      return {
-        id: event.id,
-        kind: 'split_restarted',
-        serviceMark,
-        icon: 'refresh-outline',
-        iconBg: '#EEEDFE',
-        iconColor: C.purple,
-        title: `${subName} restarted`,
-        sub: nextBill ? `Billing resumes ${nextBill}` : 'Billing resumed',
-        time,
-        amountColor: C.text,
-        badge: 'Restarted',
-        badgeVariant: 'purple',
-        _activityCreatedAtMs: createdMs,
-      };
-    }
     case 'split_price_updated': {
       const oldP = typeof meta.oldPrice === 'number' ? meta.oldPrice : 0;
       const newP = typeof meta.newPrice === 'number' ? meta.newPrice : 0;
@@ -755,7 +733,30 @@ export function activityEventToFeedRow(
         _activityCreatedAtMs: createdMs,
       };
     }
-    default:
+    default: {
+      /** Old `split_restarted` Firestore docs: generic gray row (type removed from schema). */
+      if (String(t) === 'split_restarted') {
+        const nextBill =
+          typeof meta.nextBillingLabel === 'string' && meta.nextBillingLabel.trim()
+            ? meta.nextBillingLabel.trim()
+            : '';
+        return {
+          id: event.id,
+          kind: 'split_ended',
+          serviceMark,
+          icon: 'ellipse-outline',
+          iconBg: '#F0EEE9',
+          iconColor: '#5F5E5A',
+          title: `${subName}`,
+          sub: nextBill ? `Subscription activity · ${nextBill}` : 'Subscription activity',
+          time,
+          amountColor: C.text,
+          badge: 'Activity',
+          badgeVariant: 'gray',
+          _activityCreatedAtMs: createdMs,
+        };
+      }
       return null;
+    }
   }
 }

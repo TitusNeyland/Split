@@ -18,8 +18,6 @@ type Props = {
   viewerAvatarUrl: string | null;
   lastSeenPriceMap: Record<string, { toMillis?: () => number }> | null | undefined;
   muted?: boolean;
-  /** Subscriptions list: restart without navigating to detail first. */
-  onEndedRestart?: (doc: MemberSubscriptionDoc) => void;
   /** Subscriptions list: delete after confirmation. */
   onEndedDelete?: (doc: MemberSubscriptionDoc) => void;
 };
@@ -30,7 +28,6 @@ export function LiveSubscriptionCard({
   viewerAvatarUrl,
   lastSeenPriceMap,
   muted,
-  onEndedRestart,
   onEndedDelete,
 }: Props) {
   const router = useRouter();
@@ -66,10 +63,6 @@ export function LiveSubscriptionCard({
 
   const isOwner = Boolean(viewerUid && getOwnerId(doc) === viewerUid);
 
-  const onRestartSplit = () =>
-    onEndedRestart
-      ? onEndedRestart(doc)
-      : Alert.alert('Restart split', 'This will be available when subscription management is connected.');
   const onDeleteSplit = () =>
     onEndedDelete
       ? onEndedDelete(doc)
@@ -83,7 +76,6 @@ export function LiveSubscriptionCard({
       splitEndedActions={
         splitEnded && isOwner
           ? {
-              onRestart: onRestartSplit,
               onDelete: onDeleteSplit,
             }
           : undefined

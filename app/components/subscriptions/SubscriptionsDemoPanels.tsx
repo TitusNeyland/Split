@@ -276,11 +276,9 @@ function HuluOverdueCard() {
 
 function XboxEndedCard({
   userAvatarUrl,
-  onRestart,
   onDelete,
 }: {
   userAvatarUrl: string | null;
-  onRestart: () => void;
   onDelete: () => void;
 }) {
   const router = useRouter();
@@ -314,7 +312,6 @@ function XboxEndedCard({
       faded
       hideEditSplit
       splitEndedActions={{
-        onRestart,
         onDelete,
       }}
       onCardPress={goDetail}
@@ -325,11 +322,9 @@ function XboxEndedCard({
 
 export function SubscriptionsDemoPanel({
   filter,
-  onDemoEndedRestart,
   onDemoEndedDelete,
 }: {
   filter: FilterId;
-  onDemoEndedRestart?: () => void;
   onDemoEndedDelete?: () => void;
 }) {
   const router = useRouter();
@@ -359,10 +354,6 @@ export function SubscriptionsDemoPanel({
     );
   }
   if (filter === 'ended') {
-    const onRestart =
-      onDemoEndedRestart ??
-      (() =>
-        Alert.alert('Restart split', 'This will be available when subscription management is connected.'));
     const onDelete =
       onDemoEndedDelete ??
       (() => Alert.alert('Delete', 'This will be available when subscription management is connected.'));
@@ -371,10 +362,10 @@ export function SubscriptionsDemoPanel({
         <View style={styles.sh}>
           <Text style={styles.shTitle}>Ended splits</Text>
         </View>
-        <XboxEndedCard userAvatarUrl={userAvatarUrl} onRestart={onRestart} onDelete={onDelete} />
+        <XboxEndedCard userAvatarUrl={userAvatarUrl} onDelete={onDelete} />
         <View style={styles.endedPromptCard}>
           <Text style={styles.endedPromptTitle}>Want to start a new split?</Text>
-          <Text style={styles.endedPromptSub}>Restart an ended one or add a new subscription</Text>
+          <Text style={styles.endedPromptSub}>Create a new subscription split from scratch</Text>
           <Pressable
             style={styles.endedPromptBtn}
             accessibilityRole="button"

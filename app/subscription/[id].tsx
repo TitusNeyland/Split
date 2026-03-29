@@ -37,17 +37,8 @@ import { useProfileAvatarUrl } from '../hooks/useProfileAvatarUrl';
 import { useViewerFirstName } from '../hooks/useViewerFirstName';
 import { EndSplitConfirmSheet } from '../components/subscriptions/EndSplitConfirmSheet';
 import { endSubscriptionSplit } from '../../lib/subscription/endSplitFirestore';
-import {
-  formatSettingsPercentsLine,
-  formatSplitPercentsUnchanged,
-  membersOwingBeforeEndSplit,
-} from '../../lib/subscription/endSplitHelpers';
-import {
-  setPendingEndSplitToast,
-  setPendingSubscriptionsTabToast,
-} from '../../lib/subscription/endSplitNavigationToast';
-import { RestartSplitConfirmSheet } from '../components/subscriptions/RestartSplitConfirmSheet';
-import { restartSubscriptionSplit } from '../../lib/subscription/restartSplitFirestore';
+import { formatSettingsPercentsLine, membersOwingBeforeEndSplit } from '../../lib/subscription/endSplitHelpers';
+import { setPendingEndSplitToast } from '../../lib/subscription/endSplitNavigationToast';
 import { clearSplitInviteDeclineNotices } from '../../lib/subscription/splitInviteDeclineNoticesFirestore';
 import { removePendingSplitInvite } from '../../lib/subscription/removePendingSplitInviteFirestore';
 
@@ -148,8 +139,6 @@ export default function SubscriptionDetailScreen() {
   const [removeBusyId, setRemoveBusyId] = useState<string | null>(null);
   const [endSplitSheetOpen, setEndSplitSheetOpen] = useState(false);
   const [endSplitBusy, setEndSplitBusy] = useState(false);
-  const [restartSheetOpen, setRestartSheetOpen] = useState(false);
-  const [restartBusy, setRestartBusy] = useState(false);
 
   const demoDetail = useMemo(() => {
     if (!SUBSCRIPTIONS_DEMO_MODE || !subscriptionId) return null;
@@ -223,18 +212,6 @@ export default function SubscriptionDetailScreen() {
     };
   }, [detail, uidForEndSplit]);
 
-  const restartSplitSheetModel = useMemo(() => {
-    if (!detail || !uidForEndSplit) return null;
-    const ended = (detail.lifecycleStatus ?? 'active') === 'ended';
-    if (!ended || !detail.isOwner) return null;
-    return {
-      subscriptionName: detail.displayName,
-      firstNewBillLabel: detail.nextBillingLabel,
-      splitUnchangedLine: formatSplitPercentsUnchanged(detail.members),
-      membersNotifiedCount: detail.members.filter((m) => !m.invitePending && !m.inviteExpired).length,
-    };
-  }, [detail, uidForEndSplit]);
-
   const handleConfirmEndSplit = useCallback(async () => {
     if (!detail || !detail.isOwner) return;
     if (!SUBSCRIPTIONS_DEMO_MODE && !firebaseUid) return;
@@ -262,41 +239,6 @@ export default function SubscriptionDetailScreen() {
       setEndSplitBusy(false);
     }
   }, [detail, firebaseUid, profileDisplayName, subscriptionId, router]);
-
-  const handleRestartSplit = () => {
-    if (!restartSplitSheetModel) return;
-    setRestartSheetOpen(true);
-  };
-
-  const handleConfirmRestart = useCallback(async () => {
-    if (!detail || !detail.isOwner || !restartSplitSheetModel) return;
-    if (!SUBSCRIPTIONS_DEMO_MODE && !firebaseUid) return;
-    setRestartBusy(true);
-    try {
-      const dateLabel = restartSplitSheetModel.firstNewBillLabel;
-      if (!SUBSCRIPTIONS_DEMO_MODE) {
-        const ownerName = profileDisplayName?.trim() || 'Someone';
-        const recipientUids = detail.members
-          .filter((m) => m.memberId !== firebaseUid && !m.invitePending && !m.inviteExpired)
-          .map((m) => m.memberId);
-        await restartSubscriptionSplit({
-          subscriptionId: subscriptionId.trim(),
-          restartedByUid: firebaseUid!,
-          ownerDisplayName: ownerName,
-          subscriptionDisplayName: detail.displayName,
-          recipientUids,
-          nextBillingDateLabel: dateLabel,
-        });
-      }
-      setRestartSheetOpen(false);
-      setPendingSubscriptionsTabToast(`Split restarted · billing resumes ${dateLabel}`, 'active');
-      router.replace('/(tabs)/subscriptions');
-    } catch (e) {
-      Alert.alert('Could not restart split', e instanceof Error ? e.message : 'Try again.');
-    } finally {
-      setRestartBusy(false);
-    }
-  }, [detail, firebaseUid, profileDisplayName, subscriptionId, router, restartSplitSheetModel]);
 
   const onResendSplitInvite = useCallback(
     async (m: SubscriptionDetailMember) => {
@@ -596,24 +538,14 @@ export default function SubscriptionDetailScreen() {
               </View>
             </View>
           ) : null}
-          {ended && detail.isOwner ? (
-            <Pressable
-              style={styles.restartCard}
-              onPress={handleRestartSplit}
-              accessibilityRole="button"
-              accessibilityLabel="Restart this split"
-            >
-              <View style={styles.restartCardIconWrap}>
-                <Ionicons name="refresh" size={17} color={C.purple} />
-              </View>
-              <View style={styles.restartCardTextCol}>
-                <Text style={styles.restartCardTitle}>Restart this split</Text>
-                <Text style={styles.restartCardSub}>
-                  Billing resumes next cycle · unchanged settings
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color={C.purple} />
-            </Pressable>
+          {ended ? (
+            <View style={styles.endedInfoRow} accessibilityRole="text">
+              <Text style={styles.endedInfoTxt}>
+                {detail.endedOnLabel
+                  ? `This split ended on ${detail.endedOnLabel}`
+                  : 'This split ended'}
+              </Text>
+            </View>
           ) : null}
 
           <View style={[styles.card, ended && styles.cardEnded]}>
@@ -948,21 +880,6 @@ export default function SubscriptionDetailScreen() {
           confirming={endSplitBusy}
         />
       ) : null}
-
-      {restartSplitSheetModel ? (
-        <RestartSplitConfirmSheet
-          visible={restartSheetOpen}
-          onClose={() => {
-            if (!restartBusy) setRestartSheetOpen(false);
-          }}
-          onConfirm={handleConfirmRestart}
-          subscriptionName={restartSplitSheetModel.subscriptionName}
-          firstNewBillLabel={restartSplitSheetModel.firstNewBillLabel}
-          splitUnchangedLine={restartSplitSheetModel.splitUnchangedLine}
-          membersNotifiedCount={restartSplitSheetModel.membersNotifiedCount}
-          confirming={restartBusy}
-        />
-      ) : null}
     </View>
   );
 }
@@ -1051,40 +968,14 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.22)',
     fontWeight: '500',
   },
-  restartCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    borderWidth: 0.5,
-    borderColor: C.border,
-    paddingVertical: 14,
-    paddingHorizontal: 14,
+  endedInfoRow: {
     marginBottom: 12,
+    paddingHorizontal: 2,
   },
-  restartCardIconWrap: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: C.purpleTint,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  restartCardTextCol: {
-    flex: 1,
-    minWidth: 0,
-  },
-  restartCardTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: C.purple,
-  },
-  restartCardSub: {
-    fontSize: 10,
+  endedInfoTxt: {
+    fontSize: 13,
     color: C.muted,
-    marginTop: 3,
-    lineHeight: 14,
+    lineHeight: 18,
   },
   splitPipEndedMuted: {
     opacity: 0.7,

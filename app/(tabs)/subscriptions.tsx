@@ -36,14 +36,8 @@ import { SubscriptionCardSkeletonList } from '../components/subscriptions/Subscr
 import { useProfileAvatarUrl } from '../hooks/useProfileAvatarUrl';
 import { useSubscriptions } from '../contexts/SubscriptionsContext';
 import { spacing } from '../../constants/theme';
-import {
-  consumePendingSubscriptionsTabToast,
-  setPendingSubscriptionsTabToast,
-} from '../../lib/subscription/endSplitNavigationToast';
-import { RestartSplitConfirmSheet } from '../components/subscriptions/RestartSplitConfirmSheet';
-import { restartSubscriptionSplit } from '../../lib/subscription/restartSplitFirestore';
+import { consumePendingSubscriptionsTabToast } from '../../lib/subscription/endSplitNavigationToast';
 import { deleteSubscriptionDocument } from '../../lib/subscription/deleteSubscriptionFirestore';
-import { buildRestartSheetModelFromMemberDoc } from '../../lib/subscription/restartSplitSheetModel';
 
 const C = {
   bg: '#F2F0EB',
@@ -83,15 +77,10 @@ export default function SubscriptionsScreen() {
   const [splitEndedToast, setSplitEndedToast] = useState<string | null>(null);
   const splitEndedToastOpacity = useRef(new Animated.Value(0)).current;
 
-  const { avatarUrl: userAvatarUrl, displayName: profileDisplayName } = useProfileAvatarUrl();
+  const { avatarUrl: userAvatarUrl } = useProfileAvatarUrl();
 
   const [endedSubsOrdered, setEndedSubsOrdered] = useState<MemberSubscriptionDoc[]>([]);
   const [endedLoading, setEndedLoading] = useState(true);
-  const [restartSheetOpen, setRestartSheetOpen] = useState(false);
-  const [restartDoc, setRestartDoc] = useState<MemberSubscriptionDoc | null>(null);
-  const [restartDemo, setRestartDemo] = useState(false);
-  const [restartBusy, setRestartBusy] = useState(false);
-
   useFocusEffect(
     useCallback(() => {
       const pending = consumePendingSubscriptionsTabToast();
@@ -188,74 +177,6 @@ export default function SubscriptionsScreen() {
       return mb - ma;
     });
   }, [endedSubsOrdered, endedSubsFromContext]);
-
-  const restartSheetModel = useMemo(() => {
-    if (restartDemo) {
-      return {
-        subscriptionName: 'Xbox Game Pass',
-        firstNewBillLabel: 'May 21, 2026',
-        splitUnchangedLine: '50% / 50% · unchanged',
-        membersNotifiedCount: 2,
-      };
-    }
-    if (!restartDoc) return null;
-    return buildRestartSheetModelFromMemberDoc(restartDoc);
-  }, [restartDoc, restartDemo]);
-
-  const openRestartForDoc = useCallback((doc: MemberSubscriptionDoc) => {
-    const model = buildRestartSheetModelFromMemberDoc(doc);
-    if (!model) {
-      Alert.alert('Cannot restart', 'This split is missing member data.');
-      return;
-    }
-    setRestartDoc(doc);
-    setRestartDemo(false);
-    setRestartSheetOpen(true);
-  }, []);
-
-  const handleConfirmRestart = useCallback(async () => {
-    if (!restartSheetModel) return;
-    if (restartDemo) {
-      setRestartSheetOpen(false);
-      setRestartDemo(false);
-      setPendingSubscriptionsTabToast(
-        `Split restarted · billing resumes ${restartSheetModel.firstNewBillLabel}`,
-        'active'
-      );
-      router.replace('/(tabs)/subscriptions');
-      return;
-    }
-    if (!restartDoc || !uid) return;
-    setRestartBusy(true);
-    try {
-      const dateLabel = restartSheetModel.firstNewBillLabel;
-      const shares = restartDoc.splitMemberShares;
-      const recipientUids = Array.isArray(shares)
-        ? shares
-            .filter(
-              (r: { invitePending?: boolean; memberId?: string }) =>
-                !r.invitePending && r.memberId && String(r.memberId) !== uid
-            )
-            .map((r: { memberId: string }) => String(r.memberId))
-        : [];
-      await restartSubscriptionSplit({
-        subscriptionId: restartDoc.id,
-        restartedByUid: uid,
-        ownerDisplayName: profileDisplayName?.trim() || 'Someone',
-        subscriptionDisplayName: restartSheetModel.subscriptionName,
-        recipientUids,
-        nextBillingDateLabel: dateLabel,
-      });
-      setRestartSheetOpen(false);
-      setRestartDoc(null);
-      setPendingSubscriptionsTabToast(`Split restarted · billing resumes ${dateLabel}`, 'active');
-      router.replace('/(tabs)/subscriptions');
-    } catch (e) {
-      Alert.alert('Could not restart split', e instanceof Error ? e.message : 'Try again.');
-    } finally {
-      setRestartBusy(false);
-    }
-  }, [restartSheetModel, restartDemo, restartDoc, uid, profileDisplayName, router]);
 
   const confirmDeleteEnded = useCallback(
     async (doc: MemberSubscriptionDoc) => {
@@ -409,11 +330,6 @@ export default function SubscriptionsScreen() {
           {SUBSCRIPTIONS_DEMO_MODE ? (
             <SubscriptionsDemoPanel
               filter={filter}
-              onDemoEndedRestart={() => {
-                setRestartDemo(true);
-                setRestartDoc(null);
-                setRestartSheetOpen(true);
-              }}
               onDemoEndedDelete={() => {
                 Alert.alert(
                   'Delete this split?',
@@ -528,14 +444,13 @@ export default function SubscriptionsScreen() {
                           viewerUid={uid}
                           viewerAvatarUrl={userAvatarUrl}
                           lastSeenPriceMap={lastSeenPriceMap}
-                          onEndedRestart={openRestartForDoc}
                           onEndedDelete={promptDeleteEnded}
                         />
                       ))}
                       <View style={styles.endedPromptCard}>
                         <Text style={styles.endedPromptTitle}>Want to start a new split?</Text>
                         <Text style={styles.endedPromptSub}>
-                          Restart an ended one or add a new subscription
+                          Create a new subscription split from scratch
                         </Text>
                         <Pressable
                           style={styles.endedPromptBtn}
@@ -567,24 +482,6 @@ export default function SubscriptionsScreen() {
         </Animated.View>
       ) : null}
 
-      {restartSheetModel ? (
-        <RestartSplitConfirmSheet
-          visible={restartSheetOpen}
-          onClose={() => {
-            if (!restartBusy) {
-              setRestartSheetOpen(false);
-              setRestartDoc(null);
-              setRestartDemo(false);
-            }
-          }}
-          onConfirm={handleConfirmRestart}
-          subscriptionName={restartSheetModel.subscriptionName}
-          firstNewBillLabel={restartSheetModel.firstNewBillLabel}
-          splitUnchangedLine={restartSheetModel.splitUnchangedLine}
-          membersNotifiedCount={restartSheetModel.membersNotifiedCount}
-          confirming={restartBusy}
-        />
-      ) : null}
     </View>
   );
 }
