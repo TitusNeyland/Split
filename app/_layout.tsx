@@ -86,6 +86,14 @@ export default function RootLayout() {
             }}
           />
           <Stack.Screen
+            name="(screens)/split-joined"
+            options={{
+              headerShown: false,
+              gestureEnabled: false,
+              animation: 'slide_from_right',
+            }}
+          />
+          <Stack.Screen
             name="subscription/[id]"
             options={{
               headerShown: false,
