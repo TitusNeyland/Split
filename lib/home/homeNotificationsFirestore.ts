@@ -14,6 +14,10 @@ import {
 import { getFirebaseFirestore } from '../firebase';
 import { initialsFromName } from '../profile';
 import { getTotalCents } from '../subscription/subscriptionToCardModel';
+import {
+  type SubscriptionMemberRosterRow,
+  syncOwnerShareForPendingInvites,
+} from '../subscription/subscriptionSplitRecalc';
 
 export type NotificationDocType =
   | 'split_invite'
@@ -205,7 +209,7 @@ function parseSplitInviteMetadata(m: Record<string, unknown> | null | undefined)
 
 /**
  * Confirms membership on the split (when not already fully listed), then marks the notification.
- * Aligns with `splitMemberShares` + `memberUids` / `members` string arrays.
+ * Aligns with `splitMemberShares`, `memberUids`, `activeMemberUids`, and object `members` roster.
  */
 export async function acceptSplitInviteFromNotification(params: {
   uid: string;
@@ -223,7 +227,7 @@ export async function acceptSplitInviteFromNotification(params: {
 
   const raw = subSnap.data() as Record<string, unknown>;
   const memberUids: string[] = Array.isArray(raw.memberUids) ? [...raw.memberUids] : [];
-  const members: string[] = Array.isArray(raw.members) ? [...raw.members] : [];
+  const activeMemberUids: string[] = Array.isArray(raw.activeMemberUids) ? [...raw.activeMemberUids] : [];
   const shares: Record<string, unknown>[] = Array.isArray(raw.splitMemberShares)
     ? raw.splitMemberShares.map((s) => (s && typeof s === 'object' ? { ...(s as object) } : {}))
     : [];
@@ -240,7 +244,26 @@ export async function acceptSplitInviteFromNotification(params: {
 
   const idx = shares.findIndex((s) => String(s.memberId ?? '') === uid);
   if (!memberUids.includes(uid)) memberUids.push(uid);
-  if (!members.includes(uid)) members.push(uid);
+  if (!activeMemberUids.includes(uid)) activeMemberUids.push(uid);
+
+  const firstMem = Array.isArray(raw.members) && raw.members.length > 0 ? raw.members[0] : undefined;
+  const isObjectRoster = firstMem !== undefined && typeof firstMem === 'object' && firstMem !== null;
+  const membersRoster: Record<string, unknown>[] = isObjectRoster
+    ? (raw.members as Record<string, unknown>[]).map((m) =>
+        m && typeof m === 'object' ? { ...m } : {}
+      )
+    : [];
+  if (isObjectRoster) {
+    const roIdx = membersRoster.findIndex((m) => String((m as { uid?: string }).uid ?? '') === uid);
+    if (roIdx >= 0) {
+      membersRoster[roIdx] = {
+        ...membersRoster[roIdx],
+        memberStatus: 'active',
+        acceptedAt: serverTimestamp(),
+        paymentStatus: 'pending',
+      };
+    }
+  }
 
   const avatarBg = '#EEEDFE';
   const avatarColor = '#534AB7';
@@ -273,13 +296,26 @@ export async function acceptSplitInviteFromNotification(params: {
   }
   memberPaymentStatus[uid] = 'pending';
 
-  await updateDoc(subRef, {
+  const syncedShares = isObjectRoster
+    ? syncOwnerShareForPendingInvites(shares, totalCents, membersRoster as SubscriptionMemberRosterRow[])
+    : shares;
+
+  const patch: Record<string, unknown> = {
     memberUids,
-    members,
-    splitMemberShares: shares,
+    activeMemberUids,
+    splitMemberShares: syncedShares,
     memberPaymentStatus,
     splitUpdatedAt: serverTimestamp(),
-  });
+  };
+  if (isObjectRoster) {
+    patch.members = membersRoster;
+  } else if (Array.isArray(raw.members) && raw.members.every((x) => typeof x === 'string')) {
+    const legacy = [...(raw.members as string[])];
+    if (!legacy.includes(uid)) legacy.push(uid);
+    patch.members = legacy;
+  }
+
+  await updateDoc(subRef, patch);
 
   await updateDoc(doc(db, 'users', uid, 'notifications', notificationId), {
     read: true,

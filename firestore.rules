@@ -161,10 +161,10 @@ service cloud.firestore {
 
     // --- Rest of app (align with client modules under lib/) ---
     match /subscriptions/{subscriptionId} {
-      /** Client uses `members` (legacy) and/or `memberUids` (see memberSubscriptionsFirestore.ts). */
+      /** `memberUids` is the ACL list for array-contains queries. Legacy docs may use string[] `members`. */
       function subscriptionMemberData(data) {
-        return (data.keys().hasAny(['members']) && request.auth.uid in data.members)
-          || (data.keys().hasAny(['memberUids']) && request.auth.uid in data.memberUids);
+        return (data.keys().hasAny(['memberUids']) && request.auth.uid in data.memberUids)
+          || (data.keys().hasAny(['members']) && request.auth.uid in data.members);
       }
 
       allow read: if request.auth != null

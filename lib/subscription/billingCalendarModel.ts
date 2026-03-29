@@ -61,9 +61,21 @@ export function subscriptionDisplayName(serviceName: string, planName?: string):
   return s || p || 'Subscription';
 }
 
+/** Invitees whose `memberStatus` is still `pending` (not yet accepted). */
+export function countPendingMemberAcceptances(data: Record<string, unknown>): number {
+  const roster = data.members;
+  if (!Array.isArray(roster)) return 0;
+  let n = 0;
+  for (const m of roster) {
+    if (m && typeof m === 'object' && (m as { memberStatus?: string }).memberStatus === 'pending') n++;
+  }
+  return n;
+}
+
 export function buildStatusBadge(
   statusMap: Record<string, BillingMemberStatus> | undefined,
-  viewerUid: string
+  viewerUid: string,
+  options?: { pendingAcceptanceCount?: number }
 ): { label: string; textColor: string; backgroundColor?: string } {
   const C = {
     green: '#0F6E56',
@@ -71,6 +83,15 @@ export function buildStatusBadge(
     red: '#A32D2D',
     muted: '#5F5E5A',
   };
+
+  const pendingAccept = options?.pendingAcceptanceCount ?? 0;
+  if (pendingAccept > 0) {
+    return {
+      label: `${pendingAccept} pending`,
+      textColor: C.orange,
+      backgroundColor: '#FAEEDA',
+    };
+  }
 
   if (!statusMap || Object.keys(statusMap).length === 0) {
     return { label: '—', textColor: C.muted };
@@ -117,9 +138,26 @@ export function mapFirestoreDocToCalendarSubscription(
   const shares = Array.isArray(data.splitMemberShares) ? data.splitMemberShares : [];
   const row = shares.find(
     (x) => x && typeof x === 'object' && String((x as { memberId?: string }).memberId) === viewerUid
-  ) as { amountCents?: number } | undefined;
-  const yourShareCents =
+  ) as { amountCents?: number; role?: string } | undefined;
+  let yourShareCents =
     row && typeof row.amountCents === 'number' && Number.isFinite(row.amountCents) ? row.amountCents : 0;
+
+  const ownerUid =
+    typeof data.ownerUid === 'string'
+      ? data.ownerUid
+      : typeof data.ownerId === 'string'
+        ? data.ownerId
+        : '';
+  const hasInvitePending = shares.some(
+    (x) =>
+      x &&
+      typeof x === 'object' &&
+      (x as { role?: string }).role !== 'owner' &&
+      Boolean((x as { invitePending?: boolean }).invitePending)
+  );
+  if (viewerUid && ownerUid === viewerUid && hasInvitePending) {
+    yourShareCents = totalCents;
+  }
 
   const memberPaymentStatus = data.memberPaymentStatus as Record<string, BillingMemberStatus> | undefined;
   const iconColor = typeof data.iconColor === 'string' ? data.iconColor : undefined;
@@ -134,7 +172,9 @@ export function mapFirestoreDocToCalendarSubscription(
     totalCents,
     yourShareCents,
     dotColor: resolveDotColor(iconColor, serviceName || displayName),
-    statusBadge: buildStatusBadge(memberPaymentStatus, viewerUid),
+    statusBadge: buildStatusBadge(memberPaymentStatus, viewerUid, {
+      pendingAcceptanceCount: countPendingMemberAcceptances(data),
+    }),
   };
 }
 

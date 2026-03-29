@@ -7,6 +7,7 @@ import { getNextFirstChargeDate, ordinalDay } from '../subscription/billingDayFo
 import {
   getTotalCents,
   getOwnerId,
+  getViewerShareCents,
   normalizeSubscriptionStatus,
 } from '../subscription/subscriptionToCardModel';
 import type { MemberSubscriptionDoc } from '../subscription/memberSubscriptionsFirestore';
@@ -32,14 +33,7 @@ function effectiveBillingLabel(sub: Record<string, unknown>): string {
 }
 
 export function getMemberShareCents(sub: Record<string, unknown>, memberUid: string): number {
-  const shares = Array.isArray(sub.splitMemberShares) ? sub.splitMemberShares : [];
-  const row = shares.find(
-    (x) => x && typeof x === 'object' && String((x as { memberId?: string }).memberId) === memberUid
-  ) as { amountCents?: number } | undefined;
-  if (row && typeof row.amountCents === 'number' && Number.isFinite(row.amountCents)) {
-    return Math.round(row.amountCents);
-  }
-  return 0;
+  return getViewerShareCents(sub, memberUid);
 }
 
 export function getMemberPaymentStatusRaw(sub: Record<string, unknown>, memberUid: string): string {
@@ -101,6 +95,7 @@ export function computeHomeFinancialFromSubscriptions(
         const mid = String((row as { memberId?: string }).memberId ?? '');
         if (!mid || mid === uid) continue;
         const st = getMemberPaymentStatusRaw(sub, mid);
+        if (st === 'invited_pending') continue;
         const amt = getMemberShareCents(sub, mid);
         if (isPendingOrOverdue(st)) {
           owedToYouCents += amt;
@@ -223,6 +218,7 @@ export function computeHomeFloatCard(subs: RawSub[], uid: string): HomeFloatCard
       const mid = String((row as { memberId?: string }).memberId ?? '');
       if (!mid || mid === uid) continue;
       const st = getMemberPaymentStatusRaw(sub, mid);
+      if (st === 'invited_pending') continue;
       if (!isPendingOrOverdue(st)) continue;
       pendingCount += 1;
       pendingTotalCents += getMemberShareCents(sub, mid);
@@ -241,7 +237,9 @@ export function computeHomeFloatCard(subs: RawSub[], uid: string): HomeFloatCard
       if (!row || typeof row !== 'object') continue;
       const mid = String((row as { memberId?: string }).memberId ?? '');
       if (!mid || mid === uid) continue;
-      if (getMemberPaymentStatusRaw(sub, mid) !== 'overdue') continue;
+      const st = getMemberPaymentStatusRaw(sub, mid);
+      if (st === 'invited_pending') continue;
+      if (st !== 'overdue') continue;
       const amt = getMemberShareCents(sub, mid);
       if (amt <= 0) continue;
       const daysUntil = getDaysUntilBillingFromSub(sub);
@@ -348,7 +346,9 @@ export function computeFriendBalances(
       const owner = getOwnerId(sub);
       if (owner === viewerUid) {
         const st = getMemberPaymentStatusRaw(sub, friendUid);
-        if (isPendingOrOverdue(st)) {
+        if (st === 'invited_pending') {
+          /* not yet accepted — no payment obligation */
+        } else if (isPendingOrOverdue(st)) {
           theyOweMeCents += getMemberShareCents(sub, friendUid);
         }
       }
@@ -415,6 +415,10 @@ function memberUidSet(sub: Record<string, unknown>): Set<string> {
   if (Array.isArray(mem)) {
     for (const x of mem) {
       if (typeof x === 'string' && x) s.add(x);
+      else if (x && typeof x === 'object' && typeof (x as { uid?: string }).uid === 'string') {
+        const u = (x as { uid?: string }).uid;
+        if (u) s.add(u);
+      }
     }
   }
   const shares = sub.splitMemberShares;
