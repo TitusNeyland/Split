@@ -47,6 +47,7 @@ import {
 import { RestartSplitConfirmSheet } from '../components/subscriptions/RestartSplitConfirmSheet';
 import { restartSubscriptionSplit } from '../../lib/subscription/restartSplitFirestore';
 import { clearSplitInviteDeclineNotices } from '../../lib/subscription/splitInviteDeclineNoticesFirestore';
+import { removePendingSplitInvite } from '../../lib/subscription/removePendingSplitInviteFirestore';
 
 const C = {
   bg: '#F2F0EB',
@@ -86,6 +87,22 @@ function daysLeftFromMs(ms: number | null | undefined): number {
   return Math.max(0, Math.ceil((ms - Date.now()) / (24 * 60 * 60 * 1000)));
 }
 
+function pendingPrimaryLabel(m: SubscriptionDetailMember): string {
+  const email = m.pendingInviteEmail ?? m.rosterEmail ?? null;
+  if (email) return email;
+  return m.displayName?.trim() || 'Invite';
+}
+
+function coverageFirstName(m: SubscriptionDetailMember): string {
+  const raw =
+    m.displayName?.trim() ||
+    m.pendingInviteEmail?.split('@')[0] ||
+    m.rosterEmail?.split('@')[0] ||
+    'Member';
+  const first = raw.split(/\s+/)[0] ?? 'Member';
+  return first || 'Member';
+}
+
 export default function SubscriptionDetailScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -99,6 +116,7 @@ export default function SubscriptionDetailScreen() {
   const [historyModalCycle, setHistoryModalCycle] = useState<SubscriptionHistoryCycle | null>(null);
   const [detailRetryKey, setDetailRetryKey] = useState(0);
   const [resendBusyId, setResendBusyId] = useState<string | null>(null);
+  const [removeBusyId, setRemoveBusyId] = useState<string | null>(null);
   const [endSplitSheetOpen, setEndSplitSheetOpen] = useState(false);
   const [endSplitBusy, setEndSplitBusy] = useState(false);
   const [restartSheetOpen, setRestartSheetOpen] = useState(false);
@@ -116,6 +134,23 @@ export default function SubscriptionDetailScreen() {
     });
 
   const detail = SUBSCRIPTIONS_DEMO_MODE ? demoDetail : liveDetail;
+
+  const declineInviteBannerLine = useMemo(() => {
+    const first = detail?.splitInviteDeclineNotices?.[0];
+    if (!first) return '';
+    const name = first.declinerName?.trim() || 'Someone';
+    return `${name} declined your invite`;
+  }, [detail]);
+
+  const handleDismissDeclineBanner = useCallback(async () => {
+    if (!subscriptionId.trim() || SUBSCRIPTIONS_DEMO_MODE) return;
+    try {
+      await clearSplitInviteDeclineNotices(subscriptionId.trim());
+      setDetailRetryKey((k) => k + 1);
+    } catch (e) {
+      Alert.alert('Could not dismiss', e instanceof Error ? e.message : 'Try again.');
+    }
+  }, [subscriptionId]);
 
   useEffect(() => {
     if (SUBSCRIPTIONS_DEMO_MODE) return;
@@ -262,6 +297,46 @@ export default function SubscriptionDetailScreen() {
     [firebaseUid, detail, subscriptionId],
   );
 
+  const onRemovePendingInvite = useCallback(
+    (m: SubscriptionDetailMember) => {
+      if (!m.inviteId || !detail?.isOwner) return;
+      if (SUBSCRIPTIONS_DEMO_MODE) {
+        onDemoAction('Remove invite');
+        return;
+      }
+      if (!firebaseUid) return;
+      Alert.alert(
+        'Remove invite',
+        `Remove ${pendingPrimaryLabel(m)} from this split? They can no longer accept this invite.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Remove',
+            style: 'destructive',
+            onPress: () => {
+              void (async () => {
+                setRemoveBusyId(m.memberId);
+                try {
+                  await removePendingSplitInvite({
+                    subscriptionId: subscriptionId.trim(),
+                    ownerUid: firebaseUid,
+                    inviteId: m.inviteId!,
+                  });
+                  setDetailRetryKey((k) => k + 1);
+                } catch (e) {
+                  Alert.alert('Could not remove', e instanceof Error ? e.message : 'Try again.');
+                } finally {
+                  setRemoveBusyId(null);
+                }
+              })();
+            },
+          },
+        ]
+      );
+    },
+    [detail?.isOwner, firebaseUid, subscriptionId],
+  );
+
   if (!SUBSCRIPTIONS_DEMO_MODE && subscriptionId.trim() && firebaseUid && liveLoading) {
     return (
       <View style={styles.loadingRoot}>
@@ -368,8 +443,11 @@ export default function SubscriptionDetailScreen() {
     );
   }
 
+  const activeTotal = detail.activeMembersTotalCents;
   const pctCollected =
-    detail.totalCents > 0 ? Math.min(100, Math.round((100 * detail.collectedCents) / detail.totalCents)) : 0;
+    activeTotal > 0 ? Math.min(100, Math.round((100 * detail.collectedCents) / activeTotal)) : 0;
+  const activeMemberCount = detail.members.filter((m) => !m.invitePending).length;
+  const pendingInviteMembers = detail.members.filter((m) => m.invitePending);
 
   const ended = (detail.lifecycleStatus ?? 'active') === 'ended';
 
@@ -526,38 +604,47 @@ export default function SubscriptionDetailScreen() {
                   );
                 }
                 const days = daysLeftFromMs(m.inviteExpiresAtMs);
-                const lineName = m.displayName.trim() ? m.displayName : 'Pending invite';
+                const primary = pendingPrimaryLabel(m);
                 const sub =
                   days > 0
-                    ? `Invite pending · expires in ${days} ${days === 1 ? 'day' : 'days'}`
-                    : 'Invite pending';
+                    ? `Invite sent · expires in ${days} ${days === 1 ? 'day' : 'days'}`
+                    : 'Invite sent';
                 return (
-                  <View key={m.memberId} style={styles.splitRow}>
-                    <View style={[styles.splitPip, styles.splitPipPending]}>
-                      <Ionicons name="mail-outline" size={18} color={C.muted} />
+                  <View key={m.memberId} style={styles.pendingMemberRow}>
+                    <View style={styles.pendingAvatar}>
+                      <Ionicons name="mail-outline" size={14} color="#888780" />
                     </View>
-                    <View style={styles.splitRowMid}>
-                      <Text style={styles.splitName} numberOfLines={1}>
-                        {lineName}
+                    <View style={styles.memberInfo}>
+                      <Text style={styles.pendingName} numberOfLines={1}>
+                        {primary}
                       </Text>
-                      <Text style={styles.splitPct}>{sub}</Text>
+                      <Text style={styles.pendingSub}>{sub}</Text>
                     </View>
-                    <View style={styles.splitRowRight}>
-                      <Text style={styles.splitAmt}>{fmtCents(m.amountCents)}</Text>
-                      {detail.isOwner && m.inviteId && !SUBSCRIPTIONS_DEMO_MODE ? (
+                    {detail.isOwner && m.inviteId ? (
+                      <View style={styles.pendingActions}>
                         <Pressable
                           onPress={() => void onResendSplitInvite(m)}
-                          disabled={resendBusyId === m.memberId}
-                          style={({ pressed }) => [styles.resendBtn, pressed && styles.resendBtnPressed]}
+                          disabled={resendBusyId === m.memberId || removeBusyId === m.memberId}
+                          style={({ pressed }) => [styles.resendPill, pressed && styles.resendPillPressed]}
                           accessibilityRole="button"
-                          accessibilityLabel={`Resend invite to ${lineName}`}
+                          accessibilityLabel={`Resend invite to ${primary}`}
                         >
-                          <Text style={styles.resendBtnTxt}>
+                          <Text style={styles.resendPillTxt}>
                             {resendBusyId === m.memberId ? '…' : 'Resend'}
                           </Text>
                         </Pressable>
-                      ) : null}
-                    </View>
+                        <Pressable
+                          onPress={() => onRemovePendingInvite(m)}
+                          disabled={removeBusyId === m.memberId || resendBusyId === m.memberId}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Remove invite for ${primary}`}
+                        >
+                          <Text style={styles.removeInviteTxt}>
+                            {removeBusyId === m.memberId ? '…' : 'Remove'}
+                          </Text>
+                        </Pressable>
+                      </View>
+                    ) : null}
                   </View>
                 );
               }
@@ -601,29 +688,24 @@ export default function SubscriptionDetailScreen() {
                 </View>
               );
             })}
-            {!ended && detail.isOwner
-              ? detail.members
-                  .filter((m) => m.invitePending)
-                  .map((m) => {
-                    const label = m.pendingInviteEmail ?? m.displayName;
-                    return (
-                      <View key={`invite-banner-${m.memberId}`} style={styles.pendingInviteBanner}>
-                        <Ionicons name="information-circle-outline" size={18} color="#B45309" />
-                        <Text style={styles.pendingInviteBannerTxt}>
-                          {label} hasn&apos;t joined yet. Their share will be charged once they accept.
-                        </Text>
-                      </View>
-                    );
-                  })
-              : null}
+            {!ended && detail.isOwner && pendingInviteMembers.length > 0 ? (
+              <View style={styles.ownerCoverageBlock}>
+                {pendingInviteMembers.map((m) => (
+                  <Text key={`cover-${m.memberId}`} style={styles.ownerCoverageTxt}>
+                    You are currently covering {coverageFirstName(m)}&apos;s share ({fmtCents(m.amountCents)})
+                    until they accept.
+                  </Text>
+                ))}
+              </View>
+            ) : null}
             {!ended ? (
               <>
                 <View style={styles.progTrack}>
                   <View style={[styles.progFill, { width: `${pctCollected}%` }]} />
                 </View>
                 <Text style={styles.progCaption}>
-                  {detail.paidMemberCount} of {detail.members.length} members paid ·{' '}
-                  {fmtCents(detail.collectedCents)} collected of {fmtCents(detail.totalCents)} total
+                  {detail.paidMemberCount} of {activeMemberCount} members paid ·{' '}
+                  {fmtCents(detail.collectedCents)} collected of {fmtCents(activeTotal)} total
                 </Text>
               </>
             ) : null}
@@ -1035,6 +1117,75 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0.5,
     borderBottomColor: C.divider,
   },
+  pendingMemberRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 12,
+    borderBottomWidth: 0.5,
+    borderBottomColor: C.divider,
+  },
+  pendingAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    borderColor: '#D3D1C7',
+    backgroundColor: '#F0EEE9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  memberInfo: {
+    flex: 1,
+    minWidth: 0,
+  },
+  pendingName: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: C.muted,
+  },
+  pendingSub: {
+    fontSize: 13,
+    color: C.muted,
+    marginTop: 2,
+  },
+  pendingActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  resendPill: {
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    backgroundColor: '#F0EEE9',
+  },
+  resendPillPressed: {
+    opacity: 0.7,
+  },
+  resendPillTxt: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: C.muted,
+  },
+  removeInviteTxt: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: C.red,
+  },
+  ownerCoverageBlock: {
+    marginTop: 12,
+    paddingTop: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: C.divider,
+    gap: 8,
+  },
+  ownerCoverageTxt: {
+    fontSize: 12,
+    color: C.muted,
+    lineHeight: 18,
+  },
   splitPip: {
     width: 36,
     height: 36,
@@ -1092,23 +1243,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: C.purple,
-  },
-  pendingInviteBanner: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-    backgroundColor: C.amberBg,
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    marginTop: 10,
-  },
-  pendingInviteBannerTxt: {
-    flex: 1,
-    fontSize: 13,
-    fontWeight: '500',
-    color: C.amber,
-    lineHeight: 19,
   },
   splitAmt: {
     fontSize: 16,

@@ -26,6 +26,8 @@ export type SubscriptionDetailMember = {
   invitePending?: boolean;
   inviteId?: string;
   pendingInviteEmail?: string | null;
+  /** Roster `email` when present (pending invite display). */
+  rosterEmail?: string | null;
   inviteExpiresAtMs?: number | null;
 };
 
@@ -60,6 +62,8 @@ export type SubscriptionDetailModel = {
   members: SubscriptionDetailMember[];
   paidMemberCount: number;
   collectedCents: number;
+  /** Sum of active (non-invite-pending) member shares — progress bar denominator. */
+  activeMembersTotalCents: number;
   editorMembers: SubscriptionDetailEditorMember[];
   history: SubscriptionHistoryCycle[];
   /** Owner: pending decline notices (dismissible banner). */
@@ -136,6 +140,10 @@ const JD = {
   avatarColor: '#534AB7',
 } as const;
 
+function activeMembersTotalFromMembers(members: SubscriptionDetailMember[]): number {
+  return members.filter((m) => !m.invitePending).reduce((s, m) => s + m.amountCents, 0);
+}
+
 function historyLinesFromMembers(
   members: SubscriptionDetailMember[],
   allPaid: boolean
@@ -207,6 +215,7 @@ export function getDemoSubscriptionDetail(
       members: netflixMembers,
       paidMemberCount: 2,
       collectedCents: netflixMembers[0]!.amountCents + netflixMembers[1]!.amountCents,
+      activeMembersTotalCents: activeMembersTotalFromMembers(netflixMembers),
       editorMembers: netflixSplit.editorMembers,
       history: [
         {
@@ -262,6 +271,7 @@ export function getDemoSubscriptionDetail(
       members: spotifySplit.members,
       paidMemberCount: 5,
       collectedCents: SPOTIFY_TOTAL,
+      activeMembersTotalCents: activeMembersTotalFromMembers(spotifySplit.members),
       editorMembers: spotifySplit.editorMembers,
       history: [
         {
@@ -300,6 +310,7 @@ export function getDemoSubscriptionDetail(
       members: icloudSplit.members,
       paidMemberCount: 0,
       collectedCents: 0,
+      activeMembersTotalCents: activeMembersTotalFromMembers(icloudSplit.members),
       editorMembers: icloudSplit.editorMembers,
       history: [
         {
@@ -342,6 +353,7 @@ export function getDemoSubscriptionDetail(
       members: huluSplit.members,
       paidMemberCount: 1,
       collectedCents: huluSplit.members[0]!.amountCents,
+      activeMembersTotalCents: activeMembersTotalFromMembers(huluSplit.members),
       editorMembers: huluSplit.editorMembers,
       history: [
         {
@@ -366,6 +378,7 @@ export function getDemoSubscriptionDetail(
       members: xboxSplit.members,
       paidMemberCount: 0,
       collectedCents: 0,
+      activeMembersTotalCents: activeMembersTotalFromMembers(xboxSplit.members),
       editorMembers: xboxSplit.editorMembers,
       history: [
         {

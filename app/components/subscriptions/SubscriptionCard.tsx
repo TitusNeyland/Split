@@ -26,6 +26,8 @@ export type SubscriptionCardMember = {
   color: string;
   /** Profile image URL (e.g. current user). */
   avatarUrl?: string | null;
+  /** Pending invite slot — dashed pip + clock icon. */
+  pending?: boolean;
 };
 
 export type SubscriptionCardProps = {
@@ -73,6 +75,8 @@ export type SubscriptionCardProps = {
   /** Inline split editor or other content below the edit row. */
   belowEditSplit?: React.ReactNode;
   hideEditSplit?: boolean;
+  /** Roster members still on pending invite (amber pill on Active tab cards). */
+  pendingInviteCount?: number;
   /** Ended split: Restart + Delete row (hides edit split). */
   splitEndedActions?: {
     onRestart: () => void;
@@ -87,16 +91,25 @@ function MemberPip({
   backgroundColor,
   color,
   avatarUrl,
+  pending,
 }: {
   initials: string;
   backgroundColor: string;
   color: string;
   avatarUrl?: string | null;
+  pending?: boolean;
 }) {
   if (avatarUrl) {
     return (
       <View style={[styles.pip, styles.pipPhoto]}>
         <Image source={{ uri: avatarUrl }} style={styles.pipImg} accessibilityLabel="Member photo" />
+      </View>
+    );
+  }
+  if (pending) {
+    return (
+      <View style={styles.pipPending} accessibilityLabel="Pending invite">
+        <Ionicons name="time-outline" size={12} color={C.muted} style={styles.pipPendingIcon} />
       </View>
     );
   }
@@ -137,6 +150,7 @@ export function SubscriptionCard({
   editSplitButtonLabel = 'Edit split',
   belowEditSplit,
   hideEditSplit = false,
+  pendingInviteCount = 0,
   splitEndedActions,
   faded = false,
 }: SubscriptionCardProps) {
@@ -212,10 +226,18 @@ export function SubscriptionCard({
                 backgroundColor={m.backgroundColor}
                 color={m.color}
                 avatarUrl={m.avatarUrl}
+                pending={m.pending}
               />
             ))}
           </View>
           <View style={styles.memberRowRight}>
+            {pendingInviteCount > 0 ? (
+              <View style={styles.pendingPill}>
+                <Text style={styles.pendingPillTxt}>
+                  {pendingInviteCount} pending invite{pendingInviteCount > 1 ? 's' : ''}
+                </Text>
+              </View>
+            ) : null}
             <View style={[styles.statusPill, { backgroundColor: statusPill.backgroundColor }]}>
               <View style={[styles.statusDot, { backgroundColor: statusPill.dotColor }]} />
               <Text style={[styles.statusTxt, { color: statusPill.textColor }]}>{statusPill.label}</Text>
@@ -464,6 +486,18 @@ const styles = StyleSheet.create({
   pips: {
     flexDirection: 'row',
   },
+  pendingPill: {
+    backgroundColor: '#FAEEDA',
+    paddingVertical: 2,
+    paddingHorizontal: 7,
+    borderRadius: 6,
+    alignSelf: 'center',
+  },
+  pendingPillTxt: {
+    fontSize: 9,
+    fontWeight: '500',
+    color: '#854F0B',
+  },
   pip: {
     width: 24,
     height: 24,
@@ -486,6 +520,22 @@ const styles = StyleSheet.create({
   pipTxt: {
     fontSize: 9,
     fontWeight: '600',
+  },
+  pipPending: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    borderColor: '#D3D1C7',
+    backgroundColor: '#F0EEE9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: -6,
+    opacity: 0.72,
+  },
+  pipPendingIcon: {
+    opacity: 0.85,
   },
   statusPill: {
     flexDirection: 'row',
