@@ -16,9 +16,11 @@ import type {
   SubscriptionHistoryCycle,
 } from './subscriptionDetailDemo';
 import {
-  collectedCentsForSubscription,
+  collectedCentsActiveMembersOnly,
+  getActiveMembersTotalCents,
   getOwnerId,
   getTotalCents,
+  isShareRowPendingInvite,
   normalizeSubscriptionStatus,
 } from './subscriptionToCardModel';
 
@@ -36,6 +38,21 @@ type ShareRow = {
   pendingInviteEmail?: string;
   inviteExpiresAt?: Timestamp | { toMillis?: () => number };
 };
+
+function rosterEmailForUid(data: Record<string, unknown>, uid: string): string | null {
+  const members = data.members;
+  if (!Array.isArray(members)) return null;
+  for (const m of members) {
+    if (m && typeof m === 'object') {
+      const id = String((m as { uid?: string }).uid ?? '');
+      if (id === uid) {
+        const email = (m as { email?: string }).email;
+        return typeof email === 'string' && email.trim() ? email.trim().toLowerCase() : null;
+      }
+    }
+  }
+  return null;
+}
 
 function effectiveBillingDayLabel(data: Record<string, unknown>): string {
   const existing = data.billingDayLabel;
@@ -128,11 +145,12 @@ export function mapFirestoreSubscriptionToDetailModel(
     } else if (totalCents > 0) {
       percent = Math.round((100 * amountCents) / totalCents);
     }
-    const invitePending = Boolean(row.invitePending);
+    const invitePending = isShareRowPendingInvite(data, row);
     const pendingInviteEmail =
       typeof row.pendingInviteEmail === 'string' && row.pendingInviteEmail.trim()
         ? row.pendingInviteEmail.trim().toLowerCase()
         : null;
+    const rosterEmail = rosterEmailForUid(data, memberId);
     return {
       memberId,
       displayName: String(row.displayName ?? 'Member'),
@@ -146,6 +164,7 @@ export function mapFirestoreSubscriptionToDetailModel(
       invitePending,
       inviteId: typeof row.inviteId === 'string' && row.inviteId ? row.inviteId : undefined,
       pendingInviteEmail,
+      rosterEmail,
       inviteExpiresAtMs: invitePending ? inviteExpiresAtMsFromRow(row) : null,
     };
   });
@@ -162,13 +181,14 @@ export function mapFirestoreSubscriptionToDetailModel(
     };
   });
 
-  const paidMemberCount = members.filter((m) => m.cycleStatus === 'paid').length;
-  const collectedCents = collectedCentsForSubscription(data);
+  const paidMemberCount = members.filter((m) => !m.invitePending && m.cycleStatus === 'paid').length;
+  const collectedCents = collectedCentsActiveMembersOnly(data);
+  const activeMembersTotalCents = getActiveMembersTotalCents(data);
 
   const autoCharge = data.autoCharge === true ? 'on' : 'off';
   const lifecycleStatus = normalizeSubscriptionStatus(data.status) === 'ended' ? 'ended' : 'active';
 
-  const allPaid = totalCents > 0 && collectedCents >= totalCents;
+  const allPaid = activeMembersTotalCents > 0 && collectedCents >= activeMembersTotalCents;
   const history: SubscriptionHistoryCycle[] = [
     {
       key: 'current',
@@ -217,6 +237,7 @@ export function mapFirestoreSubscriptionToDetailModel(
     members,
     paidMemberCount,
     collectedCents,
+    activeMembersTotalCents,
     editorMembers,
     history,
     splitInviteDeclineNotices,

@@ -22,6 +22,8 @@ type CardMemberPip = {
   backgroundColor: string;
   color: string;
   avatarUrl?: string | null;
+  /** Invite pending slot; dashed pip + clock icon. */
+  pending?: boolean;
 };
 
 type StatusPill = {
@@ -54,6 +56,8 @@ export type SubscriptionCardBaseProps = {
   statusPill: StatusPill;
   dueLabel?: string;
   progress: CardProgress;
+  /** Roster `memberStatus === 'pending'` count; shows amber pill on list card. */
+  pendingInviteCount?: number;
 };
 
 const C = {
@@ -154,7 +158,68 @@ type ShareRow = {
   avatarColor?: string;
   amountCents?: number;
   percent?: number;
+  invitePending?: boolean;
+  role?: string;
 };
+
+function getRosterMemberStatusByMemberId(data: Record<string, unknown>): Map<string, string> {
+  const members = data.members;
+  const map = new Map<string, string>();
+  if (!Array.isArray(members)) return map;
+  for (const m of members) {
+    if (m && typeof m === 'object') {
+      const uid = (m as { uid?: string }).uid;
+      const st = (m as { memberStatus?: string }).memberStatus;
+      if (typeof uid === 'string' && uid) map.set(uid, String(st ?? ''));
+    }
+  }
+  return map;
+}
+
+/** True when this share row is an invite slot that has not been accepted yet. */
+export function isShareRowPendingInvite(data: Record<string, unknown>, s: ShareRow): boolean {
+  if (s.role === 'owner') return false;
+  if (s.invitePending === true) return true;
+  const id = String(s.memberId ?? '');
+  return getRosterMemberStatusByMemberId(data).get(id) === 'pending';
+}
+
+/**
+ * Sum of amountCents on non-pending share rows (pending invite slots excluded from progress math).
+ */
+export function getActiveMembersTotalCents(data: Record<string, unknown>): number {
+  const shares = getSplitShares(data);
+  if (shares.length === 0) return getTotalCents(data);
+  let sum = 0;
+  for (const s of shares) {
+    if (isShareRowPendingInvite(data, s as ShareRow)) continue;
+    const amt =
+      typeof s.amountCents === 'number' && Number.isFinite(s.amountCents) ? Math.round(s.amountCents) : 0;
+    sum += amt;
+  }
+  return sum;
+}
+
+export function collectedCentsActiveMembersOnly(data: Record<string, unknown>): number {
+  const statusMap = extractMemberPaymentStatus(data);
+  const shares = getSplitShares(data);
+  if (shares.length > 0) {
+    let sum = 0;
+    for (const s of shares) {
+      if (isShareRowPendingInvite(data, s as ShareRow)) continue;
+      const id = String(s.memberId ?? '');
+      if (!id) continue;
+      const st = String(statusMap[id] ?? '').toLowerCase();
+      const amt =
+        typeof s.amountCents === 'number' && Number.isFinite(s.amountCents) ? Math.round(s.amountCents) : 0;
+      if (st === 'paid' || st === 'owner') {
+        sum += amt;
+      }
+    }
+    return Math.min(sum, getTotalCents(data));
+  }
+  return collectedCentsForSubscription(data);
+}
 
 function getSplitShares(data: Record<string, unknown>): ShareRow[] {
   const arr = data.splitMemberShares;
@@ -298,6 +363,7 @@ export function buildMemberPips(
   }
   return shares.map((s, i) => {
     const id = String(s.memberId ?? i);
+    const pending = isShareRowPendingInvite(data, s as ShareRow);
     const initials =
       typeof s.initials === 'string' && s.initials.trim()
         ? s.initials.trim().slice(0, 2).toUpperCase()
@@ -310,6 +376,7 @@ export function buildMemberPips(
       backgroundColor,
       color,
       avatarUrl: id === viewerUid ? viewerAvatarUrl : null,
+      pending,
     };
   });
 }
@@ -408,15 +475,26 @@ export function buildSubscriptionCardBase(
     typeof data.planName === 'string' ? data.planName : undefined
   );
   const statusMap = extractMemberPaymentStatus(data);
+  const pendingInviteCount = countPendingMemberAcceptances(data);
   const badge = buildStatusBadge(statusMap, viewerUid, {
-    pendingAcceptanceCount: countPendingMemberAcceptances(data),
+    pendingAcceptanceCount: pendingInviteCount,
   });
-  const collected = collectedCentsForSubscription(data);
-  const pct = totalCents > 0 ? Math.min(100, Math.round((100 * collected) / totalCents)) : 0;
+  const activeTotal = getActiveMembersTotalCents(data);
+  const collectedActive = collectedCentsActiveMembersOnly(data);
+  const collectedEnded = collectedCentsForSubscription(data);
+  const pct =
+    splitEnded && totalCents > 0
+      ? Math.min(100, Math.round((100 * collectedEnded) / totalCents))
+      : activeTotal > 0
+        ? Math.min(100, Math.round((100 * collectedActive) / activeTotal))
+        : 0;
   const ownerId = getOwnerId(data);
   const auto = data.autoCharge === true ? 'on' : data.autoCharge === false ? 'off' : undefined;
-  const remaining = Math.max(0, totalCents - collected);
-  const isComplete = totalCents > 0 && collected >= totalCents;
+  const progressDenominatorCents = splitEnded ? totalCents : activeTotal;
+  const progressCollectedCents = splitEnded ? collectedEnded : collectedActive;
+  const remaining = Math.max(0, progressDenominatorCents - progressCollectedCents);
+  const isComplete =
+    progressDenominatorCents > 0 && progressCollectedCents >= progressDenominatorCents;
   const muted = Boolean(options?.muted || splitEnded);
 
   const endedCycleLine = splitEnded
@@ -446,7 +524,7 @@ export function buildSubscriptionCardBase(
     progress: splitEnded
       ? {
           percentCollected: pct,
-          collectedLabel: `${fmtCents(collected)} collected`,
+          collectedLabel: `${fmtCents(collectedEnded)} collected`,
           rightLabel: isComplete ? 'Complete' : fmtCents(totalCents),
           isComplete,
           rightLabelColor: C.muted,
@@ -454,12 +532,13 @@ export function buildSubscriptionCardBase(
         }
       : {
           percentCollected: pct,
-          collectedLabel: `${fmtCents(collected)} collected`,
-          rightLabel: isComplete ? 'Complete' : fmtCents(totalCents),
+          collectedLabel: `${fmtCents(collectedActive)} collected`,
+          rightLabel: isComplete ? 'Complete' : fmtCents(activeTotal),
           isComplete,
           rightLabelColor: isComplete ? C.greenDark : remaining > 0 ? C.text : C.muted,
           barColor: options?.muted ? C.muted : C.green,
         },
+    pendingInviteCount: splitEnded ? 0 : pendingInviteCount,
   };
 }
 
