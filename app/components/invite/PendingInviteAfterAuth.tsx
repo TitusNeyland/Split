@@ -10,6 +10,7 @@ import {
 } from '../../../lib/friends/friendSystemFirestore';
 import { inviteIsExpired } from '../../../lib/friends/inviteHelpers';
 import { getPendingInviteId, setPendingInviteId } from '../../../lib/friends/pendingInviteStorage';
+import { replaceWithSplitJoinedCelebration } from '../../../lib/navigation/splitJoinedCelebration';
 
 /**
  * After sign-up / sign-in, if an invite id was stored (link opened in browser or before auth),
@@ -50,10 +51,13 @@ export default function PendingInviteAfterAuth() {
         await setPendingInviteId(null);
 
         if (invite.splitId) {
-          router.replace({
-            pathname: '/split-added',
-            params: { subscriptionId: invite.splitId },
-          });
+          const ok = await replaceWithSplitJoinedCelebration(router, invite.splitId, user.uid);
+          if (!ok) {
+            router.replace({
+              pathname: '/subscription/[id]',
+              params: { id: invite.splitId },
+            });
+          }
           return;
         }
 

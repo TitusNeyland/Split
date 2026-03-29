@@ -32,6 +32,7 @@ import {
 import { resolveActivityRoute } from '../../lib/activity/activityNavigation';
 import { sendPaymentReminderCallable } from '../../lib/activity/sendPaymentReminderCallable';
 import { acceptPendingInvite } from '../../lib/friends/friendSystemFirestore';
+import { replaceWithSplitJoinedCelebration } from '../../lib/navigation/splitJoinedCelebration';
 
 type IonIconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -915,7 +916,10 @@ export default function ActivityScreen() {
                         setLiveFeedItems((prev) =>
                           prev.map((i) => (i.id === item.id ? { ...i, read: true } : i)),
                         );
-                        router.push({ pathname: '/subscription/[id]', params: { id: subscriptionId } });
+                        const ok = await replaceWithSplitJoinedCelebration(router, subscriptionId, uid);
+                        if (!ok) {
+                          router.replace({ pathname: '/subscription/[id]', params: { id: subscriptionId } });
+                        }
                       } catch (e) {
                         Alert.alert('Could not join', e instanceof Error ? e.message : 'Try again.');
                       }

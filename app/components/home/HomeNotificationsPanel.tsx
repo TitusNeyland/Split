@@ -23,6 +23,7 @@ import {
   markFriendConnectedNotificationRead,
   type AppNotification,
 } from '../../../lib/home/homeNotificationsFirestore';
+import { replaceWithSplitJoinedCelebration } from '../../../lib/navigation/splitJoinedCelebration';
 import { getFriendAvatarColors } from '../../../lib/friends/friendAvatar';
 import { initialsFromName } from '../../../lib/profile';
 import { ServiceIcon } from '../shared/ServiceIcon';
@@ -101,7 +102,10 @@ export default function HomeNotificationsPanel({
           metadata: meta,
         });
         onClose();
-        router.push(`/subscription/${meta.subscriptionId}`);
+        const ok = await replaceWithSplitJoinedCelebration(router, meta.subscriptionId, uid);
+        if (!ok) {
+          router.replace({ pathname: '/subscription/[id]', params: { id: meta.subscriptionId } });
+        }
       } catch (e) {
         const msg = e instanceof Error ? e.message : 'Could not join this split.';
         Alert.alert('Could not join', msg);

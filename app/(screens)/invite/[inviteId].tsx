@@ -30,6 +30,7 @@ import { openAppStoreDownload } from '../../../lib/storeLinks';
 import { setPendingInviteId } from '../../../lib/friends/pendingInviteStorage';
 import { buildInviteUrl } from '../../../lib/friends/inviteLinks';
 import { Timestamp } from 'firebase/firestore';
+import { replaceWithSplitJoinedCelebration } from '../../../lib/navigation/splitJoinedCelebration';
 
 function daysLeft(invite: FirestoreInvite): number {
   const ex = invite.expiresAt;
@@ -141,7 +142,10 @@ export default function AcceptInviteScreen() {
     try {
       await acceptPendingInvite(inviteId, user.uid);
       if (invite.splitId) {
-        router.replace({ pathname: '/subscription/[id]', params: { id: invite.splitId } });
+        const ok = await replaceWithSplitJoinedCelebration(router, invite.splitId, user.uid);
+        if (!ok) {
+          router.replace({ pathname: '/subscription/[id]', params: { id: invite.splitId } });
+        }
       } else {
         router.replace('/friends');
       }

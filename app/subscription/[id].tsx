@@ -10,8 +10,9 @@ import {
   Image,
   Alert,
   Share,
+  BackHandler,
 } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
@@ -107,8 +108,34 @@ function coverageFirstName(m: SubscriptionDetailMember): string {
 export default function SubscriptionDetailScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { id } = useLocalSearchParams<{ id: string | string[] }>();
+  const { id, backToSubs: backToSubsRaw } = useLocalSearchParams<{
+    id: string | string[];
+    backToSubs?: string | string[];
+  }>();
   const subscriptionId = typeof id === 'string' ? id : id?.[0] ?? '';
+  const backToSubsTab =
+    backToSubsRaw === '1' ||
+    backToSubsRaw === 'true' ||
+    (Array.isArray(backToSubsRaw) && (backToSubsRaw[0] === '1' || backToSubsRaw[0] === 'true'));
+
+  const navigateBack = useCallback(() => {
+    if (backToSubsTab) {
+      router.replace('/(tabs)/subscriptions');
+      return;
+    }
+    router.back();
+  }, [router, backToSubsTab]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!backToSubsTab) return undefined;
+      const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+        router.replace('/(tabs)/subscriptions');
+        return true;
+      });
+      return () => sub.remove();
+    }, [backToSubsTab, router])
+  );
   const { avatarUrl: userAvatarUrl, displayName: profileDisplayName } = useProfileAvatarUrl();
   const { firstName: viewerFirstName } = useViewerFirstName();
   const firebaseUid = useFirebaseUid();
@@ -354,7 +381,7 @@ export default function SubscriptionDetailScreen() {
         <StatusBar style="dark" />
         <View style={[styles.loadingTopBar, { paddingTop: insets.top + 12 }]}>
           <Pressable
-            onPress={() => router.back()}
+            onPress={navigateBack}
             style={styles.unknownBack}
             accessibilityRole="button"
             accessibilityLabel="Go back"
@@ -384,7 +411,7 @@ export default function SubscriptionDetailScreen() {
       <View style={[styles.unknownRoot, { paddingTop: insets.top + 12 }]}>
         <StatusBar style="dark" />
         <Pressable
-          onPress={() => router.back()}
+          onPress={navigateBack}
           style={styles.unknownBack}
           accessibilityRole="button"
           accessibilityLabel="Go back"
@@ -398,7 +425,7 @@ export default function SubscriptionDetailScreen() {
         ) : null}
         <Pressable
           style={styles.unknownPrimaryBtn}
-          onPress={() => router.back()}
+          onPress={navigateBack}
           accessibilityRole="button"
           accessibilityLabel="Go back"
         >
@@ -423,7 +450,7 @@ export default function SubscriptionDetailScreen() {
       <View style={[styles.unknownRoot, { paddingTop: insets.top + 12 }]}>
         <StatusBar style="dark" />
         <Pressable
-          onPress={() => router.back()}
+          onPress={navigateBack}
           style={styles.unknownBack}
           accessibilityRole="button"
           accessibilityLabel="Go back"
@@ -441,7 +468,7 @@ export default function SubscriptionDetailScreen() {
       <View style={[styles.unknownRoot, { paddingTop: insets.top + 12 }]}>
         <StatusBar style="dark" />
         <Pressable
-          onPress={() => router.back()}
+          onPress={navigateBack}
           style={styles.unknownBack}
           accessibilityRole="button"
           accessibilityLabel="Go back"
@@ -480,10 +507,10 @@ export default function SubscriptionDetailScreen() {
         >
           <View style={styles.heroTop}>
             <Pressable
-              onPress={() => router.back()}
+              onPress={navigateBack}
               style={styles.backBtn}
               accessibilityRole="button"
-              accessibilityLabel="Back to subscriptions"
+              accessibilityLabel={backToSubsTab ? 'Back to Subs' : 'Back to subscriptions'}
             >
               <Ionicons name="chevron-back" size={26} color={ended ? 'rgba(255,255,255,0.4)' : '#fff'} />
             </Pressable>
