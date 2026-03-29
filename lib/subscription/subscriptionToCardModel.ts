@@ -192,9 +192,16 @@ export function isInviteSlotExpired(data: Record<string, unknown>, s: ShareRow):
 export function isShareRowPendingInvite(data: Record<string, unknown>, s: ShareRow): boolean {
   if (s.role === 'owner') return false;
   if (isInviteSlotExpired(data, s)) return false;
-  if (s.invitePending === true) return true;
   const id = String(s.memberId ?? '');
-  return getRosterMemberStatusByMemberId(data).get(id) === 'pending';
+  const rosterStatus = getRosterMemberStatusByMemberId(data).get(id);
+  // Roster says accepted — always wins.
+  if (rosterStatus === 'active') return false;
+  // Explicit false on the share row means the invite was accepted — not pending,
+  // even if the roster hasn't been updated yet (Cloud Function in-flight).
+  if (s.invitePending === false) return false;
+  if (s.invitePending === true) return true;
+  // No explicit flag — fall back to roster status.
+  return rosterStatus === 'pending';
 }
 
 /** Pending or expired invite slot — excluded from billing progress denominator/collected. */

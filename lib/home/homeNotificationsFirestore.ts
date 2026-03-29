@@ -240,6 +240,29 @@ export async function acceptSplitInviteFromNotification(params: {
   const { uid, displayName, notificationId, metadata } = params;
   if (metadata.inviteId) {
     await acceptPendingInvite(metadata.inviteId, uid);
+
+    // Immediately clear invitePending on the share row so the owner's detail screen
+    // updates without waiting for the Cloud Function to run.
+    try {
+      const subRef = doc(db, 'subscriptions', metadata.subscriptionId);
+      const subSnap = await getDoc(subRef);
+      if (subSnap.exists()) {
+        const raw = subSnap.data() as Record<string, unknown>;
+        const shares = Array.isArray(raw.splitMemberShares)
+          ? (raw.splitMemberShares as Record<string, unknown>[]).map((s) =>
+              s && typeof s === 'object' ? { ...(s as object) } : {}
+            )
+          : [];
+        const idx = shares.findIndex((s) => (s as Record<string, unknown>).inviteId === metadata.inviteId);
+        if (idx >= 0) {
+          shares[idx] = { ...shares[idx], invitePending: false };
+          await updateDoc(subRef, { splitMemberShares: shares, splitUpdatedAt: serverTimestamp() });
+        }
+      }
+    } catch {
+      // Non-critical — Cloud Function will complete the full merge
+    }
+
     await updateDoc(doc(db, 'users', uid, 'notifications', notificationId), {
       read: true,
       actioned: 'accepted',
