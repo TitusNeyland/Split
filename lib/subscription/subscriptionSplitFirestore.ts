@@ -1,11 +1,4 @@
-import {
-  addDoc,
-  collection,
-  doc,
-  serverTimestamp,
-  Timestamp,
-  updateDoc,
-} from 'firebase/firestore';
+import { addDoc, collection, doc, serverTimestamp, Timestamp, updateDoc } from 'firebase/firestore';
 import { getFirebaseFirestore } from '../firebase';
 
 export type FirestoreSplitMethod = 'equal' | 'custom_percent' | 'fixed_amount';
@@ -42,6 +35,7 @@ export async function saveSubscriptionSplitToFirestore(opts: {
     splitUpdatedAt: serverTimestamp(),
     /** Lets Cloud Functions attribute `split_percentage_updated` activity. */
     splitLastEditedByUid: opts.actorUid,
+    customSplitNeedsRebalance: false,
   });
 
   await addDoc(collection(subRef, 'split_change_log'), {

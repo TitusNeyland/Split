@@ -62,6 +62,8 @@ export type SubscriptionDetailModel = {
   /** Firestore `status`: ended splits are read-only in the UI. */
   lifecycleStatus?: 'active' | 'ended';
   endedOnLabel?: string;
+  ownerMemberLeftBanner?: { leaverDisplayName: string; shareCents: number } | null;
+  customSplitNeedsRebalance?: boolean;
   members: SubscriptionDetailMember[];
   paidMemberCount: number;
   collectedCents: number;
