@@ -95,6 +95,57 @@ export function getOwnerId(data: Record<string, unknown>): string {
   return typeof o === 'string' ? o : '';
 }
 
+function memberPaymentStatusForUid(sub: Record<string, unknown>, viewerUid: string): string {
+  const legacy = sub.memberPaymentStatus;
+  if (legacy && typeof legacy === 'object' && !Array.isArray(legacy)) {
+    return String((legacy as Record<string, string>)[viewerUid] ?? '').toLowerCase();
+  }
+  return '';
+}
+
+/**
+ * True when the viewer has accepted this split (not awaiting an invite response).
+ * Uses `activeMemberUids`, roster, `memberPaymentStatus`, and share rows — fields can lag each other
+ * across client/Cloud Function writes, so we treat accepted membership when any reliable signal says so.
+ */
+export function isViewerAcceptedActiveMember(sub: Record<string, unknown>, viewerUid: string): boolean {
+  if (!viewerUid) return false;
+  if (normalizeSubscriptionStatus(sub.status) !== 'active') return false;
+
+  const activeUids = sub.activeMemberUids;
+  if (Array.isArray(activeUids) && activeUids.includes(viewerUid)) return true;
+
+  if (getOwnerId(sub) === viewerUid) return true;
+
+  const mp = memberPaymentStatusForUid(sub, viewerUid);
+  const memberUids = sub.memberUids;
+  if (Array.isArray(memberUids) && memberUids.includes(viewerUid) && mp !== '' && mp !== 'invited_pending') {
+    if (mp === 'owner' || mp === 'pending' || mp === 'paid' || mp === 'overdue') return true;
+  }
+
+  const shares = Array.isArray(sub.splitMemberShares) ? sub.splitMemberShares : [];
+  for (const s of shares) {
+    if (!s || typeof s !== 'object') continue;
+    if (String((s as { memberId?: string }).memberId) !== viewerUid) continue;
+    if ((s as { role?: string }).role === 'owner') return true;
+    const ip = (s as { invitePending?: boolean }).invitePending;
+    if (ip === false) return true;
+    if (ip === true) return false;
+    break;
+  }
+
+  const members = sub.members;
+  if (Array.isArray(members)) {
+    for (const m of members) {
+      if (!m || typeof m !== 'object') continue;
+      if ((m as { uid?: string }).uid !== viewerUid) continue;
+      return String((m as { memberStatus?: string }).memberStatus ?? '').toLowerCase() === 'active';
+    }
+  }
+
+  return false;
+}
+
 function effectiveBillingDayLabel(data: Record<string, unknown>): string {
   const existing = data.billingDayLabel;
   if (typeof existing === 'string' && existing.trim()) return existing.trim();

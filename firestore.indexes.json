@@ -76,6 +76,14 @@
       "collectionGroup": "subscriptions",
       "queryScope": "COLLECTION",
       "fields": [
+        { "fieldPath": "activeMemberUids", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "subscriptions",
+      "queryScope": "COLLECTION",
+      "fields": [
         { "fieldPath": "memberUids", "arrayConfig": "CONTAINS" },
         { "fieldPath": "status", "order": "ASCENDING" },
         { "fieldPath": "endedAt", "order": "DESCENDING" }

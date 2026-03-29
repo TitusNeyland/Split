@@ -8,6 +8,7 @@ import {
   getTotalCents,
   getOwnerId,
   getViewerShareCents,
+  isViewerAcceptedActiveMember,
   normalizeSubscriptionStatus,
 } from '../subscription/subscriptionToCardModel';
 import type { MemberSubscriptionDoc } from '../subscription/memberSubscriptionsFirestore';
@@ -15,6 +16,11 @@ import { subscriptionDisplayName } from '../subscription/billingCalendarModel';
 import type { HomeCalendarBill } from './homeWeekCalendar';
 
 export type RawSub = MemberSubscriptionDoc;
+
+/** Home chart / balances: only splits where the viewer has accepted membership. */
+function subsAcceptedForViewer(subs: RawSub[], viewerUid: string): RawSub[] {
+  return subs.filter((s) => isViewerAcceptedActiveMember(s, viewerUid));
+}
 
 function startOfLocalDay(d: Date): Date {
   const x = new Date(d);
@@ -75,11 +81,12 @@ export function computeHomeFinancialFromSubscriptions(
   subs: RawSub[],
   uid: string
 ): HomeFinancialFromSubs {
+  const chartSubs = subsAcceptedForViewer(subs, uid);
   let youOweCents = 0;
   let owedToYouCents = 0;
   let overdueCents = 0;
 
-  for (const sub of subs) {
+  for (const sub of chartSubs) {
     if (!isActiveLike(sub)) continue;
     const owner = getOwnerId(sub);
 
@@ -152,9 +159,10 @@ export function subscriptionNextBillingDate(sub: Record<string, unknown>): Date 
   return getNextFirstChargeDate(cycle, label);
 }
 
-export function subscriptionsToHomeCalendarBills(subs: RawSub[]): HomeCalendarBill[] {
+export function subscriptionsToHomeCalendarBills(subs: RawSub[], viewerUid: string): HomeCalendarBill[] {
+  const chartSubs = subsAcceptedForViewer(subs, viewerUid);
   const out: HomeCalendarBill[] = [];
-  for (const sub of subs) {
+  for (const sub of chartSubs) {
     if (normalizeSubscriptionStatus(sub.status) !== 'active') continue;
     const d = subscriptionNextBillingDate(sub);
     if (!d) continue;
@@ -186,7 +194,7 @@ function serviceNameForIcon(sub: Record<string, unknown>): string {
 }
 
 export function computeHomeFloatCard(subs: RawSub[], uid: string): HomeFloatCardModel {
-  const active = subs.filter((s) => isActiveLike(s));
+  const active = subsAcceptedForViewer(subs, uid).filter((s) => isActiveLike(s));
 
   const youOweCandidates: FloatRowYouOwe[] = [];
   for (const sub of active) {
@@ -279,7 +287,7 @@ const C = {
 };
 
 export function computeUpcomingSplits(subs: RawSub[], uid: string, max = 3): UpcomingSplitRow[] {
-  const active = subs.filter((s) => normalizeSubscriptionStatus(s.status) === 'active');
+  const active = subsAcceptedForViewer(subs, uid).filter((s) => normalizeSubscriptionStatus(s.status) === 'active');
   const withDays = active
     .map((s) => ({ s, d: getDaysUntilBillingFromSub(s) }))
     .sort((a, b) => a.d - b.d)
@@ -335,13 +343,14 @@ export function computeFriendBalances(
   viewerUid: string,
   friendUids: string[]
 ): FriendBalanceComputed[] {
+  const chartSubs = subsAcceptedForViewer(subs, viewerUid);
   const rows: FriendBalanceComputed[] = [];
   for (const friendUid of friendUids) {
     if (friendUid === viewerUid) continue;
     let theyOweMeCents = 0;
     let iOweThemCents = 0;
 
-    for (const sub of subs) {
+    for (const sub of chartSubs) {
       if (!isActiveLike(sub)) continue;
       const owner = getOwnerId(sub);
       if (owner === viewerUid) {
@@ -363,7 +372,7 @@ export function computeFriendBalances(
     const netCents = theyOweMeCents - iOweThemCents;
     let sortKey = 3;
     if (theyOweMeCents > 0) {
-      const st = subs.some(
+      const st = chartSubs.some(
         (s) =>
           getOwnerId(s) === viewerUid && getMemberPaymentStatusRaw(s, friendUid) === 'overdue'
       );
@@ -394,8 +403,9 @@ export function countSharedSubscriptionsWithFriend(
   viewerUid: string,
   friendUid: string
 ): number {
+  const chartSubs = subsAcceptedForViewer(subs, viewerUid);
   let n = 0;
-  for (const sub of subs) {
+  for (const sub of chartSubs) {
     if (!isActiveLike(sub)) continue;
     const members = memberUidSet(sub);
     if (members.has(viewerUid) && members.has(friendUid)) n++;

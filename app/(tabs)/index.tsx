@@ -216,7 +216,10 @@ export default function HomeScreen() {
 
   const CAL_STRIP_DAYS = 21;
 
-  const billingDates = useMemo(() => getUpcomingBillingDates(subscriptions), [subscriptions]);
+  const billingDates = useMemo(
+    () => getUpcomingBillingDates(subscriptions, { viewerUid: uid }),
+    [subscriptions, uid]
+  );
 
   const calendarDays = useMemo(
     () => buildCalendarDays(billingDates, CAL_STRIP_DAYS, new Date()),
