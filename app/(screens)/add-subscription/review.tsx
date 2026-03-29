@@ -1,5 +1,4 @@
 import React, { useCallback, useMemo, useState } from 'react';
-;
 import {
   View,
   Text,
@@ -9,7 +8,6 @@ import {
   ActivityIndicator,
   Alert,
   Modal,
-  Share,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -25,7 +23,6 @@ import {
   type WizardSplitMethod,
 } from '../../../lib/subscription/createSubscriptionWizardFirestore';
 import { attachSplitInvitesToSubscription } from '../../../lib/subscription/splitInviteAttachments';
-import { buildSplitInviteShareMessage } from '../../../lib/friends/inviteLinks';
 import {
   billingWhenForSentence,
   formatFirstChargeDateLong,
@@ -33,6 +30,18 @@ import {
   getNextFirstChargeDate,
 } from '../../../lib/subscription/billingDayFormat';
 import { getServiceIconBackgroundColor, ServiceIcon } from '../../components/shared/ServiceIcon';
+
+function formatCreateSplitError(e: unknown): string {
+  if (e instanceof Error) return e.message;
+  if (typeof e === 'object' && e !== null) {
+    const o = e as { code?: unknown; message?: unknown };
+    if (typeof o.message === 'string') {
+      const code = typeof o.code === 'string' ? o.code : '';
+      return code ? `${code}: ${o.message}` : o.message;
+    }
+  }
+  return typeof e === 'string' ? e : 'Unknown error';
+}
 
 const C = {
   purple: '#534AB7',
@@ -305,22 +314,12 @@ export default function AddSubscriptionReviewScreen() {
         members,
       };
       const id = await createSubscriptionFromWizard(input);
-      const splitInviteIds = await attachSplitInvitesToSubscription(id, input);
+      await attachSplitInvitesToSubscription(id, input);
       await runSubscriptionWizardSideEffects(id, input);
-      if (splitInviteIds.length > 0) {
-        const subName = planName || serviceName || 'Subscription';
-        const body = splitInviteIds
-          .map((invId) => buildSplitInviteShareMessage(subName, invId))
-          .join('\n\n');
-        try {
-          await Share.share({ message: body });
-        } catch {
-          /* user dismissed share sheet */
-        }
-      }
       navigateToSplitCreated();
-    } catch {
-      Alert.alert('Something went wrong · please try again');
+    } catch (e) {
+      console.error('create split failed', e);
+      Alert.alert('Could not create split', formatCreateSplitError(e));
     } finally {
       setSaving(false);
     }

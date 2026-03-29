@@ -7,17 +7,19 @@ import {
   orderBy,
   query,
   serverTimestamp,
+  Timestamp,
   updateDoc,
-  type Timestamp,
   type Unsubscribe,
 } from 'firebase/firestore';
 import { getFirebaseFirestore } from '../firebase';
 import { initialsFromName } from '../profile';
 import { getTotalCents } from '../subscription/subscriptionToCardModel';
+import { computeFirstChargeObligationStartsNextCycle } from '../subscription/firstChargeObligation';
 import {
   type SubscriptionMemberRosterRow,
   syncOwnerShareForPendingInvites,
 } from '../subscription/subscriptionSplitRecalc';
+import { acceptPendingInvite } from '../friends/friendSystemFirestore';
 
 export type NotificationDocType =
   | 'split_invite'
@@ -37,6 +39,8 @@ export type SplitInviteMetadata = {
   serviceId: string;
   userShare: number;
   billingCycle: string;
+  /** Present for split invites created with `invites/{id}` — use `acceptPendingInvite` for a single merge path. */
+  inviteId?: string;
 };
 
 export type FriendConnectedMetadata = {
@@ -197,6 +201,14 @@ function parseSplitInviteMetadata(m: Record<string, unknown> | null | undefined)
   if (!m) return null;
   const subscriptionId = typeof m.subscriptionId === 'string' ? m.subscriptionId : '';
   if (!subscriptionId) return null;
+  const userShare =
+    typeof m.userShare === 'number' && Number.isFinite(m.userShare)
+      ? m.userShare
+      : typeof m.memberShare === 'number' && Number.isFinite(m.memberShare)
+        ? m.memberShare
+        : 0;
+  const inviteId =
+    typeof m.inviteId === 'string' && m.inviteId.trim() ? m.inviteId.trim() : undefined;
   return {
     inviterUid: typeof m.inviterUid === 'string' ? m.inviterUid : '',
     inviterName: typeof m.inviterName === 'string' ? m.inviterName : 'Someone',
@@ -204,14 +216,15 @@ function parseSplitInviteMetadata(m: Record<string, unknown> | null | undefined)
     subscriptionId,
     subscriptionName: typeof m.subscriptionName === 'string' ? m.subscriptionName : 'Subscription',
     serviceId: typeof m.serviceId === 'string' ? m.serviceId : '',
-    userShare: typeof m.userShare === 'number' && Number.isFinite(m.userShare) ? m.userShare : 0,
+    userShare,
     billingCycle: typeof m.billingCycle === 'string' ? m.billingCycle : 'monthly',
+    inviteId,
   };
 }
 
 /**
- * Confirms membership on the split (when not already fully listed), then marks the notification.
- * Aligns with `splitMemberShares`, `memberUids`, `activeMemberUids`, and object `members` roster.
+ * Accepts the split via `invites/{inviteId}` when `metadata.inviteId` is set (Cloud Function merges
+ * subscription + friendship). Otherwise updates the subscription document directly (legacy).
  */
 export async function acceptSplitInviteFromNotification(params: {
   uid: string;
@@ -223,6 +236,15 @@ export async function acceptSplitInviteFromNotification(params: {
   if (!db) throw new Error('Firestore is not configured.');
 
   const { uid, displayName, notificationId, metadata } = params;
+  if (metadata.inviteId) {
+    await acceptPendingInvite(metadata.inviteId, uid);
+    await updateDoc(doc(db, 'users', uid, 'notifications', notificationId), {
+      read: true,
+      actioned: 'accepted',
+    });
+    return;
+  }
+
   const subRef = doc(db, 'subscriptions', metadata.subscriptionId);
   const subSnap = await getDoc(subRef);
   if (!subSnap.exists()) throw new Error('Subscription not found.');
@@ -261,8 +283,9 @@ export async function acceptSplitInviteFromNotification(params: {
       membersRoster[roIdx] = {
         ...membersRoster[roIdx],
         memberStatus: 'active',
-        acceptedAt: serverTimestamp(),
+        acceptedAt: Timestamp.now(),
         paymentStatus: 'pending',
+        firstChargeObligationStartsNextCycle: computeFirstChargeObligationStartsNextCycle(raw),
       };
     }
   }
