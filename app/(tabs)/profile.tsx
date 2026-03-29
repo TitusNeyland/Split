@@ -358,7 +358,11 @@ export default function ProfileScreen() {
 
         <View style={styles.friendsSection}>
           <Text style={styles.sectionHeading}>FRIENDS & GROUPS</Text>
-          <ProfileFriendsBalancesCard userInitials={initials} userAvatarUrl={avatarUrl} />
+          <ProfileFriendsBalancesCard
+            userInitials={initials}
+            userAvatarUrl={avatarUrl}
+            uid={isFirebaseConfigured() ? user?.uid ?? null : null}
+          />
         </View>
 
         <View style={styles.paymentSection}>
