@@ -7,6 +7,7 @@ import {
   getNextFirstChargeDate,
   ordinalDay,
 } from './billingDayFormat';
+import { initialsFromName } from '../profile/profile';
 import type {
   CyclePaymentStatus,
   SplitInviteDeclineNotice,
@@ -14,7 +15,7 @@ import type {
   SubscriptionDetailMember,
   SubscriptionDetailModel,
   SubscriptionHistoryCycle,
-} from './subscriptionDetailDemo';
+} from './subscriptionDetailTypes';
 import {
   collectedCentsActiveMembersOnly,
   getActiveMembersTotalCents,
@@ -88,6 +89,17 @@ function toCycleStatus(raw: string | undefined): CyclePaymentStatus {
   return 'pending';
 }
 
+function viewerYouDisplayName(viewerFirstName: string): string {
+  const n = viewerFirstName.trim() || 'You';
+  return `${n} (you)`;
+}
+
+/** Stale "(you)" from another account can be stored on `splitMemberShares`; never show it on other members. */
+function cleanOtherMemberDisplayName(raw: string): string {
+  const s = raw.trim().replace(/\s*\(you\)\s*$/i, '').trim();
+  return s || 'Member';
+}
+
 function inviteExpiresAtMsFromRow(row: ShareRow): number | null {
   const ex = row.inviteExpiresAt;
   if (ex instanceof Timestamp) return ex.toMillis();
@@ -103,7 +115,8 @@ function inviteExpiresAtMsFromRow(row: ShareRow): number | null {
 export function mapFirestoreSubscriptionToDetailModel(
   data: Record<string, unknown> & { id: string },
   viewerUid: string,
-  userAvatarUrl: string | null
+  userAvatarUrl: string | null,
+  viewerFirstName: string
 ): SubscriptionDetailModel | null {
   const id = String(data.id);
   const totalCents = getTotalCents(data);
@@ -135,6 +148,7 @@ export function mapFirestoreSubscriptionToDetailModel(
 
   const members: SubscriptionDetailMember[] = rows.map((row) => {
     const memberId = String(row.memberId ?? '');
+    const isViewer = Boolean(viewerUid && memberId === viewerUid);
     const st = statusByMember[memberId];
     const cycleStatus = toCycleStatus(st);
     const amountCents =
@@ -154,10 +168,17 @@ export function mapFirestoreSubscriptionToDetailModel(
         ? row.pendingInviteEmail.trim().toLowerCase()
         : null;
     const rosterEmail = rosterEmailForUid(data, memberId);
+    const rawName = String(row.displayName ?? 'Member');
+    const displayName = isViewer
+      ? viewerYouDisplayName(viewerFirstName)
+      : cleanOtherMemberDisplayName(rawName);
+    const initials = isViewer
+      ? initialsFromName(viewerFirstName.trim() || 'You')
+      : String(row.initials ?? '?').slice(0, 2).toUpperCase();
     return {
       memberId,
-      displayName: String(row.displayName ?? 'Member'),
-      initials: String(row.initials ?? '?').slice(0, 2).toUpperCase(),
+      displayName,
+      initials,
       avatarBg: typeof row.avatarBg === 'string' && row.avatarBg ? row.avatarBg : '#E8E6E1',
       avatarColor: typeof row.avatarColor === 'string' && row.avatarColor ? row.avatarColor : '#1a1a18',
       avatarUrl: memberId === viewerUid ? userAvatarUrl : undefined,
@@ -175,10 +196,18 @@ export function mapFirestoreSubscriptionToDetailModel(
 
   const editorMembers: SubscriptionDetailEditorMember[] = rows.map((row) => {
     const memberId = String(row.memberId ?? '');
+    const isViewer = Boolean(viewerUid && memberId === viewerUid);
+    const rawName = String(row.displayName ?? 'Member');
+    const displayName = isViewer
+      ? viewerYouDisplayName(viewerFirstName)
+      : cleanOtherMemberDisplayName(rawName);
+    const initials = isViewer
+      ? initialsFromName(viewerFirstName.trim() || 'You')
+      : String(row.initials ?? '?').slice(0, 2).toUpperCase();
     return {
       memberId,
-      displayName: String(row.displayName ?? 'Member'),
-      initials: String(row.initials ?? '?').slice(0, 2).toUpperCase(),
+      displayName,
+      initials,
       avatarBg: typeof row.avatarBg === 'string' && row.avatarBg ? row.avatarBg : '#E8E6E1',
       avatarColor: typeof row.avatarColor === 'string' && row.avatarColor ? row.avatarColor : '#1a1a18',
       avatarUrl: memberId === viewerUid ? userAvatarUrl : null,
@@ -254,6 +283,7 @@ export function useSubscriptionDetailFromFirestore(
   subscriptionId: string,
   viewerUid: string | null,
   userAvatarUrl: string | null,
+  viewerFirstName: string,
   options: { enabled: boolean; retryKey?: number }
 ): {
   detail: SubscriptionDetailModel | null;
@@ -313,7 +343,12 @@ export function useSubscriptionDetailFromFirestore(
           return;
         }
         const raw = { id: snap.id, ...snap.data() } as Record<string, unknown> & { id: string };
-        const model = mapFirestoreSubscriptionToDetailModel(raw, viewerUid, userAvatarUrl);
+        const model = mapFirestoreSubscriptionToDetailModel(
+          raw,
+          viewerUid,
+          userAvatarUrl,
+          viewerFirstName
+        );
         if (!model) {
           console.error('Subscription detail: document missing splitMemberShares or invalid shape', subscriptionId);
           setDetail(null);
@@ -345,7 +380,7 @@ export function useSubscriptionDetailFromFirestore(
     return () => {
       unsub?.();
     };
-  }, [subscriptionId, viewerUid, userAvatarUrl, enabled, retryKey]);
+  }, [subscriptionId, viewerUid, userAvatarUrl, viewerFirstName, enabled, retryKey]);
 
   return { detail, loading, error, errorMessage };
 }

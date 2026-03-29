@@ -33,6 +33,7 @@ import { useSubscriptionDetailFromFirestore } from '../../lib/subscription/subsc
 import { fmtCents } from '../../lib/subscription/addSubscriptionSplitMath';
 import { useFirebaseUid } from '../../lib/auth/useFirebaseUid';
 import { useProfileAvatarUrl } from '../hooks/useProfileAvatarUrl';
+import { useViewerFirstName } from '../hooks/useViewerFirstName';
 import { EndSplitConfirmSheet } from '../components/subscriptions/EndSplitConfirmSheet';
 import { endSubscriptionSplit } from '../../lib/subscription/endSplitFirestore';
 import {
@@ -109,6 +110,7 @@ export default function SubscriptionDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string | string[] }>();
   const subscriptionId = typeof id === 'string' ? id : id?.[0] ?? '';
   const { avatarUrl: userAvatarUrl, displayName: profileDisplayName } = useProfileAvatarUrl();
+  const { firstName: viewerFirstName } = useViewerFirstName();
   const firebaseUid = useFirebaseUid();
   const nextCycleStart = useNextBillingCycleStart();
 
@@ -128,7 +130,7 @@ export default function SubscriptionDetailScreen() {
   }, [subscriptionId, userAvatarUrl]);
 
   const { detail: liveDetail, loading: liveLoading, error: liveError, errorMessage: liveErrorMessage } =
-    useSubscriptionDetailFromFirestore(subscriptionId, firebaseUid, userAvatarUrl, {
+    useSubscriptionDetailFromFirestore(subscriptionId, firebaseUid, userAvatarUrl, viewerFirstName, {
       enabled: !SUBSCRIPTIONS_DEMO_MODE,
       retryKey: detailRetryKey,
     });
