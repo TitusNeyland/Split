@@ -37,6 +37,7 @@ import { searchUsersForFriendConnect, type FriendSearchUserRow } from '../../../
 import { getFriendAvatarColors } from '../../../lib/friends/friendAvatar';
 import { normalizeInviteEmail } from '../../../lib/friends/friendSystemFirestore';
 import { initialsFromName } from '../../../lib/profile';
+import { useProfileAvatarUrl } from '../../hooks/useProfileAvatarUrl';
 
 const C = {
   purple: '#534AB7',
@@ -67,14 +68,23 @@ export type WizardMember = {
   pendingInviteEmail?: string;
 };
 
-const TITUS: WizardMember = {
-  memberId: 'owner-self',
-  displayName: 'Titus (you)',
-  initials: 'TN',
-  avatarBg: '#EEEDFE',
-  avatarColor: '#534AB7',
-  isOwner: true,
-};
+/** Owner row for the wizard; Firestore uses `persistMemberId` → real uid at create time. */
+function buildOwnerMember(displayNameFromProfile: string | null, user: User | null): WizardMember {
+  const raw =
+    (displayNameFromProfile && displayNameFromProfile.trim()) ||
+    user?.displayName?.trim() ||
+    user?.email?.split('@')[0]?.trim() ||
+    'You';
+  const first = raw.split(/\s+/)[0] || 'You';
+  return {
+    memberId: 'owner-self',
+    displayName: `${first} (you)`,
+    initials: initialsFromName(first),
+    avatarBg: '#EEEDFE',
+    avatarColor: '#534AB7',
+    isOwner: true,
+  };
+}
 
 type SheetFriend = Omit<WizardMember, 'isOwner' | 'invitePending'> & {
   mutualSubscriptionsCount: number;
@@ -169,7 +179,11 @@ export default function AddSubscriptionMembersScreen() {
   const payerDisplay = typeof params.payerDisplay === 'string' ? params.payerDisplay : 'Me (owner)';
   const autoCharge = params.autoCharge === '1';
 
-  const [members, setMembers] = useState<WizardMember[]>(() => [TITUS]);
+  const { displayName: profileDisplayName } = useProfileAvatarUrl();
+
+  const [members, setMembers] = useState<WizardMember[]>(() => [
+    buildOwnerMember(null, getFirebaseAuth()?.currentUser ?? null),
+  ]);
   const [mode, setMode] = useState<SplitMethod>('equal');
   const [customPercentStr, setCustomPercentStr] = useState<string[]>(() => ['100']);
   const [fixedDollarStr, setFixedDollarStr] = useState<string[]>(() => [
@@ -189,6 +203,19 @@ export default function AddSubscriptionMembersScreen() {
     if (!auth) return;
     return onAuthStateChanged(auth, setSearchUser);
   }, []);
+
+  useEffect(() => {
+    setMembers((prev) => {
+      const idx = prev.findIndex((m) => m.isOwner && m.memberId === 'owner-self');
+      if (idx < 0) return prev;
+      const newOwner = buildOwnerMember(profileDisplayName, searchUser);
+      const old = prev[idx];
+      if (old.displayName === newOwner.displayName && old.initials === newOwner.initials) return prev;
+      const next = [...prev];
+      next[idx] = newOwner;
+      return next;
+    });
+  }, [profileDisplayName, searchUser]);
 
   const n = members.length;
 
