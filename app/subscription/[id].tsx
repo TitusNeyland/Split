@@ -46,6 +46,7 @@ import {
 } from '../../lib/subscription/endSplitNavigationToast';
 import { RestartSplitConfirmSheet } from '../components/subscriptions/RestartSplitConfirmSheet';
 import { restartSubscriptionSplit } from '../../lib/subscription/restartSplitFirestore';
+import { clearSplitInviteDeclineNotices } from '../../lib/subscription/splitInviteDeclineNoticesFirestore';
 
 const C = {
   bg: '#F2F0EB',
@@ -451,6 +452,34 @@ export default function SubscriptionDetailScreen() {
         </LinearGradient>
 
         <View style={styles.body}>
+          {!ended && detail.isOwner && (detail.splitInviteDeclineNotices?.length ?? 0) > 0 ? (
+            <View style={styles.declinedBanner} accessibilityRole="summary">
+              <View style={styles.declinedBannerTextCol}>
+                <Text style={styles.declinedBannerTitle}>{declineInviteBannerLine}</Text>
+                <Text style={styles.declinedBannerSub}>
+                  You can invite someone else to fill this slot.
+                </Text>
+              </View>
+              <View style={styles.declinedBannerActions}>
+                <Pressable
+                  onPress={() => setEditorOpen(true)}
+                  style={({ pressed }) => [styles.declinedBannerBtn, pressed && styles.declinedBannerBtnPressed]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Invite someone else"
+                >
+                  <Text style={styles.declinedBannerBtnTxt}>Invite someone else</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => void handleDismissDeclineBanner()}
+                  style={({ pressed }) => [styles.declinedBannerDismiss, pressed && styles.declinedBannerBtnPressed]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Dismiss decline notice"
+                >
+                  <Text style={styles.declinedBannerDismissTxt}>Dismiss</Text>
+                </Pressable>
+              </View>
+            </View>
+          ) : null}
           {ended && detail.isOwner ? (
             <Pressable
               style={styles.restartCard}
@@ -931,6 +960,55 @@ const styles = StyleSheet.create({
   body: {
     paddingHorizontal: 14,
     marginTop: -12,
+  },
+  declinedBanner: {
+    backgroundColor: C.amberBg,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(180, 83, 9, 0.22)',
+    padding: 14,
+    marginBottom: 14,
+  },
+  declinedBannerTextCol: {
+    marginBottom: 10,
+  },
+  declinedBannerTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: C.amber,
+    marginBottom: 4,
+  },
+  declinedBannerSub: {
+    fontSize: 13,
+    color: C.muted,
+    lineHeight: 18,
+  },
+  declinedBannerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  declinedBannerBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 4,
+  },
+  declinedBannerBtnPressed: {
+    opacity: 0.75,
+  },
+  declinedBannerBtnTxt: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: C.purple,
+  },
+  declinedBannerDismiss: {
+    paddingVertical: 6,
+    paddingHorizontal: 4,
+  },
+  declinedBannerDismissTxt: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: C.muted,
   },
   card: {
     backgroundColor: '#fff',

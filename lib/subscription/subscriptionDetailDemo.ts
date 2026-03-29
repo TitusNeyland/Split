@@ -38,6 +38,12 @@ export type SubscriptionHistoryCycle = {
   lines: { memberId: string; displayName: string; amountCents: number; paid: boolean }[];
 };
 
+export type SplitInviteDeclineNotice = {
+  declinerName: string;
+  declinerUid?: string;
+  inviteId?: string;
+};
+
 export type SubscriptionDetailModel = {
   id: string;
   serviceName: string;
@@ -56,6 +62,8 @@ export type SubscriptionDetailModel = {
   collectedCents: number;
   editorMembers: SubscriptionDetailEditorMember[];
   history: SubscriptionHistoryCycle[];
+  /** Owner: pending decline notices (dismissible banner). */
+  splitInviteDeclineNotices?: SplitInviteDeclineNotice[];
 };
 
 function membersFromEqualSplit(

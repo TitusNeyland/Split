@@ -28,6 +28,8 @@ export type ActivityEventType =
   | 'split_invite_sent'
   | 'split_invite_accepted'
   | 'split_invite_declined'
+  /** Owner: an invitee declined joining this split. */
+  | 'split_invite_declined_owner'
   /** Owner: a pending invite was not accepted before expiry. */
   | 'split_invite_expired'
   | 'split_member_joined'

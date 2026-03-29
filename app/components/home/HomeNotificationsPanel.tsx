@@ -16,7 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import {
   acceptSplitInviteFromNotification,
-  declineSplitInviteNotification,
+  declineSplitInviteFromNotification,
   formatNotificationRelativeTime,
   getFriendConnectedMetadata,
   getSplitInviteMetadata,
@@ -114,9 +114,18 @@ export default function HomeNotificationsPanel({
 
   const onDecline = useCallback(
     async (n: AppNotification) => {
+      const meta = getSplitInviteMetadata(n);
+      if (!meta) {
+        Alert.alert('Unable to decline', 'Missing invitation details.');
+        return;
+      }
       setBusyId(n.id);
       try {
-        await declineSplitInviteNotification(uid, n.id);
+        await declineSplitInviteFromNotification({
+          uid,
+          notificationId: n.id,
+          metadata: meta,
+        });
       } catch {
         Alert.alert('Something went wrong', 'Could not update this invitation.');
       } finally {
