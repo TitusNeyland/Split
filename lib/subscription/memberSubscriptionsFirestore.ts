@@ -6,7 +6,10 @@ import {
   type Unsubscribe,
 } from 'firebase/firestore';
 import { getFirebaseFirestore } from '../firebase';
-import { subscriptionEndedAtMillis } from './subscriptionToCardModel';
+import {
+  isViewerAcceptedActiveMember,
+  subscriptionEndedAtMillis,
+} from './subscriptionToCardModel';
 
 export type MemberSubscriptionDoc = { id: string } & Record<string, unknown>;
 
@@ -43,8 +46,9 @@ function mergeEndedSubscriptions(a: MemberSubscriptionDoc[], b: MemberSubscripti
 }
 
 /**
- * Subscriptions where the user appears in `memberUids` or `members` (uid strings).
- * Two listeners are merged so legacy docs and new `memberUids` field both resolve.
+ * Active subscriptions the viewer participates in as an accepted member only.
+ * Uses `activeMemberUids` + `memberUids` (legacy) with `status === 'active'`, merged and
+ * filtered by {@link isViewerAcceptedActiveMember} so pending invitees never appear.
  */
 export function subscribeMemberSubscriptions(
   uid: string | null | undefined,
@@ -60,32 +64,65 @@ export function subscribeMemberSubscriptions(
     return () => {};
   }
 
+  let fromActiveMemberUids: MemberSubscriptionDoc[] = [];
   let fromMemberUids: MemberSubscriptionDoc[] = [];
   let fromMembers: MemberSubscriptionDoc[] = [];
   let first1 = false;
   let first2 = false;
+  let first3 = false;
 
   const emit = () => {
-    const loading = !first1 || !first2;
-    onUpdate(mergeById(fromMemberUids, fromMembers), loading);
+    const loading = !first1 || !first2 || !first3;
+    const merged = mergeById(mergeById(fromActiveMemberUids, fromMemberUids), fromMembers);
+    const acceptedOnly = merged.filter((d) => isViewerAcceptedActiveMember(d, uid));
+    onUpdate(acceptedOnly, loading);
   };
 
-  const qMemberUids = query(collection(db, 'subscriptions'), where('memberUids', 'array-contains', uid));
-  const qMembers = query(collection(db, 'subscriptions'), where('members', 'array-contains', uid));
+  const qActive = query(
+    collection(db, 'subscriptions'),
+    where('activeMemberUids', 'array-contains', uid),
+    where('status', '==', 'active')
+  );
+  const qMemberUids = query(
+    collection(db, 'subscriptions'),
+    where('memberUids', 'array-contains', uid),
+    where('status', '==', 'active')
+  );
+  const qMembers = query(
+    collection(db, 'subscriptions'),
+    where('members', 'array-contains', uid),
+    where('status', '==', 'active')
+  );
 
   const unsubs: Unsubscribe[] = [];
+
+  unsubs.push(
+    onSnapshot(
+      qActive,
+      (snap) => {
+        fromActiveMemberUids = snap.docs.map((d) => docFromSnapshot(d));
+        first1 = true;
+        emit();
+      },
+      () => {
+        fromActiveMemberUids = [];
+        first1 = true;
+        emit();
+      }
+    )
+  );
 
   unsubs.push(
     onSnapshot(
       qMemberUids,
       (snap) => {
         fromMemberUids = snap.docs.map((d) => docFromSnapshot(d));
-        first1 = true;
+        first2 = true;
         emit();
       },
       () => {
         fromMemberUids = [];
-        first1 = true;
+        first2 = true;
         emit();
       }
     )
@@ -96,12 +133,12 @@ export function subscribeMemberSubscriptions(
       qMembers,
       (snap) => {
         fromMembers = snap.docs.map((d) => docFromSnapshot(d));
-        first2 = true;
+        first3 = true;
         emit();
       },
       () => {
         fromMembers = [];
-        first2 = true;
+        first3 = true;
         emit();
       }
     )

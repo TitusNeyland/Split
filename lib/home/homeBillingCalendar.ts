@@ -8,7 +8,10 @@ import {
   subscriptionDisplayName,
 } from '../subscription/billingCalendarModel';
 import type { MemberSubscriptionDoc } from '../subscription/memberSubscriptionsFirestore';
-import { normalizeSubscriptionStatus } from '../subscription/subscriptionToCardModel';
+import {
+  isViewerAcceptedActiveMember,
+  normalizeSubscriptionStatus,
+} from '../subscription/subscriptionToCardModel';
 import { subscriptionNextBillingDate } from './homeSubscriptionMath';
 import { addLocalDays, dateKey, startOfLocalDay } from './homeWeekCalendar';
 
@@ -114,13 +117,18 @@ function nextYearlyBillingDate(
  */
 export function getUpcomingBillingDates(
   subscriptions: MemberSubscriptionDoc[],
-  options?: { monthsMonthly?: number }
+  options?: { monthsMonthly?: number; viewerUid?: string }
 ): UpcomingBillingEntry[] {
   const today = startOfLocalDay(new Date());
   const monthsMonthly = options?.monthsMonthly ?? 6;
+  const viewerUid = options?.viewerUid;
+  const subs =
+    viewerUid && viewerUid.length > 0
+      ? subscriptions.filter((s) => isViewerAcceptedActiveMember(s, viewerUid))
+      : subscriptions;
   const dates: UpcomingBillingEntry[] = [];
 
-  for (const sub of subscriptions) {
+  for (const sub of subs) {
     if (normalizeSubscriptionStatus(sub.status) !== 'active') continue;
 
     const cycle = parseFirestoreBillingCycle(sub.billingCycle);
