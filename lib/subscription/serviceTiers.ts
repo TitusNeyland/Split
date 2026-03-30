@@ -1,3 +1,5 @@
+import type { FirestoreServiceTierRow } from './servicesCatalogTypes';
+
 export type ServiceTierCycle = 'month' | 'year';
 
 export type ServiceTier = {
@@ -5,6 +7,9 @@ export type ServiceTier = {
   /** Price in dollars (e.g. 22.99). */
   price: number;
   cycle: ServiceTierCycle;
+  tierId?: string;
+  /** Shown under the tier name when present (e.g. remote catalog). */
+  priceChangeNote?: string | null;
 };
 
 /**
@@ -84,20 +89,51 @@ export function tierPriceLabel(tier: ServiceTier): string {
   return `$${tier.price.toFixed(2)} / ${period}`;
 }
 
+export function firestoreTierRowsToServiceTiers(rows: FirestoreServiceTierRow[]): ServiceTier[] {
+  return [...rows]
+    .filter((r) => r.isActive !== false)
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .map((r) => ({
+      name: r.name,
+      price: r.priceCents / 100,
+      cycle: r.billingCycle === 'yearly' ? 'year' : 'month',
+      tierId: r.tierId,
+      priceChangeNote: r.priceChangeNote ?? null,
+    }));
+}
+
 export function parseFirestoreTiers(raw: unknown): ServiceTier[] | null {
   if (!Array.isArray(raw)) return null;
   const out: ServiceTier[] = [];
   for (const row of raw) {
     if (!row || typeof row !== 'object') continue;
-    const name = typeof (row as { name?: unknown }).name === 'string' ? (row as { name: string }).name.trim() : '';
-    const priceRaw = (row as { price?: unknown }).price;
+    const o = row as Record<string, unknown>;
+    if (typeof o.priceCents === 'number' && Number.isFinite(o.priceCents)) {
+      const name = typeof o.name === 'string' ? o.name.trim() : '';
+      if (!name) continue;
+      const billingCycle = o.billingCycle === 'yearly' ? 'year' : 'month';
+      const price = o.priceCents / 100;
+      const tierId = typeof o.tierId === 'string' ? o.tierId : undefined;
+      const priceChangeNote =
+        typeof o.priceChangeNote === 'string' && o.priceChangeNote.trim() ? o.priceChangeNote.trim() : null;
+      out.push({
+        name,
+        price,
+        cycle: billingCycle === 'year' ? 'year' : 'month',
+        tierId,
+        priceChangeNote,
+      });
+      continue;
+    }
+    const name = typeof o.name === 'string' ? o.name.trim() : '';
+    const priceRaw = o.price;
     const price =
       typeof priceRaw === 'number' && Number.isFinite(priceRaw)
         ? priceRaw
         : typeof priceRaw === 'string'
           ? parseFloat(priceRaw)
           : NaN;
-    const cycleRaw = (row as { cycle?: unknown }).cycle;
+    const cycleRaw = o.cycle;
     const cycle =
       cycleRaw === 'year' || cycleRaw === 'yearly' ? 'year' : cycleRaw === 'month' || cycleRaw === 'monthly' ? 'month' : null;
     if (!name || !Number.isFinite(price) || price < 0 || !cycle) continue;

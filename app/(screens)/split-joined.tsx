@@ -244,7 +244,7 @@ export default function SplitJoinedScreen() {
       >
         <View style={styles.column}>
           <View style={styles.iconWrap}>
-            <ServiceIcon serviceName={serviceId || subscriptionName} size={56} />
+            <ServiceIcon serviceName={subscriptionName} serviceId={serviceId || undefined} size={56} />
           </View>
 
           <Text style={styles.title}>{`You joined ${subscriptionName}!`}</Text>

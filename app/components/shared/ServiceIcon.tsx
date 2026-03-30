@@ -7,7 +7,10 @@ import {
   type ResolvedServiceIcon,
   type ServiceGlyphKind,
   getServiceIconBackgroundColor,
+  mapIconTypeStringToGlyph,
+  pickGlyphColorForBackground,
 } from '../../../lib/subscription/serviceIconResolve';
+import { useServicesOptional } from '../../contexts/ServicesContext';
 
 export type { ServiceGlyphKind, ResolvedServiceIcon };
 export { resolveServiceIcon, getServiceIconBackgroundColor };
@@ -111,6 +114,8 @@ function ServiceBrandGlyph({
 
 export type ServiceIconProps = {
   serviceName: string;
+  /** When set, prefers Firestore catalog (brand color + icon type) over name-only rules. */
+  serviceId?: string;
   /** Outer box is `size` × `size`; default 40. */
   size?: number;
   style?: StyleProp<ViewStyle>;
@@ -131,15 +136,32 @@ const LIST_ENDED_GLYPH = '#888780';
 
 export function ServiceIcon({
   serviceName,
+  serviceId,
   size = BASE_SIZE,
   style,
   endedDimmed,
   listEndedMuted,
 }: ServiceIconProps) {
-  const { glyph, fallbackLetter, backgroundColor, iconColor } = useMemo(
-    () => resolveServiceIcon(serviceName),
-    [serviceName],
-  );
+  const catalogCtx = useServicesOptional();
+  const { glyph, fallbackLetter, backgroundColor, iconColor } = useMemo(() => {
+    const fallback = resolveServiceIcon(serviceName);
+    const list = catalogCtx?.services;
+    if (!list?.length) return fallback;
+    const sid = serviceId?.trim();
+    const catalog = sid
+      ? list.find((s) => s.id === sid || s.serviceId === sid)
+      : list.find((s) => s.name.trim().toLowerCase() === serviceName.trim().toLowerCase());
+    if (!catalog) return fallback;
+    const fromType = mapIconTypeStringToGlyph(catalog.iconType);
+    const glyphKind = fromType ?? fallback.glyph;
+    const bg = catalog.brandColor?.trim() || fallback.backgroundColor;
+    return {
+      glyph: glyphKind,
+      fallbackLetter: fallback.fallbackLetter,
+      backgroundColor: bg,
+      iconColor: pickGlyphColorForBackground(bg),
+    };
+  }, [catalogCtx?.services, serviceName, serviceId]);
   const fontSize = (BASE_FONT * size) / BASE_SIZE * (fallbackLetter.length >= 2 ? 0.82 : 1);
   const borderRadius = size * 0.28;
   const glyphSize = Math.round(size * GLYPH_RATIO);

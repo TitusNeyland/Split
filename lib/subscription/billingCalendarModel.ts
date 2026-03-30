@@ -8,6 +8,8 @@ export type BillingCalendarSubscription = {
   id: string;
   displayName: string;
   serviceNameForIcon: string;
+  /** Matches `services/{id}` when the split was created from a catalog preset. */
+  catalogServiceId?: string;
   billingCycle: 'monthly' | 'yearly';
   billingDayLabel: string;
   totalCents: number;
@@ -162,11 +164,14 @@ export function mapFirestoreDocToCalendarSubscription(
   const memberPaymentStatus = data.memberPaymentStatus as Record<string, BillingMemberStatus> | undefined;
   const iconColor = typeof data.iconColor === 'string' ? data.iconColor : undefined;
   const displayName = subscriptionDisplayName(serviceName, planName);
+  const catalogServiceId =
+    typeof data.serviceId === 'string' && data.serviceId.trim() ? data.serviceId.trim() : undefined;
 
   return {
     id,
     displayName,
     serviceNameForIcon: serviceName || displayName,
+    catalogServiceId,
     billingCycle,
     billingDayLabel,
     totalCents,

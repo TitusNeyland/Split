@@ -126,6 +126,8 @@ export function mapFirestoreSubscriptionToDetailModel(
   const planName = typeof data.planName === 'string' ? data.planName : undefined;
   const displayName = subscriptionDisplayName(serviceNameRaw, planName);
   const serviceNameForIcon = serviceNameRaw.trim() || displayName;
+  const catalogServiceId =
+    typeof data.serviceId === 'string' && data.serviceId.trim() ? data.serviceId.trim() : undefined;
 
   const cycle = parseFirestoreBillingCycle(data.billingCycle);
   const billingCycleLabel = cycle === 'yearly' ? 'Yearly' : 'Monthly';
@@ -290,6 +292,7 @@ export function mapFirestoreSubscriptionToDetailModel(
   return {
     id,
     serviceName: serviceNameForIcon,
+    serviceId: catalogServiceId,
     displayName,
     billingCycleLabel,
     nextBillingLabel,

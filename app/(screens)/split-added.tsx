@@ -108,7 +108,7 @@ export default function SplitAddedScreen() {
       >
         <Text style={styles.kicker}>{`You've been added!`}</Text>
         <View style={styles.iconWrap}>
-          <ServiceIcon serviceName={detail.serviceName} size={56} />
+          <ServiceIcon serviceName={detail.serviceName} serviceId={detail.serviceId} size={56} />
         </View>
         <Text style={styles.title} numberOfLines={2}>
           {detail.displayName}

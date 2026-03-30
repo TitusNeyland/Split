@@ -23,12 +23,14 @@ import {
   showShortMonthBillingWarning,
 } from '../../../lib/subscription/billingDayFormat';
 import {
+  firestoreTierRowsToServiceTiers,
   getStaticTiersForService,
   resolveServiceTierLookupKey,
   tierPriceLabel,
   type ServiceTier,
 } from '../../../lib/subscription/serviceTiers';
 import { loadServiceTiersWithFallback } from '../../../lib/subscription/serviceTiersFirestore';
+import { useServices } from '../../contexts/ServicesContext';
 
 const C = {
   purple: '#534AB7',
@@ -69,6 +71,7 @@ export default function AddSubscriptionDetailsScreen() {
   const router = useRouter();
   const {
     serviceName,
+    serviceId: serviceIdParamRaw,
     iconColor,
     priceSuggestionCents,
     planName: planNameParam,
@@ -78,6 +81,7 @@ export default function AddSubscriptionDetailsScreen() {
     autoCharge: autoChargeParam,
   } = useLocalSearchParams<{
     serviceName?: string;
+    serviceId?: string;
     iconColor?: string;
     priceSuggestionCents?: string;
     planName?: string;
@@ -88,12 +92,21 @@ export default function AddSubscriptionDetailsScreen() {
   }>();
 
   const baseServiceName = typeof serviceName === 'string' ? serviceName.trim() : '';
+  const { tiersMap, services: catalogServices } = useServices();
+  const serviceIdParam = typeof serviceIdParamRaw === 'string' ? serviceIdParamRaw.trim() : '';
+  const catalogForIcon =
+    (serviceIdParam && catalogServices.find((s) => s.id === serviceIdParam || s.serviceId === serviceIdParam)) ||
+    (baseServiceName
+      ? catalogServices.find((s) => s.name.trim().toLowerCase() === baseServiceName.toLowerCase())
+      : null) ||
+    null;
   const iconTint =
-    baseServiceName.length > 0
-      ? getServiceIconBackgroundColor(baseServiceName)
-      : typeof iconColor === 'string'
-        ? iconColor
-        : getServiceIconBackgroundColor('Subscription');
+    typeof iconColor === 'string' && /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/.test(iconColor.trim())
+      ? iconColor.trim()
+      : catalogForIcon?.brandColor ??
+        (baseServiceName.length > 0
+          ? getServiceIconBackgroundColor(baseServiceName)
+          : getServiceIconBackgroundColor('Subscription'));
   const suggestedCentsRaw =
     typeof priceSuggestionCents === 'string' && priceSuggestionCents !== ''
       ? parseInt(priceSuggestionCents, 10)
@@ -152,18 +165,28 @@ export default function AddSubscriptionDetailsScreen() {
   useEffect(() => {
     tierInitForServiceRef.current = null;
     setUseCustomPrice(false);
+
+    const fromCatalog =
+      serviceIdParam && tiersMap[serviceIdParam]?.length
+        ? firestoreTierRowsToServiceTiers(tiersMap[serviceIdParam])
+        : null;
+    if (fromCatalog && fromCatalog.length > 0) {
+      setTiers(fromCatalog);
+      return;
+    }
+
     setTiers(getStaticTiersForService(resolveServiceTierLookupKey(baseServiceName)));
 
     let cancelled = false;
     (async () => {
-      const next = await loadServiceTiersWithFallback(baseServiceName);
+      const next = await loadServiceTiersWithFallback(baseServiceName, serviceIdParam || undefined);
       if (!cancelled) setTiers(next);
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [baseServiceName]);
+  }, [baseServiceName, serviceIdParam, tiersMap]);
 
   const applyTier = useCallback(
     (index: number, tierList: ServiceTier[]) => {
@@ -266,6 +289,7 @@ export default function AddSubscriptionDetailsScreen() {
       pathname: '/add-subscription/members',
       params: {
         serviceName: baseServiceName,
+        ...(serviceIdParam ? { serviceId: serviceIdParam } : {}),
         iconColor: iconTint,
         planName: planName.trim() || baseServiceName,
         totalCents: String(totalCents),
@@ -280,6 +304,7 @@ export default function AddSubscriptionDetailsScreen() {
     billingDayOk,
     router,
     baseServiceName,
+    serviceIdParam,
     iconTint,
     planName,
     billingCycle,
@@ -355,7 +380,7 @@ export default function AddSubscriptionDetailsScreen() {
                 const selected = !useCustomPrice && selectedTierIndex === index;
                 return (
                   <Pressable
-                    key={`${tier.name}-${index}`}
+                    key={tier.tierId ?? `${tier.name}-${index}`}
                     onPress={() => applyTier(index, tiers)}
                     style={[styles.tierRow, selected && styles.tierRowSelected]}
                     accessibilityRole="radio"
@@ -364,6 +389,9 @@ export default function AddSubscriptionDetailsScreen() {
                   >
                     <View style={styles.tierRowLeft}>
                       <Text style={styles.tierName}>{tier.name}</Text>
+                      {tier.priceChangeNote ? (
+                        <Text style={styles.tierPriceNote}>{tier.priceChangeNote}</Text>
+                      ) : null}
                       <Text style={styles.tierSubtitle}>{tierPriceLabel(tier)}</Text>
                     </View>
                     <View style={[styles.radioOuter, selected && styles.radioOuterOn]}>
@@ -673,6 +701,13 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: C.text,
+  },
+  tierPriceNote: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: '#B45309',
+    marginTop: 4,
+    opacity: 0.92,
   },
   tierSubtitle: {
     fontSize: 11,

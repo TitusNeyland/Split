@@ -1,5 +1,4 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-;
 import {
   View,
   Text,
@@ -18,6 +17,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import type { ServiceCategoryId } from '../../../lib/subscription/servicesCatalogTypes';
+import { useServices } from '../../contexts/ServicesContext';
 import { getServiceIconBackgroundColor, ServiceIcon } from '../../components/shared/ServiceIcon';
 
 const FILTER_PILL_SCROLL_PADDING = 16;
@@ -98,21 +99,8 @@ const CATEGORY_FILTERS: { id: CategoryFilterId; label: string }[] = [
   { id: 'fitness', label: 'Fitness' },
 ];
 
-const PRESET_BY_NAME = new Map(PRESETS.map((p) => [p.name, p]));
-
-function presetsForCategory(categoryId: CategoryFilterId): PresetService[] {
-  if (categoryId === 'all') return PRESETS;
-  const names = SERVICE_CATEGORIES[categoryId];
-  if (!names) return [];
-  const out: PresetService[] = [];
-  for (const name of names) {
-    const p = PRESET_BY_NAME.get(name);
-    if (p) out.push(p);
-  }
-  return out;
-}
-
 function formatFromPrice(cents: number): string {
+  if (cents === 0) return 'Free';
   return `from $${(cents / 100).toFixed(2)}`;
 }
 
@@ -120,6 +108,7 @@ export default function AddSubscriptionStep1Screen() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const router = useRouter();
+  const { services } = useServices();
   const leaveAddSubscriptionFlow = useCallback(() => {
     if (router.canGoBack()) {
       router.back();
@@ -141,13 +130,30 @@ export default function AddSubscriptionStep1Screen() {
   const gap = 8;
   const presetCardWidth = (width - bodyPad * 2 - gap * (cols - 1)) / cols;
 
-  const filteredPresets = useMemo(() => presetsForCategory(selectedCategoryId), [selectedCategoryId]);
+  const filteredPresets = useMemo((): PresetService[] => {
+    if (selectedCategoryId === 'all') {
+      return services.map((s) => ({
+        id: s.id,
+        name: s.name,
+        priceCents: s.priceCentsMin,
+        brandColor: s.brandColor,
+      }));
+    }
+    return services
+      .filter((s) => s.category === selectedCategoryId)
+      .map((s) => ({
+        id: s.id,
+        name: s.name,
+        priceCents: s.priceCentsMin,
+        brandColor: s.brandColor,
+      }));
+  }, [services, selectedCategoryId]);
 
   const customTrimmed = customName.trim();
   const hasCustom = customTrimmed.length > 0;
   const selectedPreset = useMemo(
-    () => (selectedPresetId ? PRESETS.find((p) => p.id === selectedPresetId) ?? null : null),
-    [selectedPresetId],
+    () => (selectedPresetId ? services.find((p) => p.id === selectedPresetId) ?? null : null),
+    [selectedPresetId, services],
   );
 
   const canContinue = selectedPreset !== null || hasCustom;
@@ -175,8 +181,9 @@ export default function AddSubscriptionStep1Screen() {
         pathname: '/add-subscription/details',
         params: {
           serviceName: selectedPreset.name,
-          iconColor: getServiceIconBackgroundColor(selectedPreset.name),
-          priceSuggestionCents: String(selectedPreset.priceCents),
+          serviceId: selectedPreset.id,
+          iconColor: getServiceIconBackgroundColor(selectedPreset.name, selectedPreset.brandColor),
+          priceSuggestionCents: String(selectedPreset.priceCentsMin),
         },
       });
       return;
@@ -240,11 +247,12 @@ export default function AddSubscriptionStep1Screen() {
   const setCategory = useCallback(
     (id: CategoryFilterId) => {
       setSelectedCategoryId(id);
-      const nextPresets = presetsForCategory(id);
+      const nextPresets =
+        id === 'all' ? services : services.filter((s) => s.category === id);
       const ids = new Set(nextPresets.map((p) => p.id));
       setSelectedPresetId((cur) => (cur && ids.has(cur) ? cur : null));
     },
-    [],
+    [services],
   );
 
   return (
@@ -333,7 +341,7 @@ export default function AddSubscriptionStep1Screen() {
                 accessibilityState={{ selected }}
                 accessibilityLabel={`${p.name}, ${formatFromPrice(p.priceCents)}`}
               >
-                <ServiceIcon serviceName={p.name} size={42} />
+                <ServiceIcon serviceName={p.name} serviceId={p.id} size={42} />
                 <Text style={styles.presetName} numberOfLines={2}>
                   {p.name}
                 </Text>

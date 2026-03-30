@@ -91,6 +91,64 @@ export type ResolvedServiceIcon = {
   fallbackLetter: string;
 };
 
+function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
+  const h = hex.replace('#', '').trim();
+  if (h.length === 3) {
+    return {
+      r: parseInt(h[0]! + h[0]!, 16),
+      g: parseInt(h[1]! + h[1]!, 16),
+      b: parseInt(h[2]! + h[2]!, 16),
+    };
+  }
+  if (h.length === 6) {
+    return {
+      r: parseInt(h.slice(0, 2), 16),
+      g: parseInt(h.slice(2, 4), 16),
+      b: parseInt(h.slice(4, 6), 16),
+    };
+  }
+  return null;
+}
+
+function relativeLuminance(rgb: { r: number; g: number; b: number }): number {
+  const lin = [rgb.r, rgb.g, rgb.b].map((c) => {
+    const x = c / 255;
+    return x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4);
+  });
+  return 0.2126 * lin[0]! + 0.7152 * lin[1]! + 0.0722 * lin[2]!;
+}
+
+/** Readable glyph color on top of a solid brand tile (Firestore `brandColor`). */
+export function pickGlyphColorForBackground(hexBg: string): string {
+  const rgb = hexToRgb(hexBg);
+  if (!rgb) return UNKNOWN_FG;
+  return relativeLuminance(rgb) > 0.55 ? '#1a1a18' : '#ffffff';
+}
+
+/**
+ * Maps catalog `iconType` strings (e.g. `tv`) to drawable glyph kinds.
+ * Returns null for unknown / `default` so callers fall back to name-based rules.
+ */
+export function mapIconTypeStringToGlyph(iconType: string | undefined | null): ServiceGlyphKind | null {
+  if (!iconType?.trim()) return null;
+  const t = iconType.trim().toLowerCase();
+  if (t === 'default') return null;
+  const map: Record<string, ServiceGlyphKind> = {
+    tv: 'tv-screen',
+    'tv-screen': 'tv-screen',
+    'tv-panel': 'tv-panel',
+    'tv-play': 'tv-play',
+    music: 'music',
+    gamepad: 'gamepad',
+    cloud: 'cloud',
+    'box-open': 'box-open',
+    brush: 'brush',
+    grid: 'grid',
+    'play-triangle': 'play-triangle',
+  };
+  return map[t] ?? null;
+}
+
 export function resolveServiceIcon(raw: string): ResolvedServiceIcon {
   const n = normalize(raw);
   if (!n) {
@@ -120,7 +178,9 @@ export function resolveServiceIcon(raw: string): ResolvedServiceIcon {
 }
 
 /** Use when persisting `iconColor` / wizard params so tiles match `ServiceIcon`. */
-export function getServiceIconBackgroundColor(serviceName: string): string {
+export function getServiceIconBackgroundColor(serviceName: string, brandColorOverride?: string | null): string {
+  const o = brandColorOverride?.trim();
+  if (o && /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/.test(o)) return o;
   return resolveServiceIcon(serviceName).backgroundColor;
 }
 

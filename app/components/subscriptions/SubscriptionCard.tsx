@@ -41,6 +41,8 @@ export type SubscriptionCardProps = {
   };
   /** Letter-mark icon from service name (category color, no brand artwork). */
   serviceName: string;
+  /** When set, `ServiceIcon` uses Firestore catalog colors/glyph for this preset. */
+  serviceId?: string;
   iconSize?: number;
   name: string;
   nameColor?: string;
@@ -143,6 +145,7 @@ function CollectionBar({ pct, color }: { pct: number; color: string }) {
 export function SubscriptionCard({
   priceChange,
   serviceName,
+  serviceId,
   iconSize = 40,
   name,
   nameColor = C.text,
@@ -193,6 +196,7 @@ export function SubscriptionCard({
         <View style={styles.topRow}>
           <ServiceIcon
             serviceName={serviceName}
+            serviceId={serviceId}
             size={iconSize}
             style={styles.serviceIconTile}
             listEndedMuted={Boolean(splitEndedActions)}

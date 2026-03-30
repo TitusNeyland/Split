@@ -108,6 +108,8 @@ export type ActivityFeedRow = {
   friendLinkIds?: string[];
   kind: ActivityFeedKind;
   serviceMark?: string;
+  /** When Cloud Functions include `serviceId` on the activity doc (matches catalog). */
+  serviceId?: string;
   icon: string;
   iconBg: string;
   iconColor: string;
@@ -157,6 +159,8 @@ export function activityEventToFeedRow(
   const subName = event.subscriptionName?.trim() || 'Subscription';
   const brand = shortBrandName(subName);
   const serviceMark = subName;
+  const catalogServiceId =
+    typeof event.serviceId === 'string' && event.serviceId.trim() ? event.serviceId.trim() : undefined;
   const amountCents = typeof event.amount === 'number' ? event.amount : undefined;
   const amountStr = formatMoneyCents(amountCents);
   const meta = event.metadata && typeof event.metadata === 'object' ? event.metadata : {};
@@ -173,6 +177,7 @@ export function activityEventToFeedRow(
         kind: 'received',
         friendLinkIds: memberUid ? [memberUid] : undefined,
         serviceMark,
+        serviceId: catalogServiceId,
         icon: 'checkmark',
         iconBg: '#E1F5EE',
         iconColor: C.green,
@@ -191,6 +196,7 @@ export function activityEventToFeedRow(
         id: event.id,
         kind: 'payment_sent',
         serviceMark,
+        serviceId: catalogServiceId,
         icon: 'checkmark',
         iconBg: '#E1F5EE',
         iconColor: C.green,
@@ -214,6 +220,7 @@ export function activityEventToFeedRow(
         kind: 'failed',
         friendLinkIds: event.actorUid ? [event.actorUid] : undefined,
         serviceMark,
+        serviceId: catalogServiceId,
         icon: 'alert-circle-outline',
         iconBg: '#FCEBEB',
         iconColor: '#A32D2D',
@@ -240,6 +247,7 @@ export function activityEventToFeedRow(
         kind: 'overdue',
         friendLinkIds: event.actorUid ? [event.actorUid] : undefined,
         serviceMark,
+        serviceId: catalogServiceId,
         icon: 'time-outline',
         iconBg: '#FAEEDA',
         iconColor: '#854F0B',
@@ -320,6 +328,7 @@ export function activityEventToFeedRow(
         kind: 'split_invite_received',
         friendLinkIds: event.actorUid ? [event.actorUid] : undefined,
         serviceMark,
+        serviceId: catalogServiceId,
         icon: 'mail-outline',
         iconBg: '#EEEDFE',
         iconColor: C.purple,
@@ -352,6 +361,7 @@ export function activityEventToFeedRow(
         kind: 'split_invite_sent',
         friendLinkIds: inviteeUid ? [inviteeUid] : undefined,
         serviceMark,
+        serviceId: catalogServiceId,
         icon: 'person-add-outline',
         iconBg: '#E1F5EE',
         iconColor: '#0F6E56',
@@ -375,6 +385,7 @@ export function activityEventToFeedRow(
         id: event.id,
         kind: 'split_invite_accepted',
         serviceMark,
+        serviceId: catalogServiceId,
         icon: 'checkmark-circle-outline',
         iconBg: '#E1F5EE',
         iconColor: C.green,
@@ -393,6 +404,7 @@ export function activityEventToFeedRow(
         id: event.id,
         kind: 'split_invite_declined',
         serviceMark,
+        serviceId: catalogServiceId,
         serviceIconMuted: true,
         icon: 'close-outline',
         iconBg: '#F0EEE9',
@@ -414,6 +426,7 @@ export function activityEventToFeedRow(
         kind: 'split_invite_declined_owner',
         friendLinkIds: event.actorUid ? [event.actorUid] : undefined,
         serviceMark,
+        serviceId: catalogServiceId,
         icon: 'person-remove-outline',
         iconBg: '#FEF3C7',
         iconColor: '#B45309',
@@ -436,6 +449,7 @@ export function activityEventToFeedRow(
         id: event.id,
         kind: 'split_invite_expired',
         serviceMark,
+        serviceId: catalogServiceId,
         icon: 'time-outline',
         iconBg: '#FAEEDA',
         iconColor: C.orange,
@@ -497,6 +511,7 @@ export function activityEventToFeedRow(
         id: event.id,
         kind: 'split_left',
         serviceMark,
+        serviceId: catalogServiceId,
         icon: 'log-out-outline',
         iconBg: '#F0EEE9',
         iconColor: C.muted,
@@ -515,6 +530,7 @@ export function activityEventToFeedRow(
         id: event.id,
         kind: 'split_member_left',
         serviceMark,
+        serviceId: catalogServiceId,
         friendLinkIds: event.actorUid ? [event.actorUid] : undefined,
         icon: 'person-outline',
         iconBg: '#FAEEDA',
@@ -536,6 +552,7 @@ export function activityEventToFeedRow(
         kind: 'split_ended',
         friendLinkIds: endedByUid ? [endedByUid] : undefined,
         serviceMark,
+        serviceId: catalogServiceId,
         serviceIconMuted: true,
         icon: 'close-circle-outline',
         iconBg: '#F0EEE9',
@@ -556,6 +573,7 @@ export function activityEventToFeedRow(
         id: event.id,
         kind: 'split_price_updated',
         serviceMark,
+        serviceId: catalogServiceId,
         icon: 'information-circle-outline',
         iconBg: '#FAEEDA',
         iconColor: '#854F0B',
@@ -678,6 +696,7 @@ export function activityEventToFeedRow(
         id: event.id,
         kind: 'billing_cycle_complete',
         serviceMark,
+        serviceId: catalogServiceId,
         icon: 'checkmark-circle-outline',
         iconBg: '#E1F5EE',
         iconColor: C.green,
@@ -713,6 +732,7 @@ export function activityEventToFeedRow(
         id: event.id,
         kind: 'billing_cycle_partial',
         serviceMark,
+        serviceId: catalogServiceId,
         icon: 'alert-circle-outline',
         iconBg: '#FAEEDA',
         iconColor: '#854F0B',
@@ -782,6 +802,7 @@ export function activityEventToFeedRow(
           id: event.id,
           kind: 'split_ended',
           serviceMark,
+          serviceId: catalogServiceId,
           icon: 'ellipse-outline',
           iconBg: '#F0EEE9',
           iconColor: '#5F5E5A',

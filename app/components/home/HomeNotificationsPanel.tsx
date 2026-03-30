@@ -267,7 +267,9 @@ function NotificationRow({
 
   if (n.type === 'split_invite') {
     const meta = getSplitInviteMetadata(n);
-    const serviceLabel = meta?.serviceId?.trim() || meta?.subscriptionName || 'Subscription';
+    const catalogServiceId =
+      typeof meta?.serviceId === 'string' && meta.serviceId.trim() ? meta.serviceId.trim() : undefined;
+    const serviceLabel = meta?.subscriptionName?.trim() || 'Subscription';
     const shareLabel =
       meta != null ? `Your share · $${(meta.userShare / 100).toFixed(2)}/month` : n.body;
     const showActions = unread && !n.actioned;
@@ -288,7 +290,7 @@ function NotificationRow({
       >
         <View style={styles.rowMain}>
           <View style={styles.iconLeft}>
-            <ServiceIcon serviceName={serviceLabel} size={36} />
+            <ServiceIcon serviceName={serviceLabel} serviceId={catalogServiceId} size={36} />
           </View>
           <View style={styles.rowText}>
             <Text style={styles.rowTitle} numberOfLines={2}>

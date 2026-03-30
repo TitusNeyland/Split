@@ -46,6 +46,8 @@ type CardProgress = {
 
 export type SubscriptionCardBaseProps = {
   serviceName: string;
+  /** Catalog id when present on the subscription doc (Firestore `services` / icons). */
+  serviceId?: string;
   name: string;
   nameColor?: string;
   cycleLine: string;
@@ -582,8 +584,11 @@ export function buildSubscriptionCardBase(
     ? formatEndedListCycleLine(data, memberCountForEndedSubLabel(data))
     : '';
 
+  const sid = typeof data.serviceId === 'string' && data.serviceId.trim() ? data.serviceId.trim() : undefined;
+
   return {
     serviceName: serviceNameForIcon(data),
+    serviceId: sid,
     name: displayName,
     nameColor: muted ? C.muted : C.text,
     cycleLine: splitEnded ? endedCycleLine : formatCycleLine(data),

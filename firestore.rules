@@ -230,6 +230,11 @@ service cloud.firestore {
         && resource.data.uid == request.auth.uid;
     }
 
+    match /services/{serviceId} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+
     match /service_tiers/{docId} {
       allow read: if request.auth != null;
       allow write: if false;

@@ -24,6 +24,8 @@ export type WizardMemberRow = {
 export type CreateSubscriptionWizardInput = {
   actorUid: string;
   serviceName: string;
+  /** Preset catalog id (e.g. `netflix`) when chosen from the picker; omitted for custom services. */
+  serviceId?: string;
   planName: string;
   iconColor: string;
   totalCents: number;
@@ -181,6 +183,7 @@ export async function createSubscriptionFromWizard(
   const docRef = await addDoc(col, {
     ownerUid: input.actorUid,
     serviceName: input.serviceName,
+    ...(input.serviceId?.trim() ? { serviceId: input.serviceId.trim() } : {}),
     planName: input.planName,
     iconColor: input.iconColor,
     totalCents: input.totalCents,

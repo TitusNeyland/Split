@@ -51,6 +51,7 @@ export type SplitInviteDeclineNotice = {
 export type SubscriptionDetailModel = {
   id: string;
   serviceName: string;
+  serviceId?: string;
   displayName: string;
   billingCycleLabel: string;
   nextBillingLabel: string;
