@@ -13,6 +13,7 @@ import {
   getStackEntriesFromProfileRows,
   type ProfileFriendBalanceRow,
 } from '../../../lib/profile/profileFriendsBalance';
+import { formatUsdDollarsFixed2 } from '../../../lib/format/currency';
 
 const C = {
   text: '#1a1a18',
@@ -75,8 +76,8 @@ function NetBalanceBar({ owedToYou, youOwe }: { owedToYou: number; youOwe: numbe
         )}
       </View>
       <View style={netStyles.amountRow}>
-        <Text style={netStyles.amtGreen}>+${ow.toFixed(2)}</Text>
-        <Text style={netStyles.amtRed}>-${yo.toFixed(2)}</Text>
+        <Text style={netStyles.amtGreen}>{`+${formatUsdDollarsFixed2(ow)}`}</Text>
+        <Text style={netStyles.amtRed}>{`-${formatUsdDollarsFixed2(yo)}`}</Text>
       </View>
     </View>
   );
@@ -151,16 +152,16 @@ function BalanceRow({
   let rightText = '';
   let rightColor = C.muted;
   if (row.kind === 'they_owe_overdue') {
-    rightText = `owes $${(row.amount ?? 0).toFixed(2)}`;
+    rightText = `owes ${formatUsdDollarsFixed2(row.amount ?? 0)}`;
     rightColor = C.red;
   } else if (row.kind === 'they_owe_pending') {
-    rightText = `owes $${(row.amount ?? 0).toFixed(2)}`;
+    rightText = `owes ${formatUsdDollarsFixed2(row.amount ?? 0)}`;
     rightColor = C.amber;
   } else if (row.kind === 'settled') {
     rightText = 'settled';
     rightColor = C.green;
   } else if (row.kind === 'you_owe') {
-    rightText = `owe $${row.amount.toFixed(2)}`;
+    rightText = `owe ${formatUsdDollarsFixed2(row.amount)}`;
     rightColor = C.red;
   }
 

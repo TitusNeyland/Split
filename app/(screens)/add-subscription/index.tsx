@@ -18,6 +18,7 @@ import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useServices } from '../../contexts/ServicesContext';
+import { formatUsdFromCents } from '../../../lib/format/currency';
 import { getServiceIconBackgroundColor, ServiceIcon } from '../../components/shared/ServiceIcon';
 
 const FILTER_PILL_SCROLL_PADDING = 16;
@@ -69,7 +70,7 @@ const CATEGORY_FILTERS: { id: CategoryFilterId; label: string }[] = [
 
 function formatFromPrice(cents: number): string {
   if (cents === 0) return 'Free';
-  return `from $${(cents / 100).toFixed(2)}`;
+  return `from ${formatUsdFromCents(cents)}`;
 }
 
 export default function AddSubscriptionStep1Screen() {

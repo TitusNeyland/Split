@@ -1,3 +1,4 @@
+import { formatUsdDollarsFixed2 } from '../format/currency';
 import type { FirestoreServiceTierRow } from './servicesCatalogTypes';
 
 export type ServiceTierCycle = 'month' | 'year';
@@ -86,7 +87,7 @@ export function resolveServiceTierLookupKey(serviceName: string): string {
 
 export function tierPriceLabel(tier: ServiceTier): string {
   const period = tier.cycle === 'year' ? 'year' : 'month';
-  return `$${tier.price.toFixed(2)} / ${period}`;
+  return `${formatUsdDollarsFixed2(tier.price)} / ${period}`;
 }
 
 export function firestoreTierRowsToServiceTiers(rows: FirestoreServiceTierRow[]): ServiceTier[] {

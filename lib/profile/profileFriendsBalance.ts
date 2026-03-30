@@ -4,6 +4,7 @@ import {
 } from '../home/homeSubscriptionMath';
 import type { MemberSubscriptionDoc } from '../subscription/memberSubscriptionsFirestore';
 import { initialsFromName } from './profile';
+import { formatUsdDollarsFixed2 } from '../format/currency';
 
 export type FriendBalanceKind = 'they_owe_overdue' | 'they_owe_pending' | 'settled' | 'you_owe';
 
@@ -228,7 +229,7 @@ export function buildFriendsHubFriendRowsFromSubscriptions(
         displayName: name,
         initials,
         sharedSubsLabel,
-        balanceMain: `you owe $${owe.toFixed(2)}`,
+        balanceMain: `you owe ${formatUsdDollarsFixed2(owe)}`,
         balanceSub: 'Tap activity for details',
         balanceTone: 'red',
       };
@@ -240,7 +241,7 @@ export function buildFriendsHubFriendRowsFromSubscriptions(
         displayName: name,
         initials,
         sharedSubsLabel,
-        balanceMain: `owes $${they.toFixed(2)}`,
+        balanceMain: `owes ${formatUsdDollarsFixed2(they)}`,
         balanceSub: 'Payment overdue',
         balanceTone: 'red',
       };
@@ -252,7 +253,7 @@ export function buildFriendsHubFriendRowsFromSubscriptions(
         displayName: name,
         initials,
         sharedSubsLabel,
-        balanceMain: `owes $${they.toFixed(2)}`,
+        balanceMain: `owes ${formatUsdDollarsFixed2(they)}`,
         balanceSub: 'Payment pending',
         balanceTone: 'green',
       };
@@ -285,7 +286,7 @@ export function getFriendsHubFriendRows(): FriendsHubFriendRow[] {
           return row.counterpartyShortName.slice(0, 2).toUpperCase() || '?';
         })(),
         sharedSubsLabel: toSharedSubsLabel(row.subscriptionCountLabel),
-        balanceMain: `you owe $${row.amount.toFixed(2)}`,
+        balanceMain: `you owe ${formatUsdDollarsFixed2(row.amount)}`,
         balanceSub: 'Tap activity for details',
         balanceTone: 'red',
       };
@@ -296,7 +297,7 @@ export function getFriendsHubFriendRows(): FriendsHubFriendRow[] {
         displayName: row.displayName,
         initials: row.initials,
         sharedSubsLabel: toSharedSubsLabel(row.subscriptionCountLabel),
-        balanceMain: `owes $${(row.amount ?? 0).toFixed(2)}`,
+        balanceMain: `owes ${formatUsdDollarsFixed2(row.amount ?? 0)}`,
         balanceSub: row.subLine,
         balanceTone: 'red',
       };
@@ -307,7 +308,7 @@ export function getFriendsHubFriendRows(): FriendsHubFriendRow[] {
         displayName: row.displayName,
         initials: row.initials,
         sharedSubsLabel: toSharedSubsLabel(row.subscriptionCountLabel),
-        balanceMain: `owes $${(row.amount ?? 0).toFixed(2)}`,
+        balanceMain: `owes ${formatUsdDollarsFixed2(row.amount ?? 0)}`,
         balanceSub: row.subLine,
         balanceTone: 'green',
       };

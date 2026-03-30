@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import type { HomeFloatCardModel } from '../../../lib/home/homeSubscriptionMath';
+import { formatUsdDollarsFixed2 } from '../../../lib/format/currency';
 
 const C = {
   bg: '#fff',
@@ -86,7 +87,7 @@ export function HomeFloatCard({ model, hasSubscriptions, loading = false }: Prop
                   : `Due in ${youOweRow.daysUntil} days`}
             </Text>
           </View>
-          <Text style={styles.rowAmt}>${youOweRow.amountDollars.toFixed(2)}</Text>
+          <Text style={styles.rowAmt}>{formatUsdDollarsFixed2(youOweRow.amountDollars)}</Text>
         </Pressable>
       ) : null}
 
@@ -97,7 +98,7 @@ export function HomeFloatCard({ model, hasSubscriptions, loading = false }: Prop
             <Text style={styles.rowTitle}>Pending from {pendingRow.pendingCount} people</Text>
             <Text style={styles.rowSub}>Collect on your subscriptions</Text>
           </View>
-          <Text style={styles.rowAmt}>${pendingRow.totalDollars.toFixed(2)}</Text>
+          <Text style={styles.rowAmt}>{formatUsdDollarsFixed2(pendingRow.totalDollars)}</Text>
         </View>
       ) : null}
 
@@ -114,7 +115,7 @@ export function HomeFloatCard({ model, hasSubscriptions, loading = false }: Prop
             </Text>
             <Text style={styles.rowSub}>Member payment overdue</Text>
           </View>
-          <Text style={[styles.rowAmt, { color: C.red }]}>${overdueRow.amountDollars.toFixed(2)}</Text>
+          <Text style={[styles.rowAmt, { color: C.red }]}>{formatUsdDollarsFixed2(overdueRow.amountDollars)}</Text>
         </Pressable>
       ) : null}
     </View>

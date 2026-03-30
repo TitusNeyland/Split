@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
-;
 import { View, Text, StyleSheet, Animated, type ViewStyle } from 'react-native';
 import { subscribeProfileStats, type ProfileStats } from '../../../lib/profile';
+import { formatUsdDollarsFlexible } from '../../../lib/format/currency';
 
 const C = {
   text: '#1a1a18',
@@ -17,12 +17,6 @@ const DEMO_STATS: ProfileStats = {
   friends: 7,
   loading: { activeSplits: false, collectedTotal: false, friends: false },
 };
-
-function formatCurrency(n: number): string {
-  const rounded = Math.round(n * 100) / 100;
-  if (Number.isInteger(rounded)) return `$${rounded}`;
-  return `$${rounded.toFixed(2)}`;
-}
 
 function PulsingBar({ style }: { style: ViewStyle }) {
   const op = useRef(new Animated.Value(0.45)).current;
@@ -101,7 +95,7 @@ export default function ProfileStatsCard({ uid, demoMode }: Props) {
         <View style={styles.divider} />
         <StatColumn
           loading={stats.loading.collectedTotal}
-          value={formatCurrency(stats.collectedTotal)}
+          value={formatUsdDollarsFlexible(stats.collectedTotal)}
           label="Collected total"
           valueStyle={styles.valueGreen}
         />

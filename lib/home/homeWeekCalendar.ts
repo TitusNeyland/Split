@@ -2,6 +2,8 @@
  * Home "This week" billing strip + next-bill preview (demo / local logic until Firestore wiring).
  */
 
+import { formatUsdDollarsFixed2 } from '../format/currency';
+
 export type HomeCalendarBill = {
   id: string;
   serviceName: string;
@@ -177,6 +179,6 @@ export function pickNextBillPreview(
     billingDetail: formatBillingDetail(bd),
     whenLabel: formatUpcomingWhenLabel(bd, now),
     whenIsToday,
-    amountFormatted: `$${chosen.amount.toFixed(2)}`,
+    amountFormatted: formatUsdDollarsFixed2(chosen.amount),
   };
 }

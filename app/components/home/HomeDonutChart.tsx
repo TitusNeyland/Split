@@ -7,6 +7,7 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
+import { formatUsdDollarsFixed2 } from '../../../lib/format/currency';
 
 /** Outer box; hero chart + legend row uses this width (flexShrink:0 on wrap). */
 export const HOME_DONUT_SIZE = 180;
@@ -40,9 +41,9 @@ function arcPath(cx: number, cy: number, r: number, a0: number, a1: number): str
 }
 
 function formatNet(n: number): string {
-  if (!Number.isFinite(n) || Math.abs(n) < 0.005) return '+$0.00';
+  if (!Number.isFinite(n) || Math.abs(n) < 0.005) return `+${formatUsdDollarsFixed2(0)}`;
   const sign = n > 0 ? '+' : '-';
-  return `${sign}$${Math.abs(n).toFixed(2)}`;
+  return `${sign}${formatUsdDollarsFixed2(Math.abs(n))}`;
 }
 
 export type HomeDonutChartProps = {

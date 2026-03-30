@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import { formatUsdDollarsFixed2 } from '../../../lib/format/currency';
 
 /** Same hex as `HomeDonutChart` ring segments (dots + amounts). */
 const DOT_RED = '#EF4444';
@@ -11,10 +12,6 @@ export type HomeHeroDonutLegendProps = {
   owedToYou: number;
   overdue: number;
 };
-
-function fmt(n: number): string {
-  return `$${n.toFixed(2)}`;
-}
 
 export function HomeHeroDonutLegend({
   youOwe,
@@ -29,7 +26,7 @@ export function HomeHeroDonutLegend({
         </View>
         <View style={styles.legContent}>
           <Text style={styles.legLabel}>You owe</Text>
-          <Text style={[styles.legAmt, { color: DOT_RED }]}>{fmt(youOwe)}</Text>
+          <Text style={[styles.legAmt, { color: DOT_RED }]}>{formatUsdDollarsFixed2(youOwe)}</Text>
         </View>
       </View>
       <View style={styles.legItem}>
@@ -38,7 +35,7 @@ export function HomeHeroDonutLegend({
         </View>
         <View style={styles.legContent}>
           <Text style={styles.legLabel}>Owed to you</Text>
-          <Text style={[styles.legAmt, { color: DOT_GREEN }]}>{fmt(owedToYou)}</Text>
+          <Text style={[styles.legAmt, { color: DOT_GREEN }]}>{formatUsdDollarsFixed2(owedToYou)}</Text>
         </View>
       </View>
       <View style={styles.legItem}>
@@ -47,7 +44,7 @@ export function HomeHeroDonutLegend({
         </View>
         <View style={styles.legContent}>
           <Text style={styles.legLabel}>Pending</Text>
-          <Text style={[styles.legAmt, { color: DOT_AMBER }]}>{fmt(overdue)}</Text>
+          <Text style={[styles.legAmt, { color: DOT_AMBER }]}>{formatUsdDollarsFixed2(overdue)}</Text>
         </View>
       </View>
     </View>

@@ -24,6 +24,7 @@ import {
   upsertRecentFromSession,
 } from '../../lib/receipts/recentReceipts';
 import type { AssignReceiptLine, ReceiptAssignSession, StoredReceiptRecord } from '../../lib/receipts/receiptTypes';
+import { formatUsdDollarsFixed2 } from '../../lib/format/currency';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
@@ -648,7 +649,7 @@ function RecentReceiptRow({
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={`${row.merchantName}, ${row.peopleCount} ${row.peopleCount === 1 ? 'person' : 'people'}, ${row.itemCount} ${row.itemCount === 1 ? 'item' : 'items'}, total ${row.totalAmount.toFixed(2)} dollars, your share ${row.yourShare.toFixed(2)}`}
+      accessibilityLabel={`${row.merchantName}, ${row.peopleCount} ${row.peopleCount === 1 ? 'person' : 'people'}, ${row.itemCount} ${row.itemCount === 1 ? 'item' : 'items'}, total ${formatUsdDollarsFixed2(row.totalAmount)}, your share ${formatUsdDollarsFixed2(row.yourShare)}`}
       style={({ pressed }) => [styles.recentRow, pressed && { opacity: 0.92 }]}
     >
       <View style={styles.recentReceiptIconCircle} accessibilityElementsHidden>
@@ -664,11 +665,11 @@ function RecentReceiptRow({
         </Text>
       </View>
       <View style={styles.recentRight}>
-        <Text style={styles.recentTotal}>${row.totalAmount.toFixed(2)}</Text>
+        <Text style={styles.recentTotal}>{formatUsdDollarsFixed2(row.totalAmount)}</Text>
         <Text style={styles.recentShare}>
           {alwaysShowExactAmounts
-            ? `Your share $${row.yourShare.toFixed(2)} · ${sharePct}%`
-            : `Your share $${row.yourShare.toFixed(2)}`}
+            ? `Your share ${formatUsdDollarsFixed2(row.yourShare)} · ${sharePct}%`
+            : `Your share ${formatUsdDollarsFixed2(row.yourShare)}`}
         </Text>
       </View>
     </Pressable>

@@ -26,6 +26,7 @@ import {
   type AppNotification,
 } from '../../../lib/home/homeNotificationsFirestore';
 import { replaceWithSplitJoinedCelebration } from '../../../lib/navigation/splitJoinedCelebration';
+import { formatUsdFromCents } from '../../../lib/format/currency';
 import { getFriendAvatarColors } from '../../../lib/friends/friendAvatar';
 import { initialsFromName } from '../../../lib/profile';
 import { ServiceIcon } from '../shared/ServiceIcon';
@@ -285,7 +286,7 @@ function NotificationRow({
       typeof meta?.serviceId === 'string' && meta.serviceId.trim() ? meta.serviceId.trim() : undefined;
     const serviceLabel = meta?.subscriptionName?.trim() || 'Subscription';
     const shareLabel =
-      meta != null ? `Your share · $${(meta.userShare / 100).toFixed(2)}/month` : n.body;
+      meta != null ? `Your share · ${formatUsdFromCents(meta.userShare)}/month` : n.body;
     const showActions = unread && !n.actioned;
     const actionedLabel =
       n.actioned === 'accepted' ? (
