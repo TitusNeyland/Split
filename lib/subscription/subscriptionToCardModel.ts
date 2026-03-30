@@ -1,7 +1,6 @@
 import { fmtCents } from './addSubscriptionSplitMath';
 import {
   buildStatusBadge,
-  countPendingMemberAcceptances,
   parseFirestoreBillingCycle,
   subscriptionDisplayName,
   type BillingMemberStatus,
@@ -60,7 +59,7 @@ export type SubscriptionCardBaseProps = {
   statusPill: StatusPill;
   dueLabel?: string;
   progress: CardProgress;
-  /** Roster `memberStatus === 'pending'` count; shows amber pill on list card. */
+  /** Share rows still awaiting invite (same rules as member pips); amber pill on list card. */
   pendingInviteCount?: number;
 };
 
@@ -255,6 +254,33 @@ export function isShareRowPendingInvite(data: Record<string, unknown>, s: ShareR
   if (s.invitePending === true) return true;
   // No explicit flag — fall back to roster status.
   return rosterStatus === 'pending';
+}
+
+/**
+ * Non-owner share rows still awaiting invite acceptance. Matches {@link buildMemberPips} /
+ * {@link isShareRowPendingInvite}: if `invitePending` is false on the share row, the slot counts as
+ * filled even when roster `memberStatus` is still catching up as `pending`.
+ */
+export function countPendingInviteSlots(data: Record<string, unknown>): number {
+  const shares = getSplitShares(data);
+  if (shares.length === 0) {
+    const roster = data.members;
+    if (!Array.isArray(roster)) return 0;
+    let n = 0;
+    for (const m of roster) {
+      if (m && typeof m === 'object' && (m as { memberStatus?: string }).memberStatus === 'pending') {
+        n++;
+      }
+    }
+    return n;
+  }
+  let n = 0;
+  for (const s of shares) {
+    const row = s as ShareRow;
+    if (row.role === 'owner') continue;
+    if (isShareRowPendingInvite(data, row)) n++;
+  }
+  return n;
 }
 
 /** Pending or expired invite slot — excluded from billing progress denominator/collected. */
@@ -558,7 +584,7 @@ export function buildSubscriptionCardBase(
     typeof data.planName === 'string' ? data.planName : undefined
   );
   const statusMap = extractMemberPaymentStatus(data);
-  const pendingInviteCount = countPendingMemberAcceptances(data);
+  const pendingInviteCount = countPendingInviteSlots(data);
   const badge = buildStatusBadge(statusMap, viewerUid, {
     pendingAcceptanceCount: pendingInviteCount,
   });
