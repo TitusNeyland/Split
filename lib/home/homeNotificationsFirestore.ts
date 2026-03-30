@@ -2,6 +2,7 @@ import {
   collection,
   doc,
   getDoc,
+  increment,
   limit,
   onSnapshot,
   orderBy,
@@ -9,6 +10,7 @@ import {
   serverTimestamp,
   Timestamp,
   updateDoc,
+  writeBatch,
   type Unsubscribe,
 } from 'firebase/firestore';
 import { getFirebaseFirestore } from '../firebase';
@@ -61,7 +63,12 @@ export type AppNotification = {
   deepLink?: string;
   metadata?: Record<string, unknown> | null;
   actioned?: 'accepted' | 'declined' | null;
+  /** Server may set to hide stale rows after owner cancels invite. */
+  status?: string;
 };
+
+/** Thrown when invite doc or subscription no longer allows accept (owner removed invite, etc.). */
+export const SPLIT_INVITE_INVALID_ERROR = 'SPLIT_INVITE_INVALID';
 
 const PRIORITY: Record<string, number> = {
   split_invite: 0,
@@ -113,6 +120,7 @@ function parseNotificationDoc(id: string, data: Record<string, unknown>): AppNot
   const actionedRaw = data.actioned;
   const actioned =
     actionedRaw === 'accepted' || actionedRaw === 'declined' ? actionedRaw : null;
+  const status = typeof data.status === 'string' ? data.status : undefined;
 
   return {
     id,
@@ -124,6 +132,7 @@ function parseNotificationDoc(id: string, data: Record<string, unknown>): AppNot
     deepLink,
     metadata,
     actioned,
+    status,
   };
 }
 
@@ -145,7 +154,7 @@ export function subscribeHomeNotifications(
       const items: AppNotification[] = [];
       for (const d of snap.docs) {
         const row = parseNotificationDoc(d.id, d.data() as Record<string, unknown>);
-        if (row) items.push(row);
+        if (row && row.status !== 'cancelled') items.push(row);
       }
       items.sort(sortNotifications);
       onUpdate(items);
@@ -199,6 +208,28 @@ export async function updateNotificationFields(
   await updateDoc(doc(db, 'users', uid, 'notifications', notificationId), fields);
 }
 
+/** Marks a stale split-invite notification dismissed after a failed accept (e.g. owner cancelled). */
+export async function markSplitInviteNotificationInvalidated(
+  uid: string,
+  notificationId: string,
+  wasUnread: boolean
+): Promise<void> {
+  const db = getFirebaseFirestore();
+  if (!db) throw new Error('Firestore is not configured.');
+  const batch = writeBatch(db);
+  batch.update(doc(db, 'users', uid, 'notifications', notificationId), {
+    read: true,
+    status: 'cancelled',
+    cancelledAt: serverTimestamp(),
+  });
+  if (wasUnread) {
+    batch.update(doc(db, 'users', uid), {
+      unreadNotificationCount: increment(-1),
+    });
+  }
+  await batch.commit();
+}
+
 function parseSplitInviteMetadata(m: Record<string, unknown> | null | undefined): SplitInviteMetadata | null {
   if (!m) return null;
   const subscriptionId = typeof m.subscriptionId === 'string' ? m.subscriptionId : '';
@@ -239,15 +270,46 @@ export async function acceptSplitInviteFromNotification(params: {
 
   const { uid, displayName, notificationId, metadata } = params;
   if (metadata.inviteId) {
+    const inviteRef = doc(db, 'invites', metadata.inviteId);
+    const inviteSnap = await getDoc(inviteRef);
+    if (!inviteSnap.exists()) {
+      throw new Error(SPLIT_INVITE_INVALID_ERROR);
+    }
+    const inv = inviteSnap.data() as { status?: string };
+    if (inv.status !== 'pending') {
+      throw new Error(SPLIT_INVITE_INVALID_ERROR);
+    }
+
+    const subRef = doc(db, 'subscriptions', metadata.subscriptionId);
+    const subSnap = await getDoc(subRef);
+    if (!subSnap.exists()) {
+      throw new Error(SPLIT_INVITE_INVALID_ERROR);
+    }
+    const rawPre = subSnap.data() as Record<string, unknown>;
+    const muids = Array.isArray(rawPre.memberUids) ? rawPre.memberUids : [];
+    if (!muids.includes(uid)) {
+      throw new Error(SPLIT_INVITE_INVALID_ERROR);
+    }
+    const membersPre = Array.isArray(rawPre.members) ? rawPre.members : [];
+    const firstPre = membersPre[0];
+    const rosterObjects = firstPre !== undefined && typeof firstPre === 'object' && firstPre !== null;
+    if (rosterObjects) {
+      const ro = (membersPre as Record<string, unknown>[]).find(
+        (m) => String((m as { uid?: string }).uid ?? '') === uid
+      );
+      if (!ro || String((ro as { memberStatus?: string }).memberStatus ?? '') !== 'pending') {
+        throw new Error(SPLIT_INVITE_INVALID_ERROR);
+      }
+    }
+
     await acceptPendingInvite(metadata.inviteId, uid);
 
     // Immediately clear invitePending on the share row so the owner's detail screen
     // updates without waiting for the Cloud Function to run.
     try {
-      const subRef = doc(db, 'subscriptions', metadata.subscriptionId);
-      const subSnap = await getDoc(subRef);
-      if (subSnap.exists()) {
-        const raw = subSnap.data() as Record<string, unknown>;
+      const subSnap2 = await getDoc(subRef);
+      if (subSnap2.exists()) {
+        const raw = subSnap2.data() as Record<string, unknown>;
         const shares = Array.isArray(raw.splitMemberShares)
           ? (raw.splitMemberShares as Record<string, unknown>[]).map((s) =>
               s && typeof s === 'object' ? { ...(s as object) } : {}
@@ -292,9 +354,6 @@ export async function acceptSplitInviteFromNotification(params: {
   const init = initialsFromName(dn);
 
   const idx = shares.findIndex((s) => String(s.memberId ?? '') === uid);
-  if (!memberUids.includes(uid)) memberUids.push(uid);
-  if (!activeMemberUids.includes(uid)) activeMemberUids.push(uid);
-
   const firstMem = Array.isArray(raw.members) && raw.members.length > 0 ? raw.members[0] : undefined;
   const isObjectRoster = firstMem !== undefined && typeof firstMem === 'object' && firstMem !== null;
   const membersRoster: Record<string, unknown>[] = isObjectRoster
@@ -302,6 +361,27 @@ export async function acceptSplitInviteFromNotification(params: {
         m && typeof m === 'object' ? { ...m } : {}
       )
     : [];
+
+  if (isObjectRoster) {
+    const roIdx = membersRoster.findIndex((m) => String((m as { uid?: string }).uid ?? '') === uid);
+    if (
+      roIdx < 0 ||
+      String((membersRoster[roIdx] as { memberStatus?: string }).memberStatus ?? '') !== 'pending'
+    ) {
+      throw new Error(SPLIT_INVITE_INVALID_ERROR);
+    }
+    if (idx < 0) {
+      throw new Error(SPLIT_INVITE_INVALID_ERROR);
+    }
+  } else {
+    if (!memberUids.includes(uid) || idx < 0) {
+      throw new Error(SPLIT_INVITE_INVALID_ERROR);
+    }
+  }
+
+  if (!memberUids.includes(uid)) memberUids.push(uid);
+  if (!activeMemberUids.includes(uid)) activeMemberUids.push(uid);
+
   if (isObjectRoster) {
     const roIdx = membersRoster.findIndex((m) => String((m as { uid?: string }).uid ?? '') === uid);
     if (roIdx >= 0) {
