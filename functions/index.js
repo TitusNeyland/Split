@@ -1081,6 +1081,139 @@ exports.onSubscriptionSplitInviteNotifications = onDocumentUpdated('subscription
 });
 
 /**
+ * When the owner removes a pending invite, a slot expires to `expired`, or the owner ends the split,
+ * invalidate the invitee's bell notification + activity row so stale Join/Decline UI disappears.
+ */
+function subscriptionLooksEnded(data) {
+  if (!data || typeof data !== 'object') return false;
+  const s = data.status;
+  return s === 'ended' || s === 'archived' || s === 'cancelled' || s === 'paused';
+}
+
+function findSplitInviteInvalidationTargets(before, after) {
+  const targets = [];
+  const seen = new Set();
+  const beforeShares = Array.isArray(before.splitMemberShares) ? before.splitMemberShares : [];
+  const afterMemberUids = new Set(Array.isArray(after.memberUids) ? after.memberUids : []);
+
+  /* Ending the split updates `status` only; pending invitees stay in `memberUids` until cleaned up. */
+  if (subscriptionLooksEnded(after) && !subscriptionLooksEnded(before)) {
+    const afterShares = Array.isArray(after.splitMemberShares) ? after.splitMemberShares : [];
+    for (const s of afterShares) {
+      if (!s || !s.invitePending) continue;
+      const mid = typeof s.memberId === 'string' ? s.memberId : '';
+      const iid = typeof s.inviteId === 'string' ? s.inviteId : '';
+      if (!mid || !iid) continue;
+      if (!isLikelyFirebaseUidForInvite(mid)) continue;
+      const key = `${mid}_${iid}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      targets.push({ uid: mid, inviteId: iid });
+    }
+  }
+
+  for (const s of beforeShares) {
+    if (!s || !s.invitePending) continue;
+    const mid = typeof s.memberId === 'string' ? s.memberId : '';
+    const iid = typeof s.inviteId === 'string' ? s.inviteId : '';
+    if (!mid || !iid) continue;
+    if (!isLikelyFirebaseUidForInvite(mid)) continue;
+    if (!afterMemberUids.has(mid)) {
+      const key = `${mid}_${iid}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      targets.push({ uid: mid, inviteId: iid });
+    }
+  }
+
+  const bR = Array.isArray(before.members) && before.members[0] && typeof before.members[0] === 'object' ? before.members : [];
+  const aR = Array.isArray(after.members) && after.members[0] && typeof after.members[0] === 'object' ? after.members : [];
+  for (const bm of bR) {
+    if (!bm || bm.memberStatus !== 'pending') continue;
+    const uid = typeof bm.uid === 'string' ? bm.uid : '';
+    if (!uid || !isLikelyFirebaseUidForInvite(uid)) continue;
+    const am = aR.find((m) => m && m.uid === uid);
+    if (!am || am.memberStatus !== 'expired') continue;
+    const shareRow = beforeShares.find((x) => x && x.memberId === uid);
+    const iid =
+      (shareRow && typeof shareRow.inviteId === 'string' && shareRow.inviteId) ||
+      (typeof bm.inviteId === 'string' ? bm.inviteId : '');
+    if (!iid) continue;
+    const key = `${uid}_${iid}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    targets.push({ uid, inviteId: iid });
+  }
+
+  return targets;
+}
+
+async function invalidateSplitInviteForInvitee(db, subId, inviteeUid, inviteId) {
+  if (typeof inviteeUid !== 'string' || !inviteeUid) return;
+
+  let unreadDec = 0;
+  const notifCol = db.collection('users').doc(inviteeUid).collection('notifications');
+  const notifSnap = await notifCol.where('subscriptionId', '==', subId).where('type', '==', 'split_invite').get();
+
+  for (const doc of notifSnap.docs) {
+    const d = doc.data() || {};
+    const meta = d.metadata && typeof d.metadata === 'object' ? d.metadata : {};
+    const metaInvite =
+      typeof meta.inviteId === 'string' && meta.inviteId.trim() ? meta.inviteId.trim() : '';
+    if (inviteId && metaInvite && metaInvite !== inviteId) continue;
+    if (d.status === 'cancelled') continue;
+    if (d.read !== true) unreadDec += 1;
+    await doc.ref.update({
+      status: 'cancelled',
+      read: true,
+      cancelledAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  }
+
+  const actCol = db.collection('users').doc(inviteeUid).collection('activity');
+  const actSnap = await actCol.where('subscriptionId', '==', subId).where('type', '==', 'split_invite_received').get();
+
+  for (const doc of actSnap.docs) {
+    const d = doc.data() || {};
+    const meta = d.metadata && typeof d.metadata === 'object' ? d.metadata : {};
+    const metaInvite =
+      typeof meta.inviteId === 'string' && meta.inviteId.trim() ? meta.inviteId.trim() : '';
+    if (inviteId && metaInvite && metaInvite !== inviteId) continue;
+    if (d.status === 'cancelled') continue;
+    await doc.ref.update({
+      status: 'cancelled',
+      read: true,
+    });
+  }
+
+  if (unreadDec > 0) {
+    await db.collection('users').doc(inviteeUid).set(
+      { unreadNotificationCount: admin.firestore.FieldValue.increment(-unreadDec) },
+      { merge: true }
+    );
+  }
+}
+
+exports.onInviteRemoved = onDocumentUpdated('subscriptions/{subscriptionId}', async (event) => {
+  const before = event.data.before.exists ? event.data.before.data() : null;
+  const after = event.data.after.exists ? event.data.after.data() : null;
+  if (!before || !after) return;
+
+  const subId = event.params.subscriptionId;
+  const targets = findSplitInviteInvalidationTargets(before, after);
+  if (targets.length === 0) return;
+
+  const db = admin.firestore();
+  for (const t of targets) {
+    try {
+      await invalidateSplitInviteForInvitee(db, subId, t.uid, t.inviteId);
+    } catch (e) {
+      console.warn('onInviteRemoved: failed for', t.uid, e?.message || e);
+    }
+  }
+});
+
+/**
  * Payment activity: pending → paid on `memberPaymentStatus` writes `payment_received` (owner) and
  * `payment_sent` (member who paid).
  */

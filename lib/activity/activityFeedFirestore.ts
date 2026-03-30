@@ -48,6 +48,7 @@ export function activityFeedNextPageQuery(
 export function parseActivityEventDoc(d: QueryDocumentSnapshot): ActivityEvent | null {
   const data = d.data() as Partial<ActivityEventFirestoreData> | undefined;
   if (!data || typeof data.type !== 'string' || !data.createdAt) return null;
+  if (data.status === 'cancelled') return null;
   return {
     ...data,
     id: d.id,

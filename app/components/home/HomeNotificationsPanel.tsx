@@ -21,6 +21,8 @@ import {
   getFriendConnectedMetadata,
   getSplitInviteMetadata,
   markFriendConnectedNotificationRead,
+  markSplitInviteNotificationInvalidated,
+  SPLIT_INVITE_INVALID_ERROR,
   type AppNotification,
 } from '../../../lib/home/homeNotificationsFirestore';
 import { replaceWithSplitJoinedCelebration } from '../../../lib/navigation/splitJoinedCelebration';
@@ -107,8 +109,20 @@ export default function HomeNotificationsPanel({
           router.replace({ pathname: '/subscription/[id]', params: { id: meta.subscriptionId } });
         }
       } catch (e) {
-        const msg = e instanceof Error ? e.message : 'Could not join this split.';
-        Alert.alert('Could not join', msg);
+        if (e instanceof Error && e.message === SPLIT_INVITE_INVALID_ERROR) {
+          Alert.alert(
+            'Invite no longer valid',
+            'This invite is no longer valid. The owner may have cancelled it.'
+          );
+          try {
+            await markSplitInviteNotificationInvalidated(uid, n.id, !n.read);
+          } catch {
+            // best-effort
+          }
+        } else {
+          const msg = e instanceof Error ? e.message : 'Could not join this split.';
+          Alert.alert('Could not join', msg);
+        }
       } finally {
         setBusyId(null);
       }

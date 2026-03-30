@@ -58,6 +58,8 @@ export type ActivityEventFirestoreData = {
   createdAt: Timestamp;
   /** Default false for new events. */
   read: boolean;
+  /** When set (e.g. by Cloud Functions), client hides this row from feeds. */
+  status?: 'cancelled' | string;
   subscriptionId?: string;
   subscriptionName?: string;
   serviceId?: string;
