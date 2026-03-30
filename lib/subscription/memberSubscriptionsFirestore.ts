@@ -7,6 +7,7 @@ import {
 } from 'firebase/firestore';
 import { getFirebaseFirestore } from '../firebase';
 import {
+  countPendingInviteSlots,
   isViewerAcceptedActiveMember,
   subscriptionEndedAtMillis,
 } from './subscriptionToCardModel';
@@ -17,6 +18,36 @@ function docFromSnapshot(d: { id: string; data: () => Record<string, unknown> })
   return { id: d.id, ...d.data() } as MemberSubscriptionDoc;
 }
 
+function splitUpdatedAtMillis(doc: Record<string, unknown> | undefined): number {
+  if (!doc) return 0;
+  const ts = doc.splitUpdatedAt;
+  if (ts && typeof (ts as { toMillis?: () => number }).toMillis === 'function') {
+    const ms = (ts as { toMillis: () => number }).toMillis();
+    return typeof ms === 'number' && Number.isFinite(ms) ? ms : 0;
+  }
+  return 0;
+}
+
+/**
+ * Merged subscription list combines three queries; snapshots can arrive out of order, so a shallow
+ * `{ ...prev, ...next }` merge may apply an older document over a newer one. Prefer the write with
+ * the latest `splitUpdatedAt`, then the copy with fewer roster `pending` members (fresher acceptances).
+ */
+function preferNewerSubscriptionDoc(
+  prev: MemberSubscriptionDoc,
+  next: MemberSubscriptionDoc
+): MemberSubscriptionDoc {
+  const a = splitUpdatedAtMillis(prev);
+  const b = splitUpdatedAtMillis(next);
+  if (b > a) return next;
+  if (a > b) return prev;
+  const pa = countPendingInviteSlots(prev);
+  const pb = countPendingInviteSlots(next);
+  if (pb < pa) return next;
+  if (pa < pb) return prev;
+  return next;
+}
+
 function mergeById(a: MemberSubscriptionDoc[], b: MemberSubscriptionDoc[]): MemberSubscriptionDoc[] {
   const map = new Map<string, MemberSubscriptionDoc>();
   for (const doc of a) {
@@ -25,7 +56,7 @@ function mergeById(a: MemberSubscriptionDoc[], b: MemberSubscriptionDoc[]): Memb
   for (const doc of b) {
     const prev = map.get(doc.id);
     if (prev) {
-      map.set(doc.id, { ...prev, ...doc });
+      map.set(doc.id, preferNewerSubscriptionDoc(prev, doc));
     } else {
       map.set(doc.id, doc);
     }
