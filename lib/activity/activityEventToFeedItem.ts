@@ -1,4 +1,5 @@
 import type { Timestamp } from 'firebase/firestore';
+import { formatUsdFromCents } from '../format/currency';
 import type { ActivityEvent, ActivityEventType } from './activityFeedSchema';
 
 const C = {
@@ -30,7 +31,7 @@ function formatMoneyCents(cents: number | undefined): string {
   if (cents == null || !Number.isFinite(cents)) return '';
   const neg = cents < 0;
   const abs = Math.abs(cents);
-  return `${neg ? '-' : ''}$${(abs / 100).toFixed(2)}`;
+  return `${neg ? '-' : ''}${formatUsdFromCents(abs)}`;
 }
 
 function shortBrandName(fullName: string): string {

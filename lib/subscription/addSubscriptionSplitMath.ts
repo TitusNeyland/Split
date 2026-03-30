@@ -1,5 +1,7 @@
 /** Pure split math shared by add-subscription flow and editors. */
 
+import { formatUsdFromCents } from '../format/currency';
+
 export function equalIntegerPercents(n: number): number[] {
   if (n <= 0) return [];
   const base = Math.floor(100 / n);
@@ -50,7 +52,7 @@ export function parseDollarToCents(raw: string): number {
 }
 
 export function fmtCents(cents: number): string {
-  return `$${(cents / 100).toFixed(2)}`;
+  return formatUsdFromCents(cents);
 }
 
 export function percentTotalIsExactly100(values: number[]): boolean {

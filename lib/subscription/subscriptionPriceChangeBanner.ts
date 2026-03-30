@@ -6,6 +6,8 @@
  *   optional `billingDayOfMonth` (1–28), and `amountCents` (current total).
  * - `users/{uid}`: `lastSeenPriceChangeBySubscription.{subscriptionId}` → Timestamp
  */
+import { formatUsdFromCents } from '../format/currency';
+
 export type SubscriptionPriceBannerFields = {
   priceChangedAt?: { toMillis: () => number } | null;
   /** Previous total before the change (cents). */
@@ -17,7 +19,7 @@ export type SubscriptionPriceBannerFields = {
 };
 
 export function formatCentsUsd(cents: number): string {
-  return `$${(cents / 100).toFixed(2)}`;
+  return formatUsdFromCents(cents);
 }
 
 export function formatPriceChangeBannerMessage(fromCents: number, toCents: number): string {

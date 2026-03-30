@@ -2,6 +2,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { Platform, Alert } from 'react-native';
+import { formatUsdDollarsFixed2 } from '../format/currency';
 
 export type PaymentHistoryEvent = {
   at: Date;
@@ -149,7 +150,7 @@ export function buildPaymentHistoryPdfHtml(
           return `<tr>
             <td>${escapeHtml(when)}</td>
             <td>${escapeHtml(e.subscription)}</td>
-            <td style="text-align:right;">$${e.amount.toFixed(2)}</td>
+            <td style="text-align:right;">${formatUsdDollarsFixed2(e.amount)}</td>
             <td>${escapeHtml(e.status)}</td>
             <td>${escapeHtml(e.method)}</td>
             <td>${escapeHtml(e.notes || '—')}</td>

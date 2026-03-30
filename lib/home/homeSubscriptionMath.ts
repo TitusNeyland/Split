@@ -13,6 +13,7 @@ import {
 } from '../subscription/subscriptionToCardModel';
 import type { MemberSubscriptionDoc } from '../subscription/memberSubscriptionsFirestore';
 import { subscriptionDisplayName } from '../subscription/billingCalendarModel';
+import { formatUsdDollarsFixed2 } from '../format/currency';
 import type { HomeCalendarBill } from './homeWeekCalendar';
 
 export type RawSub = MemberSubscriptionDoc;
@@ -304,7 +305,7 @@ export function computeUpcomingSplits(subs: RawSub[], uid: string, max = 3): Upc
     let status: string;
     let statusColor: string;
     if (isOwner) {
-      status = `collect $${shareD.toFixed(2)}`;
+      status = `collect ${formatUsdDollarsFixed2(shareD)}`;
       statusColor = C.green;
     } else {
       const st = getMemberPaymentStatusRaw(s, uid);
@@ -312,7 +313,7 @@ export function computeUpcomingSplits(subs: RawSub[], uid: string, max = 3): Upc
         status = 'paid up';
         statusColor = C.green;
       } else {
-        status = `you owe $${shareD.toFixed(2)}`;
+        status = `you owe ${formatUsdDollarsFixed2(shareD)}`;
         statusColor = C.red;
       }
     }

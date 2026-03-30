@@ -1,5 +1,4 @@
 import React, { useCallback, useMemo, useState } from 'react';
-;
 import {
   View,
   Text,
@@ -25,6 +24,7 @@ import {
 } from '../../lib/receipts/receiptParseSession';
 import { newReceiptId, upsertRecentFromSession } from '../../lib/receipts/recentReceipts';
 import type { AssignReceiptLine, ReceiptAssignSession } from '../../lib/receipts/receiptTypes';
+import { formatUsdDollarsFixed2 } from '../../lib/format/currency';
 
 const C = {
   bg: '#F2F0EB',
@@ -150,7 +150,7 @@ function computeLiveBreakdown(
 
 function formatMoney(n: number | null | undefined) {
   if (n == null || Number.isNaN(n)) return '—';
-  return `$${n.toFixed(2)}`;
+  return formatUsdDollarsFixed2(n);
 }
 
 function parseMoneyInput(s: string): number | null {

@@ -34,6 +34,7 @@ import { resolveActivityRoute } from '../../lib/activity/activityNavigation';
 import { sendPaymentReminderCallable } from '../../lib/activity/sendPaymentReminderCallable';
 import { acceptPendingInvite } from '../../lib/friends/friendSystemFirestore';
 import { replaceWithSplitJoinedCelebration } from '../../lib/navigation/splitJoinedCelebration';
+import { formatUsdDollarsFixed2 } from '../../lib/format/currency';
 
 type IonIconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -148,7 +149,7 @@ function applyManualPaidToItem(
 ): ActivityFeedItem {
   const settledAmount =
     item.partial != null
-      ? `+$${item.partial.total.toFixed(2)}`
+      ? `+${formatUsdDollarsFixed2(item.partial.total)}`
       : item.amount?.startsWith('$')
         ? item.amount
         : item.amount;
@@ -479,10 +480,10 @@ function ActivityItemRow({
         <View style={styles.partialWrap}>
           <View style={styles.partialLabelRow}>
             <Text style={styles.partialLbl}>
-              ${item.partial.paid.toFixed(2)} of ${item.partial.total.toFixed(2)} paid
+              {formatUsdDollarsFixed2(item.partial.paid)} of {formatUsdDollarsFixed2(item.partial.total)} paid
             </Text>
             <Text style={styles.partialAmt}>
-              ${(item.partial.total - item.partial.paid).toFixed(2)} remaining
+              {formatUsdDollarsFixed2(item.partial.total - item.partial.paid)} remaining
             </Text>
           </View>
           <View style={styles.partialTrack}>
@@ -674,7 +675,7 @@ export default function ActivityScreen() {
     return unsub;
   }, [uid]);
 
-  const collectedDisplay = useMemo(() => '+$47.50', []);
+  const collectedDisplay = useMemo(() => `+${formatUsdDollarsFixed2(47.5)}`, []);
   const trendDisplay = useMemo(() => '↑ $12 vs last month', []);
   const pendingCount = 3;
   const pendingBreakdown = '1 overdue · 1 partial';

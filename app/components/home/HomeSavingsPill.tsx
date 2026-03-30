@@ -1,7 +1,10 @@
 import React from 'react';
-;
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { formatUsdDollarsWhole } from '../../../lib/format/currency';
+
+/** Brighter than chart “Owed to you” green (`#22C55E`) so the pill reads clearly on the hero. */
+const SAVINGS_AMOUNT_GREEN = '#4ADE80';
 
 export type HomeSavingsPillProps = {
   savedDollars: number;
@@ -9,12 +12,12 @@ export type HomeSavingsPillProps = {
 };
 
 export function HomeSavingsPill({ savedDollars, monthsLabel }: HomeSavingsPillProps) {
-  const amt = `$${savedDollars.toFixed(2)}`;
+  const amt = formatUsdDollarsWhole(savedDollars);
 
   return (
     <View style={styles.pill} accessibilityRole="summary" accessibilityLabel={`Saved by splitting ${amt} versus paying alone. ${monthsLabel} since joining.`}>
       <View style={styles.iconCircle}>
-        <Ionicons name="star" size={20} color="rgba(134,239,172,0.95)" />
+        <Ionicons name="star" size={22} color={SAVINGS_AMOUNT_GREEN} />
       </View>
       <View style={styles.center}>
         <Text style={styles.label}>Saved by splitting</Text>
@@ -41,9 +44,9 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
   iconCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: 'rgba(255,255,255,0.1)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -59,11 +62,11 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.45)',
   },
   amount: {
-    fontSize: 19,
+    fontSize: 26,
     fontWeight: '700',
-    color: '#86efac',
-    letterSpacing: -0.4,
-    lineHeight: 24,
+    color: SAVINGS_AMOUNT_GREEN,
+    letterSpacing: -0.5,
+    lineHeight: 30,
     marginTop: 3,
   },
   sub: {
@@ -82,9 +85,9 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.3)',
   },
   months: {
-    fontSize: 13,
-    fontWeight: '500',
-    lineHeight: 17,
+    fontSize: 15,
+    fontWeight: '600',
+    lineHeight: 19,
     color: 'rgba(255,255,255,0.72)',
     marginTop: 4,
   },

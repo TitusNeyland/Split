@@ -25,6 +25,7 @@ import {
   type InviteSenderProfile,
 } from '../../../lib/friends/friendSystemFirestore';
 import { inviteIsExpired } from '../../../lib/friends/inviteHelpers';
+import { formatUsdDollarsWhole } from '../../../lib/format/currency';
 import { formatMemberSince, initialsFromName } from '../../../lib/profile';
 import { openAppStoreDownload } from '../../../lib/storeLinks';
 import { setPendingInviteId } from '../../../lib/friends/pendingInviteStorage';
@@ -346,7 +347,7 @@ export default function AcceptInviteScreen() {
           </View>
           <View style={styles.stat}>
             <Text style={[styles.statVal, { color: '#1D9E75' }]}>
-              {sender?.lifetimeSaved != null ? `$${Math.round(sender.lifetimeSaved)}` : '—'}
+              {sender?.lifetimeSaved != null ? formatUsdDollarsWhole(sender.lifetimeSaved) : '—'}
             </Text>
             <Text style={styles.statLbl}>Saved</Text>
           </View>

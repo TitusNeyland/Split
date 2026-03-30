@@ -16,6 +16,7 @@ import { useRouter } from 'expo-router';
 import { useScrollToTop } from '@react-navigation/native';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { spacing } from '../../constants/theme';
+import { formatUsdDollarsFixed2 } from '../../lib/format/currency';
 import { getFriendAvatarColors } from '../../lib/friends/friendAvatar';
 import { getFirebaseAuth, isFirebaseConfigured } from '../../lib/firebase';
 import { initialsFromName } from '../../lib/profile';
@@ -260,12 +261,12 @@ export default function HomeScreen() {
       let actionLabel: string;
       let subLine: string;
       if (r.theyOweMeCents > 0) {
-        balanceLabel = `owes $${they.toFixed(2)}`;
+        balanceLabel = `owes ${formatUsdDollarsFixed2(they)}`;
         balanceColor = C.red;
         actionLabel = 'send reminder';
         subLine = 'Subscription split';
       } else if (r.iOweThemCents > 0) {
-        balanceLabel = `you owe $${owe.toFixed(2)}`;
+        balanceLabel = `you owe ${formatUsdDollarsFixed2(owe)}`;
         balanceColor = C.purple;
         actionLabel = 'settle up';
         subLine = 'Subscription split';
@@ -575,7 +576,7 @@ export default function HomeScreen() {
                           · {formatBillingDetailLine(bill.date)}
                         </Text>
                       </Text>
-                      <Text style={styles.bpAmt}>{`$${amt.toFixed(2)}`}</Text>
+                      <Text style={styles.bpAmt}>{formatUsdDollarsFixed2(amt)}</Text>
                     </Pressable>
                   );
                 })}
@@ -619,7 +620,7 @@ export default function HomeScreen() {
                   {nextBillWhen?.label ?? ''}
                 </Text>
                 <Text style={styles.bpAmt}>
-                  {`$${(getTotalCents(nextBill.subscription) / 100).toFixed(2)}`}
+                  {formatUsdDollarsFixed2(getTotalCents(nextBill.subscription) / 100)}
                 </Text>
               </View>
             ) : (
@@ -700,7 +701,7 @@ export default function HomeScreen() {
                     <Text style={styles.subMeta}>{item.meta}</Text>
                   </View>
                   <View style={styles.subRight}>
-                    <Text style={styles.subAmt}>{`$${item.total.toFixed(2)}`}</Text>
+                    <Text style={styles.subAmt}>{formatUsdDollarsFixed2(item.total)}</Text>
                     <Text style={[styles.subStatus, { color: item.statusColor }]}>{item.status}</Text>
                   </View>
                 </Pressable>
