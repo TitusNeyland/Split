@@ -105,6 +105,7 @@ type HomeRecentActivityItem = {
   amount: string;
   amountColor: string;
   serviceMark?: string;
+  serviceId?: string;
   icon: string;
   iconBg: string;
   iconColor: string;
@@ -184,6 +185,7 @@ export default function HomeScreen() {
           amount: x.amount,
           amountColor: x.amountColor,
           serviceMark: x.serviceMark,
+          serviceId: x.serviceId,
           icon: x.icon,
           iconBg: x.iconBg,
           iconColor: x.iconColor,
@@ -547,6 +549,10 @@ export default function HomeScreen() {
                     (typeof sub.serviceName === 'string' && sub.serviceName.trim()) ||
                     (typeof sub.serviceId === 'string' && sub.serviceId.trim()) ||
                     name;
+                  const catalogSid =
+                    typeof sub.serviceId === 'string' && sub.serviceId.trim()
+                      ? sub.serviceId.trim()
+                      : undefined;
                   return (
                     <Pressable
                       key={sub.id}
@@ -556,7 +562,7 @@ export default function HomeScreen() {
                       accessibilityLabel={`${name}, open subscription`}
                     >
                       <View style={styles.bpIco}>
-                        <ServiceIcon serviceName={iconName} size={30} />
+                        <ServiceIcon serviceName={iconName} serviceId={catalogSid} size={30} />
                       </View>
                       <Text style={styles.bpName} numberOfLines={2}>
                         {name}
@@ -581,6 +587,12 @@ export default function HomeScreen() {
                       (typeof nextBill.subscription.serviceId === 'string' &&
                         nextBill.subscription.serviceId.trim()) ||
                       subscriptionDisplayLabel(nextBill.subscription)
+                    }
+                    serviceId={
+                      typeof nextBill.subscription.serviceId === 'string' &&
+                      nextBill.subscription.serviceId.trim()
+                        ? nextBill.subscription.serviceId.trim()
+                        : undefined
                     }
                     size={30}
                   />
@@ -673,7 +685,11 @@ export default function HomeScreen() {
                   onPress={() => router.push(`/subscription/${item.id}`)}
                 >
                   <View style={styles.subIco}>
-                    <ServiceIcon serviceName={item.serviceName} size={38} />
+                    <ServiceIcon
+                      serviceName={item.serviceName}
+                      serviceId={item.serviceId}
+                      size={38}
+                    />
                   </View>
                   <View style={styles.subMid}>
                     <Text style={styles.subName}>{item.name}</Text>
@@ -745,6 +761,7 @@ export default function HomeScreen() {
                     <View style={styles.actIcoWrap}>
                       <ServiceIcon
                         serviceName={item.serviceMark}
+                        serviceId={item.serviceId}
                         size={38}
                         listEndedMuted={item.serviceIconMuted}
                       />

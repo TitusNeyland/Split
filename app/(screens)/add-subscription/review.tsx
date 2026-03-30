@@ -152,6 +152,7 @@ export default function AddSubscriptionReviewScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{
     serviceName?: string;
+    serviceId?: string;
     iconColor?: string;
     planName?: string;
     totalCents?: string;
@@ -164,8 +165,12 @@ export default function AddSubscriptionReviewScreen() {
   }>();
 
   const serviceName = typeof params.serviceName === 'string' ? params.serviceName.trim() : '';
+  const serviceIdParam = typeof params.serviceId === 'string' ? params.serviceId.trim() : '';
   const planName = typeof params.planName === 'string' ? params.planName.trim() : '';
-  const iconColor = getServiceIconBackgroundColor(serviceName || planName || 'Subscription');
+  const iconColor =
+    typeof params.iconColor === 'string' && /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/.test(params.iconColor.trim())
+      ? params.iconColor.trim()
+      : getServiceIconBackgroundColor(serviceName || planName || 'Subscription');
   const totalCentsRaw = typeof params.totalCents === 'string' ? parseInt(params.totalCents, 10) : NaN;
   const totalCents = Number.isFinite(totalCentsRaw) && totalCentsRaw >= 0 ? totalCentsRaw : 0;
   const billingCycle: 'monthly' | 'yearly' =
@@ -255,6 +260,7 @@ export default function AddSubscriptionReviewScreen() {
       pathname: '/add-subscription/details',
       params: {
         serviceName,
+        ...(serviceIdParam ? { serviceId: serviceIdParam } : {}),
         iconColor,
         planName: planName || serviceName,
         totalCents: String(totalCents),
@@ -263,7 +269,7 @@ export default function AddSubscriptionReviewScreen() {
         autoCharge: autoCharge ? '1' : '0',
       },
     });
-  }, [router, serviceName, iconColor, planName, totalCents, billingCycle, billingDay, autoCharge]);
+  }, [router, serviceName, serviceIdParam, iconColor, planName, totalCents, billingCycle, billingDay, autoCharge]);
 
   /** Preview the success screen when Firestore is not available (no document written). */
   const navigateToSplitCreated = useCallback(() => {
@@ -303,6 +309,7 @@ export default function AddSubscriptionReviewScreen() {
       const input = {
         actorUid: uid,
         serviceName: serviceName || planName || 'Subscription',
+        ...(serviceIdParam ? { serviceId: serviceIdParam } : {}),
         planName: planName || serviceName || 'Subscription',
         iconColor,
         totalCents,
@@ -328,6 +335,7 @@ export default function AddSubscriptionReviewScreen() {
     members,
     serviceName,
     planName,
+    serviceIdParam,
     iconColor,
     billingCycle,
     billingDay,
@@ -406,7 +414,11 @@ export default function AddSubscriptionReviewScreen() {
           <View style={styles.reviewRow}>
             <Text style={styles.rvLbl}>Service</Text>
             <View style={styles.serviceVal}>
-              <ServiceIcon serviceName={serviceName || planName || 'Subscription'} size={32} />
+              <ServiceIcon
+                serviceName={serviceName || planName || 'Subscription'}
+                serviceId={serviceIdParam || undefined}
+                size={32}
+              />
               <Text style={styles.rvVal} numberOfLines={2}>
                 {planName || serviceName || '—'}
               </Text>
@@ -535,7 +547,11 @@ export default function AddSubscriptionReviewScreen() {
 
               <View style={styles.modalSummaryCard}>
                 <View style={styles.modalServiceRow}>
-                  <ServiceIcon serviceName={serviceName || planName || 'Subscription'} size={44} />
+                  <ServiceIcon
+                    serviceName={serviceName || planName || 'Subscription'}
+                    serviceId={serviceIdParam || undefined}
+                    size={44}
+                  />
                   <View style={styles.modalServiceTxt}>
                     <Text style={styles.modalServiceName} numberOfLines={2}>
                       {displayServiceName}

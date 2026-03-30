@@ -532,7 +532,12 @@ export default function SubscriptionDetailScreen() {
           </View>
 
           <View style={styles.heroIconWrap}>
-            <ServiceIcon serviceName={detail.serviceName} size={52} endedDimmed={ended} />
+            <ServiceIcon
+              serviceName={detail.serviceName}
+              serviceId={detail.serviceId}
+              size={52}
+              endedDimmed={ended}
+            />
           </View>
           <Text style={[styles.heroTotal, ended && styles.heroTotalEnded]}>{fmtCents(detail.totalCents)}</Text>
           {ended ? (

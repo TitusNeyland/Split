@@ -277,6 +277,8 @@ export type UpcomingSplitRow = {
   status: string;
   statusColor: string;
   serviceName: string;
+  /** Preset catalog id when stored on the subscription doc. */
+  serviceId?: string;
 };
 
 const C = {
@@ -318,6 +320,8 @@ export function computeUpcomingSplits(subs: RawSub[], uid: string, max = 3): Upc
       d === 0 ? 'today' : d === 1 ? 'tomorrow' : d < 14 ? `in ${d} days` : `in ${d} days`;
     const n = Array.isArray(s.splitMemberShares) ? s.splitMemberShares.length : 0;
     const meta = `${n} member${n === 1 ? '' : 's'} · bills ${when}`;
+    const sid =
+      typeof s.serviceId === 'string' && s.serviceId.trim() ? s.serviceId.trim() : undefined;
     return {
       id: s.id,
       name: displayName(s),
@@ -326,6 +330,7 @@ export function computeUpcomingSplits(subs: RawSub[], uid: string, max = 3): Upc
       status,
       statusColor,
       serviceName: serviceNameForIcon(s),
+      serviceId: sid,
     };
   });
 }

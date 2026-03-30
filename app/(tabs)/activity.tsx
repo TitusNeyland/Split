@@ -200,6 +200,8 @@ type ActivityFeedItem = {
   kind: ActivityKind;
   /** Letter-mark icon for subscription or receipt merchant; when set, overrides `icon`. */
   serviceMark?: string;
+  /** Catalog preset id when present on the activity event (matches `services/{id}`). */
+  serviceId?: string;
   icon: IonIconName;
   iconBg: string;
   iconColor: string;
@@ -424,6 +426,7 @@ function ActivityItemRow({
               <View style={styles.actIcoPlain}>
                 <ServiceIcon
                   serviceName={item.serviceMark}
+                  serviceId={item.serviceId}
                   size={40}
                   listEndedMuted={item.serviceIconMuted}
                 />

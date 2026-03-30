@@ -13,6 +13,7 @@ import { SecurityPrefsProvider } from './contexts/SecurityPrefsContext';
 import { FirebaseRecaptchaProvider } from './contexts/FirebaseRecaptchaContext';
 import { LocalProfileAvatarProvider } from './contexts/LocalProfileAvatarContext';
 import { SubscriptionsProvider } from './contexts/SubscriptionsContext';
+import { ServicesProvider } from './contexts/ServicesContext';
 import { getFirebaseWebOptions, isFirebaseConfigured } from '../lib/firebase';
 import { ENABLE_PROFILE_SECURITY } from '../constants/features';
 
@@ -43,6 +44,7 @@ export default function RootLayout() {
       {/* LOCAL_PROFILE_AVATAR_OFFLINE — remove LocalProfileAvatarProvider when Firebase-only avatars (see lib/profile/localProfileAvatarStorage.ts). */}
       <LocalProfileAvatarProvider>
       <SubscriptionsProvider>
+      <ServicesProvider>
       <View style={styles.root}>
         <AuthSessionSync />
         <InviteDeepLinkBootstrap />
@@ -128,6 +130,7 @@ export default function RootLayout() {
           </Animated.View>
         )}
       </View>
+      </ServicesProvider>
       </SubscriptionsProvider>
       </LocalProfileAvatarProvider>
     </GestureHandlerRootView>

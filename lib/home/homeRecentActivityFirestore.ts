@@ -22,6 +22,7 @@ export type HomeRecentActivityFirestoreItem = {
   amount: string;
   amountColor: string;
   serviceMark?: string;
+  serviceId?: string;
   icon: string;
   iconBg: string;
   iconColor: string;
@@ -67,6 +68,7 @@ export function subscribeHomeRecentActivity(
           amount: amountRight,
           amountColor: row.amountColor,
           serviceMark: row.serviceMark,
+          serviceId: row.serviceId,
           icon: row.icon,
           iconBg: row.iconBg,
           iconColor: row.iconColor,

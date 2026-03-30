@@ -154,6 +154,7 @@ export default function AddSubscriptionMembersScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{
     serviceName?: string;
+    serviceId?: string;
     iconColor?: string;
     planName?: string;
     totalCents?: string;
@@ -164,11 +165,12 @@ export default function AddSubscriptionMembersScreen() {
   }>();
 
   const serviceName = typeof params.serviceName === 'string' ? params.serviceName.trim() : '';
+  const serviceIdParam = typeof params.serviceId === 'string' ? params.serviceId.trim() : '';
   const iconColor =
-    serviceName.length > 0
-      ? getServiceIconBackgroundColor(serviceName)
-      : typeof params.iconColor === 'string'
-        ? params.iconColor
+    typeof params.iconColor === 'string' && /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/.test(params.iconColor.trim())
+      ? params.iconColor.trim()
+      : serviceName.length > 0
+        ? getServiceIconBackgroundColor(serviceName)
         : getServiceIconBackgroundColor('Subscription');
   const planName = typeof params.planName === 'string' ? params.planName.trim() : serviceName;
   const totalCentsRaw = typeof params.totalCents === 'string' ? parseInt(params.totalCents, 10) : NaN;
@@ -521,6 +523,7 @@ export default function AddSubscriptionMembersScreen() {
       pathname: '/add-subscription/review',
       params: {
         serviceName,
+        ...(serviceIdParam ? { serviceId: serviceIdParam } : {}),
         iconColor,
         planName,
         totalCents: String(totalCents),

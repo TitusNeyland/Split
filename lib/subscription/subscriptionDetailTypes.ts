@@ -51,6 +51,8 @@ export type OwnerMemberLeftBanner = {
 export type SubscriptionDetailModel = {
   id: string;
   serviceName: string;
+  /** Catalog preset id when stored on the subscription (matches `services/{id}`). */
+  serviceId?: string;
   displayName: string;
   billingCycleLabel: string;
   nextBillingLabel: string;

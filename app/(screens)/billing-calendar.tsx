@@ -344,7 +344,12 @@ export default function BillingCalendarScreen() {
                   accessibilityRole="button"
                   accessibilityLabel={`${sub.displayName}, open details`}
                 >
-                  <ServiceIcon serviceName={sub.serviceNameForIcon} size={34} style={styles.svcIco} />
+                  <ServiceIcon
+                    serviceName={sub.serviceNameForIcon}
+                    serviceId={sub.catalogServiceId}
+                    size={34}
+                    style={styles.svcIco}
+                  />
                   <View style={styles.dayBillMid}>
                     <Text style={styles.dayBillName} numberOfLines={2}>
                       {sub.displayName}
