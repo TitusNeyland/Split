@@ -12,6 +12,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { router } from 'expo-router';
+import { useScrollToTop } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { ProfilePhotoActionSheet } from '../components/profile/ProfilePhotoActionSheet';
@@ -78,6 +79,8 @@ function memberDateFrom(user: User | null, profile: UserProfileDoc | null): Date
 }
 
 export default function ProfileScreen() {
+  const scrollRef = useRef<ScrollView>(null);
+  useScrollToTop(scrollRef);
   const insets = useSafeAreaInsets();
   const {
     avatarUrl,
@@ -266,6 +269,7 @@ export default function ProfileScreen() {
     <View style={styles.root}>
       <StatusBar style="light" />
       <ScrollView
+        ref={scrollRef}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         bounces

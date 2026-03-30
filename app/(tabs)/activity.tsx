@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -17,6 +17,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useScrollToTop } from '@react-navigation/native';
 import { getFriendFilterDisplayName } from '../../lib/profile';
 import { ServiceIcon } from '../components/shared/ServiceIcon';
 import { UserAvatarCircle } from '../components/shared/UserAvatarCircle';
@@ -591,6 +592,8 @@ function ActivityItemRow({
 }
 
 export default function ActivityScreen() {
+  const scrollRef = useRef<ScrollView>(null);
+  useScrollToTop(scrollRef);
   const uid = useFirebaseUid();
   const router = useRouter();
   const params = useLocalSearchParams<{
@@ -761,6 +764,7 @@ export default function ActivityScreen() {
     <View style={styles.root}>
       <StatusBar style="light" />
       <ScrollView
+        ref={scrollRef}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"

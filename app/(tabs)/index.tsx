@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useScrollToTop } from '@react-navigation/native';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { spacing } from '../../constants/theme';
 import { getFriendAvatarColors } from '../../lib/friends/friendAvatar';
@@ -115,6 +116,8 @@ type HomeRecentActivityItem = {
 };
 
 export default function HomeScreen() {
+  const scrollRef = useRef<ScrollView>(null);
+  useScrollToTop(scrollRef);
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [user, setUser] = useState<User | null>(null);
@@ -360,6 +363,7 @@ export default function HomeScreen() {
     <View style={styles.root}>
       <StatusBar style="light" />
       <ScrollView
+        ref={scrollRef}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         bounces

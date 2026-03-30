@@ -1,5 +1,4 @@
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
-;
 import {
   View,
   Text,
@@ -14,6 +13,7 @@ import {
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { router, useFocusEffect } from 'expo-router';
+import { useScrollToTop } from '@react-navigation/native';
 import { parseReceiptImage } from '../../lib/receipts/receiptApi';
 import { setReceiptAssignSession } from '../../lib/receipts/receiptParseSession';
 import { emptyManualSession, sessionFromParse } from '../../lib/receipts/receiptMappers';
@@ -285,6 +285,8 @@ function ScanLineOverlay({ height }: { height: number }) {
 }
 
 export default function ScanScreen() {
+  const scrollRef = useRef<ScrollView>(null);
+  useScrollToTop(scrollRef);
   const splitPrefs = useMergedSplitPreferences();
   const insets = useSafeAreaInsets();
   const [permission, requestPermission] = useCameraPermissions();
@@ -450,6 +452,7 @@ export default function ScanScreen() {
         </View>
       </Modal>
       <ScrollView
+        ref={scrollRef}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: Math.max(insets.bottom, 12) }]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
