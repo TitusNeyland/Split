@@ -8,7 +8,8 @@ export type ServiceCategoryId =
   | 'cloud'
   | 'shopping'
   | 'apps'
-  | 'fitness';
+  | 'fitness'
+  | 'lifestyle';
 
 /** One row inside `service_tiers/{serviceId}.tiers[]`. */
 export type FirestoreServiceTierRow = {

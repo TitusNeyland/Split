@@ -27,7 +27,9 @@ function normalizeServiceDoc(id: string, data: Record<string, unknown>): Catalog
   const catRaw = data.category;
   const category =
     typeof catRaw === 'string' &&
-    ['streaming', 'music', 'gaming', 'ai', 'cloud', 'shopping', 'apps', 'fitness'].includes(catRaw)
+    ['streaming', 'music', 'gaming', 'ai', 'cloud', 'shopping', 'apps', 'fitness', 'lifestyle'].includes(
+      catRaw,
+    )
       ? (catRaw as CatalogService['category'])
       : null;
   if (!category) return null;

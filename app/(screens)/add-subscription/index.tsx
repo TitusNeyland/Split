@@ -17,7 +17,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import type { ServiceCategoryId } from '../../../lib/subscription/servicesCatalogTypes';
 import { useServices } from '../../contexts/ServicesContext';
 import { getServiceIconBackgroundColor, ServiceIcon } from '../../components/shared/ServiceIcon';
 
@@ -37,53 +36,21 @@ export type PresetService = {
   name: string;
   /** Lowest common “from” price in cents for suggestions in later steps. */
   priceCents: number;
+  brandColor?: string;
 };
 
-/** Category → service display names (must match `PRESETS[].name`). Later: migrate to Firestore. */
+/** Category → example service names (for exports / docs; picker uses Firestore catalog). */
 export const SERVICE_CATEGORIES: Record<string, readonly string[]> = {
-  streaming: ['Netflix', 'Hulu', 'Disney+', 'HBO Max', 'Amazon Prime Video', 'Apple TV+'],
-  music: ['Spotify', 'Apple Music', 'Tidal', 'YouTube Music'],
+  streaming: ['Netflix', 'Disney+', 'YouTube Premium', 'Hulu', 'Paramount+'],
+  music: ['Spotify', 'Apple Music', 'Audible'],
   gaming: ['Xbox Game Pass', 'PlayStation Plus', 'Nintendo Online'],
-  ai: ['ChatGPT Plus', 'Claude Pro', 'Copilot Pro', 'Gemini Advanced', 'Midjourney'],
-  cloud: ['iCloud', 'Google One', 'Dropbox', 'OneDrive'],
-  shopping: ['Amazon Prime', 'Instacart+', 'DoorDash DashPass'],
-  apps: ['Adobe CC', 'Microsoft 365', 'Duolingo Plus'],
-  fitness: ['Peloton', 'Strava', 'MyFitnessPal'],
+  ai: ['ChatGPT Plus', 'Claude Pro', 'Gemini Advanced'],
+  cloud: ['iCloud', 'Google One', 'Dropbox'],
+  shopping: ['Amazon Prime', 'Instacart+', 'Uber One'],
+  apps: ['Adobe CC', 'Microsoft 365', 'MasterClass'],
+  fitness: ['Peloton', 'Strava', 'Headspace'],
+  lifestyle: ['IPSY', 'HelloFresh', 'BarkBox'],
 };
-
-const PRESETS: PresetService[] = [
-  { id: 'netflix', name: 'Netflix', priceCents: 699 },
-  { id: 'hulu', name: 'Hulu', priceCents: 799 },
-  { id: 'disney', name: 'Disney+', priceCents: 799 },
-  { id: 'hbo', name: 'HBO Max', priceCents: 999 },
-  { id: 'amazon-prime-video', name: 'Amazon Prime Video', priceCents: 899 },
-  { id: 'appletv', name: 'Apple TV+', priceCents: 999 },
-  { id: 'spotify', name: 'Spotify', priceCents: 999 },
-  { id: 'apple-music', name: 'Apple Music', priceCents: 1099 },
-  { id: 'tidal', name: 'Tidal', priceCents: 1099 },
-  { id: 'youtube-music', name: 'YouTube Music', priceCents: 1099 },
-  { id: 'xbox-gp', name: 'Xbox Game Pass', priceCents: 999 },
-  { id: 'ps-plus', name: 'PlayStation Plus', priceCents: 799 },
-  { id: 'nintendo', name: 'Nintendo Online', priceCents: 399 },
-  { id: 'chatgpt', name: 'ChatGPT Plus', priceCents: 2000 },
-  { id: 'claude', name: 'Claude Pro', priceCents: 2000 },
-  { id: 'copilot', name: 'Copilot Pro', priceCents: 2000 },
-  { id: 'gemini', name: 'Gemini Advanced', priceCents: 1999 },
-  { id: 'midjourney', name: 'Midjourney', priceCents: 1000 },
-  { id: 'icloud', name: 'iCloud', priceCents: 99 },
-  { id: 'google-one', name: 'Google One', priceCents: 199 },
-  { id: 'dropbox', name: 'Dropbox', priceCents: 999 },
-  { id: 'onedrive', name: 'OneDrive', priceCents: 699 },
-  { id: 'amazon-prime', name: 'Amazon Prime', priceCents: 1499 },
-  { id: 'instacart', name: 'Instacart+', priceCents: 999 },
-  { id: 'doordash', name: 'DoorDash DashPass', priceCents: 999 },
-  { id: 'adobe', name: 'Adobe CC', priceCents: 5499 },
-  { id: 'm365', name: 'Microsoft 365', priceCents: 699 },
-  { id: 'duolingo', name: 'Duolingo Plus', priceCents: 699 },
-  { id: 'peloton', name: 'Peloton', priceCents: 1299 },
-  { id: 'strava', name: 'Strava', priceCents: 799 },
-  { id: 'mfp', name: 'MyFitnessPal', priceCents: 999 },
-];
 
 type CategoryFilterId = 'all' | keyof typeof SERVICE_CATEGORIES;
 
@@ -97,6 +64,7 @@ const CATEGORY_FILTERS: { id: CategoryFilterId; label: string }[] = [
   { id: 'shopping', label: 'Shopping' },
   { id: 'apps', label: 'Apps' },
   { id: 'fitness', label: 'Fitness' },
+  { id: 'lifestyle', label: 'Lifestyle' },
 ];
 
 function formatFromPrice(cents: number): string {
