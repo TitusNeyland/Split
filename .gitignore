@@ -38,6 +38,7 @@ server/.env
 # Firebase native config files (contain sensitive credentials)
 GoogleService-Info.plist
 google-services.json
+scripts/serviceAccountKey.json
 
 # typescript
 *.tsbuildinfo

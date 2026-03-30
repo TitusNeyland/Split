@@ -8,7 +8,8 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "receipt-server": "npm run start --prefix server",
-    "seed:services": "tsx scripts/seed-services-firestore.ts"
+    "seed:services": "tsx scripts/seed-services-firestore.ts",
+    "seed:services:js": "node scripts/seedServices.js"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.2",
