@@ -11,6 +11,8 @@ import {
   UIManager,
   Linking,
   TextInput,
+  Animated,
+  type ViewStyle,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -34,7 +36,9 @@ import { resolveActivityRoute } from '../../lib/activity/activityNavigation';
 import { sendPaymentReminderCallable } from '../../lib/activity/sendPaymentReminderCallable';
 import { acceptPendingInvite } from '../../lib/friends/friendSystemFirestore';
 import { replaceWithSplitJoinedCelebration } from '../../lib/navigation/splitJoinedCelebration';
-import { formatUsdDollarsFixed2 } from '../../lib/format/currency';
+import { formatUsdFromCents, formatUsdDollarsFixed2 } from '../../lib/format/currency';
+import { computeActivityOwnerSummaryStats } from '../../lib/activity/activityOwnerSummaryStats';
+import { useSubscriptions } from '../contexts/SubscriptionsContext';
 
 type IonIconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -55,6 +59,30 @@ const C = {
   partialAmber: '#EF9F27',
   red: '#E24B4A',
 };
+
+const HERO_STAT_SKELETON = '#E5E2DC';
+
+/** Gray pulsing bar — matches profile stat cards while subscriptions load. */
+function HeroStatValueSkeleton({ style }: { style?: ViewStyle }) {
+  const op = useRef(new Animated.Value(0.45)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(op, { toValue: 0.95, duration: 700, useNativeDriver: true }),
+        Animated.timing(op, { toValue: 0.4, duration: 700, useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [op]);
+  return (
+    <Animated.View
+      style={[style, { backgroundColor: HERO_STAT_SKELETON, opacity: op }]}
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+    />
+  );
+}
 
 type ActivityFilterId = ActivityFilterTabId;
 
@@ -596,6 +624,7 @@ export default function ActivityScreen() {
   const scrollRef = useRef<ScrollView>(null);
   useScrollToTop(scrollRef);
   const uid = useFirebaseUid();
+  const { subscriptions, loading: subscriptionsLoading } = useSubscriptions();
   const router = useRouter();
   const params = useLocalSearchParams<{
     filter?: string | string[];
@@ -675,10 +704,30 @@ export default function ActivityScreen() {
     return unsub;
   }, [uid]);
 
-  const collectedDisplay = useMemo(() => `+${formatUsdDollarsFixed2(47.5)}`, []);
-  const trendDisplay = useMemo(() => '↑ $12 vs last month', []);
-  const pendingCount = 3;
-  const pendingBreakdown = '1 overdue · 1 partial';
+  const ownerSummary = useMemo(
+    () => computeActivityOwnerSummaryStats(subscriptions, uid ?? '', new Date()),
+    [subscriptions, uid],
+  );
+
+  const statsLoading = Boolean(uid && subscriptionsLoading);
+
+  const collectedDisplay = useMemo(() => {
+    const cents = ownerSummary.collectedThisMonthCents;
+    const formatted = formatUsdFromCents(cents);
+    if (cents === 0) return formatted;
+    return `+${formatted}`;
+  }, [ownerSummary.collectedThisMonthCents]);
+
+  const pendingDisplay = useMemo(
+    () => formatUsdFromCents(ownerSummary.pendingCents),
+    [ownerSummary.pendingCents],
+  );
+
+  const pendingBreakdown = useMemo(() => {
+    const { pendingOverdueCount: o, pendingOnlyCount: p } = ownerSummary;
+    if (o + p === 0) return '';
+    return `${o} overdue · ${p} pending`;
+  }, [ownerSummary]);
 
   const filteredGroups = useMemo(() => {
     const mapped = liveFeedItems.map((i) =>
@@ -812,14 +861,23 @@ export default function ActivityScreen() {
 
           <View style={styles.heroStats}>
             <View style={styles.hstat}>
-              <Text style={styles.hstatValGreen}>{collectedDisplay}</Text>
+              {statsLoading ? (
+                <HeroStatValueSkeleton style={styles.heroStatSkeleton} />
+              ) : (
+                <Text style={styles.hstatValGreen}>{collectedDisplay}</Text>
+              )}
               <Text style={styles.hstatLbl}>Collected this month</Text>
-              <Text style={styles.hstatSubGreen}>{trendDisplay}</Text>
             </View>
             <View style={styles.hstat}>
-              <Text style={styles.hstatValWhite}>{pendingCount}</Text>
+              {statsLoading ? (
+                <HeroStatValueSkeleton style={styles.heroStatSkeleton} />
+              ) : (
+                <Text style={styles.hstatValWhite}>{pendingDisplay}</Text>
+              )}
               <Text style={styles.hstatLbl}>Pending payments</Text>
-              <Text style={styles.hstatSubAmber}>{pendingBreakdown}</Text>
+              {pendingBreakdown ? (
+                <Text style={styles.hstatSubAmber}>{pendingBreakdown}</Text>
+              ) : null}
             </View>
           </View>
 
@@ -1022,16 +1080,16 @@ const styles = StyleSheet.create({
     marginBottom: 4,
     letterSpacing: -0.5,
   },
+  heroStatSkeleton: {
+    height: 34,
+    width: 128,
+    borderRadius: 10,
+    marginBottom: 4,
+    maxWidth: '100%',
+  },
   hstatLbl: {
     fontSize: 13,
     color: 'rgba(255,255,255,0.55)',
-    lineHeight: 18,
-  },
-  hstatSubGreen: {
-    fontSize: 13,
-    fontWeight: '500',
-    marginTop: 5,
-    color: 'rgba(134,239,172,0.8)',
     lineHeight: 18,
   },
   hstatSubAmber: {
