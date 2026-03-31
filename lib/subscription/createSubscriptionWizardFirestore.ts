@@ -19,6 +19,8 @@ export type WizardMemberRow = {
   invitePending?: boolean;
   /** When invite is email-targeted; stored on split share rows for resend + rules. */
   pendingInviteEmail?: string;
+  /** Existing `invites/{id}` when editing a pending slot (avoid creating duplicate invites). */
+  inviteId?: string;
 };
 
 export type CreateSubscriptionWizardInput = {

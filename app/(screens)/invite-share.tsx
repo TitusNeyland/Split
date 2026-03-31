@@ -127,7 +127,6 @@ export default function InviteShareScreen() {
             shareMessage={shareMessage}
             subtitle={suggestedName ? `For ${suggestedName}` : null}
             onClose={onClose}
-            autoShareOnMount
           />
         ) : null}
       </View>
