@@ -6,7 +6,6 @@ import {
   ScrollView,
   Pressable,
   useWindowDimensions,
-  Animated,
   Alert,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -42,6 +41,7 @@ import {
   type SubscriptionsTabToastVariant,
 } from '../../lib/subscription/endSplitNavigationToast';
 import { deleteSubscriptionDocument } from '../../lib/subscription/deleteSubscriptionFirestore';
+import { Toast } from '../components/shared/Toast';
 
 const C = {
   bg: '#F2F0EB',
@@ -82,7 +82,7 @@ export default function SubscriptionsScreen() {
   >(null);
   const [splitEndedToast, setSplitEndedToast] = useState<string | null>(null);
   const [splitToastVariant, setSplitToastVariant] = useState<SubscriptionsTabToastVariant>('default');
-  const splitEndedToastOpacity = useRef(new Animated.Value(0)).current;
+  const onSplitToastDismiss = useCallback(() => setSplitEndedToast(null), []);
 
   const { avatarUrl: userAvatarUrl } = useProfileAvatarUrl();
 
@@ -91,25 +91,15 @@ export default function SubscriptionsScreen() {
   useFocusEffect(
     useCallback(() => {
       const pending = consumePendingSubscriptionsTabToast();
-      if (!pending) return undefined;
-      setFilter(pending.filter);
-      setSplitToastVariant(pending.variant ?? 'default');
-      setSplitEndedToast(pending.message);
-      splitEndedToastOpacity.setValue(0);
-      Animated.timing(splitEndedToastOpacity, {
-        toValue: 1,
-        duration: 220,
-        useNativeDriver: true,
-      }).start();
-      const t = setTimeout(() => {
-        Animated.timing(splitEndedToastOpacity, {
-          toValue: 0,
-          duration: 200,
-          useNativeDriver: true,
-        }).start(() => setSplitEndedToast(null));
-      }, 3200);
-      return () => clearTimeout(t);
-    }, [splitEndedToastOpacity])
+      if (pending) {
+        setFilter(pending.filter);
+        setSplitToastVariant(pending.variant ?? 'default');
+        setSplitEndedToast(pending.message);
+      }
+      return () => {
+        setSplitEndedToast(null);
+      };
+    }, [])
   );
 
   useEffect(() => {
@@ -479,22 +469,14 @@ export default function SubscriptionsScreen() {
         </View>
       </ScrollView>
 
-      {splitEndedToast ? (
-        <Animated.View
-          style={[
-            styles.toast,
-            splitToastVariant === 'success' && styles.toastSuccess,
-            { bottom: Math.max(insets.bottom, 12) + 8, opacity: splitEndedToastOpacity },
-          ]}
-          pointerEvents="none"
-        >
-          <Text
-            style={[styles.toastTxt, splitToastVariant === 'success' && styles.toastTxtSuccess]}
-          >
-            {splitEndedToast}
-          </Text>
-        </Animated.View>
-      ) : null}
+      <Toast
+        message={splitEndedToast}
+        onDismiss={onSplitToastDismiss}
+        duration={3000}
+        type={splitToastVariant === 'success' ? 'success' : 'info'}
+        bottomInsetExtra={8}
+        showIcon={false}
+      />
 
     </View>
   );
@@ -703,29 +685,6 @@ const styles = StyleSheet.create({
   emptyAddBtnTxt: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#fff',
-  },
-  toast: {
-    position: 'absolute',
-    left: 20,
-    right: 20,
-    backgroundColor: 'rgba(26,26,24,0.92)',
-    borderRadius: 14,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    zIndex: 50,
-  },
-  toastTxt: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#fff',
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  toastSuccess: {
-    backgroundColor: '#1D9E75',
-  },
-  toastTxtSuccess: {
     color: '#fff',
   },
   endedPromptCard: {

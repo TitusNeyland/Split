@@ -6,7 +6,6 @@ import {
   ScrollView,
   Pressable,
   Alert,
-  Animated,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -27,6 +26,7 @@ import ProfilePrivacyCard from '../components/profile/ProfilePrivacyCard';
 import ProfileSecurityCard from '../components/profile/ProfileSecurityCard';
 import ProfileActiveSessionsCard from '../components/profile/ProfileActiveSessionsCard';
 import ProfileSupportLegalSection from '../components/profile/ProfileSupportLegalSection';
+import { Toast } from '../components/shared/Toast';
 import { ENABLE_PROFILE_SECURITY } from '../../constants/features';
 import { isFirebaseConfigured } from '../../lib/firebase';
 import {
@@ -95,8 +95,7 @@ export default function ProfileScreen() {
   const [photoSheetOpen, setPhotoSheetOpen] = useState(false);
   const [cropUri, setCropUri] = useState<string | null>(null);
   const [cropVisible, setCropVisible] = useState(false);
-  const [toast, setToast] = useState<string | null>(null);
-  const toastOpacity = useRef(new Animated.Value(0)).current;
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
   const [authHydrated, setAuthHydrated] = useState(false);
 
   useEffect(() => {
@@ -140,30 +139,9 @@ export default function ProfileScreen() {
 
   const initials = useMemo(() => initialsFromName(displayName), [displayName]);
 
-  const showToast = useCallback(
-    (message: string) => {
-      setToast(message);
-      toastOpacity.setValue(0);
-      Animated.timing(toastOpacity, {
-        toValue: 1,
-        duration: 220,
-        useNativeDriver: true,
-      }).start();
-    },
-    [toastOpacity]
-  );
-
-  useEffect(() => {
-    if (!toast) return;
-    const t = setTimeout(() => {
-      Animated.timing(toastOpacity, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }).start(() => setToast(null));
-    }, 2500);
-    return () => clearTimeout(t);
-  }, [toast, toastOpacity]);
+  const showToast = useCallback((message: string) => {
+    setToastMsg(message);
+  }, []);
 
   const openPhotoOptions = useCallback(() => {
     setPhotoSheetOpen(true);
@@ -445,14 +423,14 @@ export default function ProfileScreen() {
         onConfirm={onCroppedAvatar}
       />
 
-      {toast ? (
-        <Animated.View style={[styles.toast, { opacity: toastOpacity }]} pointerEvents="none">
-          {toast.toLowerCase().includes('updated') ? (
-            <Ionicons name="checkmark" size={16} color="#fff" />
-          ) : null}
-          <Text style={styles.toastTxt}>{toast}</Text>
-        </Animated.View>
-      ) : null}
+      <Toast
+        message={toastMsg}
+        onDismiss={() => setToastMsg(null)}
+        duration={3000}
+        type="success"
+        showIcon={toastMsg != null && toastMsg.toLowerCase().includes('updated')}
+        bottom={Math.max(insets.bottom, 12) + 56}
+      />
     </View>
   );
 }
@@ -634,26 +612,5 @@ const styles = StyleSheet.create({
   bodyPad: {
     minHeight: 24,
     backgroundColor: '#F2F0EB',
-  },
-  toast: {
-    position: 'absolute',
-    bottom: 88,
-    left: 24,
-    right: 24,
-    alignSelf: 'center',
-    maxWidth: 360,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: '#1D9E75',
-    borderRadius: 20,
-    paddingVertical: 10,
-    paddingHorizontal: 18,
-  },
-  toastTxt: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#fff',
   },
 });

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -8,13 +8,13 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   ScrollView,
-  Animated,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { sendPasswordResetEmail } from 'firebase/auth';
 import { getFirebaseAuth } from '../../../lib/firebase';
+import { Toast, type ToastType } from '../../components/shared/Toast';
 
 const C = {
   bg: '#FFFFFF',
@@ -26,28 +26,6 @@ const C = {
   errorRed: '#E24B4A',
   green: '#1D9E75',
 };
-
-function useToast() {
-  const [message, setMessage] = useState<string | null>(null);
-  const [variant, setVariant] = useState<'green' | 'dark'>('dark');
-  const opacity = useRef(new Animated.Value(0)).current;
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  function show(msg: string, v: 'green' | 'dark' = 'dark') {
-    if (timer.current) clearTimeout(timer.current);
-    setMessage(msg);
-    setVariant(v);
-    opacity.setValue(0);
-    Animated.timing(opacity, { toValue: 1, duration: 220, useNativeDriver: true }).start();
-    timer.current = setTimeout(() => {
-      Animated.timing(opacity, { toValue: 0, duration: 220, useNativeDriver: true }).start(
-        () => setMessage(null),
-      );
-    }, 3500);
-  }
-
-  return { message, variant, opacity, show };
-}
 
 function sendErrorMessage(code: string): string {
   switch (code) {
@@ -69,7 +47,12 @@ export default function ForgotPasswordCheckEmailScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ email?: string }>();
   const auth = getFirebaseAuth();
-  const toast = useToast();
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const [toastType, setToastType] = useState<ToastType>('info');
+  const showToast = useCallback((msg: string, v: 'green' | 'dark' = 'dark') => {
+    setToastType(v === 'green' ? 'success' : 'info');
+    setToastMsg(msg);
+  }, []);
 
   const email = typeof params.email === 'string' ? params.email.trim() : '';
 
@@ -106,11 +89,11 @@ export default function ForgotPasswordCheckEmailScreen() {
     setLoading(true);
     try {
       await sendPasswordResetEmail(auth, email);
-      toast.show('Reset link resent!', 'green');
+      showToast('Reset link resent!', 'green');
       startCountdown(60);
     } catch (e: unknown) {
       const code = (e as { code?: string })?.code ?? '';
-      toast.show(sendErrorMessage(code));
+      showToast(sendErrorMessage(code));
     } finally {
       setLoading(false);
     }
@@ -192,22 +175,14 @@ export default function ForgotPasswordCheckEmailScreen() {
         </View>
       ) : null}
 
-      {toast.message ? (
-        <Animated.View
-          style={[
-            styles.toast,
-            { bottom: insets.bottom + 20, opacity: toast.opacity },
-            toast.variant === 'green' && styles.toastGreen,
-          ]}
-        >
-          <Ionicons
-            name={toast.variant === 'green' ? 'checkmark' : 'alert-circle-outline'}
-            size={16}
-            color="#fff"
-          />
-          <Text style={styles.toastTxt}>{toast.message}</Text>
-        </Animated.View>
-      ) : null}
+      <Toast
+        message={toastMsg}
+        onDismiss={() => setToastMsg(null)}
+        duration={3000}
+        type={toastType}
+        showIcon
+        bottomInsetExtra={20}
+      />
     </View>
   );
 }
@@ -306,26 +281,5 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     alignItems: 'center',
     pointerEvents: 'none',
-  },
-  toast: {
-    position: 'absolute',
-    left: 16,
-    right: 16,
-    backgroundColor: '#1a1a18',
-    borderRadius: 16,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  toastGreen: {
-    backgroundColor: C.green,
-  },
-  toastTxt: {
-    color: '#fff',
-    fontSize: 13,
-    fontWeight: '500',
-    flex: 1,
   },
 });
