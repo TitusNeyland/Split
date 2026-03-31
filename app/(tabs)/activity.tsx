@@ -12,6 +12,7 @@ import {
   Linking,
   TextInput,
   Animated,
+  BackHandler,
   type ViewStyle,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -275,6 +276,34 @@ function itemMatchesFriend(item: ActivityFeedItem, friendId: string | null): boo
 
 function itemMatchesFilter(item: ActivityFeedItem, f: ActivityFilterId): boolean {
   return activityEventMatchesFilter(f, item.activityType);
+}
+
+/** Real-time activity search: title, sub, amounts, type, badge, detail rows. */
+function itemMatchesSearch(item: ActivityFeedItem, qRaw: string): boolean {
+  const q = qRaw.trim().toLowerCase();
+  if (!q) return true;
+  const parts: string[] = [
+    item.title,
+    item.sub,
+    item.serviceMark ?? '',
+    item.amount ?? '',
+    item.badge,
+    String(item.activityType ?? ''),
+    item.kind,
+    item.payerNote ?? '',
+    item.friendAvatar?.initials ?? '',
+  ];
+  for (const row of item.detail?.rows ?? []) {
+    parts.push(row.label, row.value);
+  }
+  const blob = parts.join(' ').toLowerCase();
+  if (blob.includes(q)) return true;
+  const qDigits = q.replace(/\D/g, '');
+  if (qDigits.length >= 1) {
+    const amtDigits = (item.amount ?? '').replace(/\D/g, '');
+    if (amtDigits.includes(qDigits)) return true;
+  }
+  return false;
 }
 
 
@@ -640,6 +669,9 @@ export default function ActivityScreen() {
   const [markPaidNotes, setMarkPaidNotes] = useState<Record<string, string>>({});
   const [markPaidDrawerOpenForId, setMarkPaidDrawerOpenForId] = useState<string | null>(null);
   const [liveFeedItems, setLiveFeedItems] = useState<ActivityFeedItem[]>([]);
+  const [searchActive, setSearchActive] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const searchInputRef = useRef<TextInput>(null);
 
   const friendIdFilter = useMemo(() => {
     const raw = params.friendId;
@@ -681,6 +713,30 @@ export default function ActivityScreen() {
     setExpandedId(trimmed);
     setMarkPaidDrawerOpenForId(null);
   }, [params.expandId]);
+
+  const dismissSearch = useCallback(() => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setSearchActive(false);
+    setSearchQuery('');
+    searchInputRef.current?.blur();
+  }, []);
+
+  useEffect(() => {
+    if (!searchActive) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      dismissSearch();
+      return true;
+    });
+    return () => sub.remove();
+  }, [searchActive, dismissSearch]);
+
+  useEffect(() => {
+    if (!searchActive) return;
+    const t = requestAnimationFrame(() => {
+      searchInputRef.current?.focus();
+    });
+    return () => cancelAnimationFrame(t);
+  }, [searchActive]);
 
   useEffect(() => {
     if (!uid) {
@@ -729,15 +785,25 @@ export default function ActivityScreen() {
     return `${o} overdue · ${p} pending`;
   }, [ownerSummary]);
 
-  const filteredGroups = useMemo(() => {
+  const feedItemsAfterPills = useMemo(() => {
     const mapped = liveFeedItems.map((i) =>
       manualPaidByItemId[i.id] ? applyManualPaidToItem(i, manualPaidByItemId[i.id]!) : i,
     );
-    const liveFiltered = mapped.filter(
+    return mapped.filter(
       (i) => itemMatchesFilter(i, filter) && itemMatchesFriend(i, friendIdFilter),
     );
-    return groupLiveItemsBySection(liveFiltered);
   }, [filter, manualPaidByItemId, friendIdFilter, liveFeedItems]);
+
+  const filteredGroups = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    const liveFiltered = q
+      ? feedItemsAfterPills.filter((i) => itemMatchesSearch(i, q))
+      : feedItemsAfterPills;
+    return groupLiveItemsBySection(liveFiltered);
+  }, [feedItemsAfterPills, searchQuery]);
+
+  const searchNoResults =
+    Boolean(searchQuery.trim()) && feedItemsAfterPills.length > 0 && filteredGroups.length === 0;
 
   const toggleExpanded = useCallback((id: string) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -832,16 +898,54 @@ export default function ActivityScreen() {
             },
           ]}
         >
-          <View style={styles.sbar}>
-            <Text style={styles.pageTitle}>Activity</Text>
-            <Pressable
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel="Search activity"
-            >
-              <Ionicons name="search-outline" size={22} color="rgba(255,255,255,0.6)" />
-            </Pressable>
-          </View>
+          {searchActive ? (
+            <View style={styles.searchHeroRow}>
+              <Ionicons name="search-outline" size={20} color="rgba(255,255,255,0.55)" style={styles.searchHeroIcon} />
+              <TextInput
+                ref={searchInputRef}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                placeholder="Search activity…"
+                placeholderTextColor="rgba(255,255,255,0.4)"
+                style={styles.searchInput}
+                autoCapitalize="none"
+                autoCorrect={false}
+                returnKeyType="search"
+                accessibilityLabel="Search activity"
+              />
+              <Pressable
+                hitSlop={8}
+                onPress={dismissSearch}
+                accessibilityRole="button"
+                accessibilityLabel="Dismiss search"
+              >
+                <Ionicons name="close-circle" size={22} color="rgba(255,255,255,0.45)" />
+              </Pressable>
+              <Pressable
+                hitSlop={8}
+                onPress={dismissSearch}
+                accessibilityRole="button"
+                accessibilityLabel="Cancel search"
+              >
+                <Text style={styles.searchCancel}>Cancel</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <View style={styles.sbar}>
+              <Text style={styles.pageTitle}>Activity</Text>
+              <Pressable
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Search activity"
+                onPress={() => {
+                  LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                  setSearchActive(true);
+                }}
+              >
+                <Ionicons name="search-outline" size={22} color="rgba(255,255,255,0.6)" />
+              </Pressable>
+            </View>
+          )}
 
           {friendIdFilter ? (
             <View style={styles.friendFilterBar}>
@@ -927,7 +1031,24 @@ export default function ActivityScreen() {
         </LinearGradient>
 
         <View style={styles.body}>
-          {filteredGroups.length === 0 ? (
+          {searchNoResults ? (
+            <View style={styles.feedEmpty}>
+              <View style={styles.searchEmptyIconWrap}>
+                <Ionicons name="search-outline" size={40} color={C.muted} />
+              </View>
+              <Text style={styles.feedEmptyText}>
+                {`No activity matching "${searchQuery.trim()}"`}
+              </Text>
+              <Pressable
+                style={styles.searchClearBtn}
+                onPress={dismissSearch}
+                accessibilityRole="button"
+                accessibilityLabel="Clear search"
+              >
+                <Text style={styles.searchClearBtnTxt}>Clear search</Text>
+              </Pressable>
+            </View>
+          ) : filteredGroups.length === 0 ? (
             <View style={styles.feedEmpty}>
               <Text style={styles.feedEmptyText}>
                 {friendIdFilter
@@ -1038,6 +1159,46 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 18,
+  },
+  searchHeroRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 18,
+    minHeight: 44,
+  },
+  searchHeroIcon: {
+    marginRight: 2,
+  },
+  searchInput: {
+    flex: 1,
+    minWidth: 0,
+    fontSize: 17,
+    fontWeight: '500',
+    color: '#fff',
+    paddingVertical: Platform.OS === 'ios' ? 10 : 6,
+    paddingHorizontal: 0,
+  },
+  searchCancel: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.9)',
+  },
+  searchEmptyIconWrap: {
+    marginBottom: 12,
+    opacity: 0.85,
+  },
+  searchClearBtn: {
+    marginTop: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    borderRadius: 12,
+    backgroundColor: 'rgba(83,74,183,0.12)',
+  },
+  searchClearBtnTxt: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: C.purple,
   },
   pageTitle: {
     fontSize: 24,
