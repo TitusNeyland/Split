@@ -17,36 +17,35 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
-import { ServiceIcon } from '../components/shared/ServiceIcon';
-import { SubscriptionDetailSkeleton } from '../components/subscriptions/SubscriptionDetailSkeleton';
-import { SubscriptionSplitEditor } from '../components/subscriptions/SubscriptionSplitEditor';
-import { spacing } from '../../constants/theme';
-import { SUBSCRIPTIONS_DEMO_MODE } from '../../lib/subscription/subscriptionsScreenDemo';
+import { ServiceIcon } from '../../components/shared/ServiceIcon';
+import { SubscriptionDetailSkeleton } from '../../components/subscriptions/SubscriptionDetailSkeleton';
+import { spacing } from '../../../constants/theme';
+import { SUBSCRIPTIONS_DEMO_MODE } from '../../../lib/subscription/subscriptionsScreenDemo';
 import {
   getDemoSubscriptionDetail,
   type CyclePaymentStatus,
   type SubscriptionDetailMember,
   type SubscriptionHistoryCycle,
-} from '../../lib/subscription/subscriptionDetailDemo';
-import { resendSplitInvite } from '../../lib/subscription/resendSplitInvite';
-import { buildSplitInviteShareMessage } from '../../lib/friends/inviteLinks';
-import { useSubscriptionDetailFromFirestore } from '../../lib/subscription/subscriptionDetailFromFirestore';
-import { fmtCents } from '../../lib/subscription/addSubscriptionSplitMath';
-import { useFirebaseUid } from '../../lib/auth/useFirebaseUid';
-import { useProfileAvatarUrl } from '../hooks/useProfileAvatarUrl';
-import { useViewerFirstName } from '../hooks/useViewerFirstName';
-import { EndSplitConfirmSheet } from '../components/subscriptions/EndSplitConfirmSheet';
-import { endSubscriptionSplit } from '../../lib/subscription/endSplitFirestore';
-import { formatSettingsPercentsLine, membersOwingBeforeEndSplit } from '../../lib/subscription/endSplitHelpers';
+} from '../../../lib/subscription/subscriptionDetailDemo';
+import { resendSplitInvite } from '../../../lib/subscription/resendSplitInvite';
+import { buildSplitInviteShareMessage } from '../../../lib/friends/inviteLinks';
+import { useSubscriptionDetailFromFirestore } from '../../../lib/subscription/subscriptionDetailFromFirestore';
+import { fmtCents } from '../../../lib/subscription/addSubscriptionSplitMath';
+import { useFirebaseUid } from '../../../lib/auth/useFirebaseUid';
+import { useProfileAvatarUrl } from '../../hooks/useProfileAvatarUrl';
+import { useViewerFirstName } from '../../hooks/useViewerFirstName';
+import { EndSplitConfirmSheet } from '../../components/subscriptions/EndSplitConfirmSheet';
+import { endSubscriptionSplit } from '../../../lib/subscription/endSplitFirestore';
+import { formatSettingsPercentsLine, membersOwingBeforeEndSplit } from '../../../lib/subscription/endSplitHelpers';
 import {
   setPendingEndSplitToast,
   setPendingSubscriptionsTabToast,
-} from '../../lib/subscription/endSplitNavigationToast';
-import { LeaveSplitConfirmSheet } from '../components/subscriptions/LeaveSplitConfirmSheet';
-import { leaveSubscriptionSplit } from '../../lib/subscription/leaveSplitFirestore';
-import { clearOwnerMemberLeftBanner } from '../../lib/subscription/clearOwnerMemberLeftBannerFirestore';
-import { clearSplitInviteDeclineNotices } from '../../lib/subscription/splitInviteDeclineNoticesFirestore';
-import { removePendingSplitInvite } from '../../lib/subscription/removePendingSplitInviteFirestore';
+} from '../../../lib/subscription/endSplitNavigationToast';
+import { LeaveSplitConfirmSheet } from '../../components/subscriptions/LeaveSplitConfirmSheet';
+import { leaveSubscriptionSplit } from '../../../lib/subscription/leaveSplitFirestore';
+import { clearOwnerMemberLeftBanner } from '../../../lib/subscription/clearOwnerMemberLeftBannerFirestore';
+import { clearSplitInviteDeclineNotices } from '../../../lib/subscription/splitInviteDeclineNoticesFirestore';
+import { removePendingSplitInvite } from '../../../lib/subscription/removePendingSplitInviteFirestore';
 
 const C = {
   bg: '#F2F0EB',
@@ -69,16 +68,6 @@ function statusMeta(status: CyclePaymentStatus): { label: string; bg: string; fg
   if (status === 'paid') return { label: 'Paid', bg: '#E1F5EE', fg: C.greenDark };
   if (status === 'overdue') return { label: 'Overdue', bg: '#FCEBEB', fg: '#A32D2D' };
   return { label: 'Pending', bg: C.cream, fg: C.amber };
-}
-
-function useNextBillingCycleStart() {
-  return useMemo(() => {
-    const d = new Date();
-    d.setMonth(d.getMonth() + 1);
-    d.setDate(1);
-    d.setHours(0, 0, 0, 0);
-    return d;
-  }, []);
 }
 
 function daysLeftFromMs(ms: number | null | undefined): number {
@@ -136,9 +125,6 @@ export default function SubscriptionDetailScreen() {
   const { avatarUrl: userAvatarUrl, displayName: profileDisplayName } = useProfileAvatarUrl();
   const { firstName: viewerFirstName } = useViewerFirstName();
   const firebaseUid = useFirebaseUid();
-  const nextCycleStart = useNextBillingCycleStart();
-
-  const [editorOpen, setEditorOpen] = useState(false);
   const [historyModalCycle, setHistoryModalCycle] = useState<SubscriptionHistoryCycle | null>(null);
   const [detailRetryKey, setDetailRetryKey] = useState(0);
   const [resendBusyId, setResendBusyId] = useState<string | null>(null);
@@ -186,8 +172,10 @@ export default function SubscriptionDetailScreen() {
     }
   }, [subscriptionId, router]);
 
-  const openEditor = useCallback(() => setEditorOpen(true), []);
-  const closeEditor = useCallback(() => setEditorOpen(false), []);
+  const navigateToEditSplit = useCallback(() => {
+    if (!subscriptionId.trim()) return;
+    router.push(`/subscription/${subscriptionId.trim()}/edit-split` as never);
+  }, [router, subscriptionId]);
 
   const onDemoAction = (title: string) => {
     Alert.alert(title, 'This action will be available when subscription management is connected.');
@@ -369,7 +357,7 @@ export default function SubscriptionDetailScreen() {
                     `You removed ${name} from this split. Update the split percentages to redistribute their share.`,
                     [
                       { text: 'Later', style: 'cancel' },
-                      { text: 'Edit split', onPress: () => setEditorOpen(true) },
+                      { text: 'Edit split', onPress: () => navigateToEditSplit() },
                     ]
                   );
                 } catch (e) {
@@ -383,7 +371,7 @@ export default function SubscriptionDetailScreen() {
         ]
       );
     },
-    [detail?.isOwner, firebaseUid, subscriptionId],
+    [detail?.isOwner, firebaseUid, subscriptionId, navigateToEditSplit],
   );
 
   if (!SUBSCRIPTIONS_DEMO_MODE && subscriptionId.trim() && firebaseUid && liveLoading) {
@@ -601,7 +589,7 @@ export default function SubscriptionDetailScreen() {
               </View>
               <View style={styles.declinedBannerActions}>
                 <Pressable
-                  onPress={() => setEditorOpen(true)}
+                  onPress={() => navigateToEditSplit()}
                   style={({ pressed }) => [styles.declinedBannerBtn, pressed && styles.declinedBannerBtnPressed]}
                   accessibilityRole="button"
                   accessibilityLabel="Invite someone else"
@@ -651,7 +639,7 @@ export default function SubscriptionDetailScreen() {
           {!ended && detail.isOwner && detail.customSplitNeedsRebalance ? (
             <Pressable
               style={styles.ownerRebalanceBanner}
-              onPress={() => setEditorOpen(true)}
+              onPress={() => navigateToEditSplit()}
               accessibilityRole="button"
               accessibilityLabel="Edit split to fix percentages"
             >
@@ -886,28 +874,17 @@ export default function SubscriptionDetailScreen() {
                 </Text>
               </>
             ) : null}
-            {!ended && !editorOpen ? (
+            {!ended && detail.isOwner ? (
               <Pressable
                 style={({ pressed }) => [styles.editLinkRow, pressed && styles.editLinkRowPressed]}
-                onPress={openEditor}
+                onPress={navigateToEditSplit}
                 hitSlop={{ top: 10, bottom: 10, left: 12, right: 12 }}
                 accessibilityRole="button"
-                accessibilityLabel="Edit split for next billing cycle"
+                accessibilityLabel="Edit split"
               >
                 <Ionicons name="create-outline" size={14} color={C.editLink} />
                 <Text style={styles.editLinkTxt}>Edit split</Text>
               </Pressable>
-            ) : null}
-            {!ended && editorOpen ? (
-              <SubscriptionSplitEditor
-                subscriptionId={detail.id}
-                totalCents={detail.totalCents}
-                members={detail.editorMembers}
-                nextCycleEffectiveFrom={nextCycleStart}
-                skipFirestore={SUBSCRIPTIONS_DEMO_MODE}
-                onCancel={closeEditor}
-                onSaved={closeEditor}
-              />
             ) : null}
           </View>
 

@@ -153,7 +153,6 @@ export default function FriendsInviteModal({ visible, onClose, prefilledInviteId
             inviteUrl={inviteUrl}
             shareMessage={shareMessage}
             onClose={onClose}
-            autoShareOnMount
           />
         ) : null}
         </View>
