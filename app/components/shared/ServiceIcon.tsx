@@ -9,6 +9,9 @@ import {
   getServiceIconBackgroundColor,
   mapIconTypeStringToGlyph,
   pickGlyphColorForBackground,
+  findCatalogServiceByServiceId,
+  findCatalogServiceByNameLoose,
+  serviceLetterMark,
 } from '../../../lib/subscription/serviceIconResolve';
 import { useServicesOptional } from '../../contexts/ServicesContext';
 
@@ -109,6 +112,8 @@ function ServiceBrandGlyph({
           <Rect x="13.3" y="13.3" width="6.2" height="6.2" rx="0.9" fill={color} />
         </Svg>
       );
+    default:
+      return <Ionicons name="apps-outline" size={size} color={color} />;
   }
 }
 
@@ -144,20 +149,39 @@ export function ServiceIcon({
 }: ServiceIconProps) {
   const catalogCtx = useServicesOptional();
   const { glyph, fallbackLetter, backgroundColor, iconColor } = useMemo(() => {
-    const fallback = resolveServiceIcon(serviceName);
-    const list = catalogCtx?.services;
-    if (!list?.length) return fallback;
+    const trimmedName = serviceName.trim();
     const sid = serviceId?.trim();
-    const catalog = sid
-      ? list.find((s) => s.id === sid || s.serviceId === sid)
-      : list.find((s) => s.name.trim().toLowerCase() === serviceName.trim().toLowerCase());
-    if (!catalog) return fallback;
+    const labelForResolve = trimmedName || sid || '?';
+    const fallback = resolveServiceIcon(labelForResolve);
+    const list = catalogCtx?.services;
+    if (!list?.length) {
+      return {
+        glyph: fallback.glyph,
+        fallbackLetter: serviceLetterMark(labelForResolve),
+        backgroundColor: fallback.backgroundColor,
+        iconColor: fallback.iconColor,
+      };
+    }
+    let catalog = sid ? findCatalogServiceByServiceId(list, sid) : null;
+    if (!catalog && trimmedName) {
+      catalog = findCatalogServiceByNameLoose(list, trimmedName);
+    }
+    if (!catalog) {
+      return {
+        glyph: fallback.glyph,
+        fallbackLetter: serviceLetterMark(labelForResolve),
+        backgroundColor: fallback.backgroundColor,
+        iconColor: fallback.iconColor,
+      };
+    }
     const fromType = mapIconTypeStringToGlyph(catalog.iconType);
-    const glyphKind = fromType ?? fallback.glyph;
-    const bg = catalog.brandColor?.trim() || fallback.backgroundColor;
+    const nameFallback = resolveServiceIcon(catalog.name || trimmedName || sid || '?');
+    const glyphKind = fromType ?? nameFallback.glyph;
+    const bg = catalog.brandColor?.trim() || nameFallback.backgroundColor;
+    const letterSource = catalog.name || trimmedName || sid || '?';
     return {
       glyph: glyphKind,
-      fallbackLetter: fallback.fallbackLetter,
+      fallbackLetter: serviceLetterMark(letterSource),
       backgroundColor: bg,
       iconColor: pickGlyphColorForBackground(bg),
     };
@@ -181,7 +205,7 @@ export function ServiceIcon({
         style,
       ]}
       accessibilityRole="image"
-      accessibilityLabel={`${serviceName.trim() || 'Subscription'} icon`}
+      accessibilityLabel={`${serviceName.trim() || serviceId?.trim() || 'Subscription'} icon`}
     >
       {glyph ? (
         <ServiceBrandGlyph kind={glyph} color={glyphColor} size={glyphSize} />
