@@ -539,7 +539,14 @@ export default function SubscriptionDetailScreen() {
               endedDimmed={ended}
             />
           </View>
-          <Text style={[styles.heroTotal, ended && styles.heroTotalEnded]}>{fmtCents(detail.totalCents)}</Text>
+          <Text
+            style={[styles.heroTotal, ended && styles.heroTotalEnded]}
+            adjustsFontSizeToFit
+            numberOfLines={1}
+            minimumFontScale={0.6}
+          >
+            {fmtCents(detail.totalCents)}
+          </Text>
           {ended ? (
             <Text style={styles.heroEndedLine}>Ended · billing stopped</Text>
           ) : (
@@ -672,7 +679,14 @@ export default function SubscriptionDetailScreen() {
                         <Text style={[styles.splitPct, styles.splitTextEnded]}>Invite expired</Text>
                       </View>
                       <View style={styles.splitRowRight}>
-                        <Text style={[styles.splitAmt, styles.splitTextEnded]}>{fmtCents(m.amountCents)}</Text>
+                        <Text
+                          style={[styles.splitAmt, styles.splitTextEnded]}
+                          adjustsFontSizeToFit
+                          numberOfLines={1}
+                          minimumFontScale={0.6}
+                        >
+                          {fmtCents(m.amountCents)}
+                        </Text>
                         <View style={[styles.statusBadge, { backgroundColor: '#FCEBEB' }]}>
                           <Text style={[styles.statusBadgeTxt, { color: '#A32D2D' }]}>Expired</Text>
                         </View>
@@ -739,7 +753,14 @@ export default function SubscriptionDetailScreen() {
                         <Text style={[styles.splitPct, styles.splitTextEnded]}>Invite not accepted</Text>
                       </View>
                       <View style={styles.splitRowRight}>
-                        <Text style={[styles.splitAmt, styles.splitTextEnded]}>{fmtCents(m.amountCents)}</Text>
+                        <Text
+                          style={[styles.splitAmt, styles.splitTextEnded]}
+                          adjustsFontSizeToFit
+                          numberOfLines={1}
+                          minimumFontScale={0.6}
+                        >
+                          {fmtCents(m.amountCents)}
+                        </Text>
                         <View style={[styles.statusBadge, { backgroundColor: '#F0EEE9' }]}>
                           <Text style={[styles.statusBadgeTxt, { color: C.muted }]}>Ended</Text>
                         </View>
@@ -824,7 +845,14 @@ export default function SubscriptionDetailScreen() {
                     <Text style={[styles.splitPct, ended && styles.splitTextEnded]}>{m.percent}%</Text>
                   </View>
                   <View style={styles.splitRowRight}>
-                    <Text style={[styles.splitAmt, ended && styles.splitTextEnded]}>{fmtCents(m.amountCents)}</Text>
+                    <Text
+                      style={[styles.splitAmt, ended && styles.splitTextEnded]}
+                      adjustsFontSizeToFit
+                      numberOfLines={1}
+                      minimumFontScale={0.6}
+                    >
+                      {fmtCents(m.amountCents)}
+                    </Text>
                     <View style={[styles.statusBadge, { backgroundColor: st.bg }]}>
                       <Text style={[styles.statusBadgeTxt, { color: st.fg }]}>{st.label}</Text>
                     </View>
@@ -847,7 +875,12 @@ export default function SubscriptionDetailScreen() {
                 <View style={styles.progTrack}>
                   <View style={[styles.progFill, { width: `${pctCollected}%` }]} />
                 </View>
-                <Text style={styles.progCaption}>
+                <Text
+                  style={styles.progCaption}
+                  adjustsFontSizeToFit
+                  numberOfLines={2}
+                  minimumFontScale={0.6}
+                >
                   {detail.paidMemberCount} of {activeMemberCount} members paid ·{' '}
                   {fmtCents(detail.collectedCents)} collected of {fmtCents(activeTotal)} total
                 </Text>
@@ -888,8 +921,19 @@ export default function SubscriptionDetailScreen() {
                 accessibilityRole="button"
                 accessibilityLabel={`${row.label}, ${row.allPaid ? 'all paid' : 'partial'}`}
               >
-                <Text style={styles.historyMonth}>{row.label}</Text>
-                <Text style={styles.historyTotal}>{fmtCents(row.totalCents)}</Text>
+                <Text style={styles.historyMonth} numberOfLines={1}>
+                  {row.label}
+                </Text>
+                <View style={styles.historyTotalWrap}>
+                  <Text
+                    style={styles.historyTotal}
+                    adjustsFontSizeToFit
+                    numberOfLines={1}
+                    minimumFontScale={0.6}
+                  >
+                    {fmtCents(row.totalCents)}
+                  </Text>
+                </View>
                 <View
                   style={[
                     styles.historyPill,
@@ -1051,6 +1095,8 @@ const styles = StyleSheet.create({
     color: '#fff',
     textAlign: 'center',
     letterSpacing: -0.5,
+    width: '100%',
+    alignSelf: 'stretch',
   },
   heroCycle: {
     fontSize: 15,
@@ -1411,6 +1457,9 @@ const styles = StyleSheet.create({
   splitRowRight: {
     alignItems: 'flex-end',
     gap: 6,
+    flexShrink: 1,
+    minWidth: 0,
+    maxWidth: '44%',
   },
   resendBtn: {
     paddingVertical: 6,
@@ -1430,6 +1479,8 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: C.text,
+    width: '100%',
+    textAlign: 'right',
   },
   statusBadge: {
     paddingHorizontal: 8,
@@ -1457,6 +1508,7 @@ const styles = StyleSheet.create({
     color: C.muted,
     marginTop: 8,
     lineHeight: 17,
+    width: '100%',
   },
   editLinkRow: {
     flexDirection: 'row',
@@ -1488,15 +1540,24 @@ const styles = StyleSheet.create({
   },
   historyMonth: {
     flex: 1,
+    minWidth: 0,
     fontSize: 16,
     fontWeight: '500',
     color: C.text,
+  },
+  historyTotalWrap: {
+    flexShrink: 1,
+    minWidth: 0,
+    maxWidth: '38%',
+    marginRight: 4,
+    alignItems: 'flex-end',
   },
   historyTotal: {
     fontSize: 15,
     fontWeight: '600',
     color: C.text,
-    marginRight: 4,
+    width: '100%',
+    textAlign: 'right',
   },
   historyPill: {
     paddingHorizontal: 10,

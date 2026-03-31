@@ -259,20 +259,43 @@ export default function SubscriptionsScreen() {
 
           <View style={styles.heroStats}>
             <View style={styles.hstat}>
-              <Text style={styles.hstatVal}>
+              <Text
+                style={styles.hstatVal}
+                adjustsFontSizeToFit
+                numberOfLines={1}
+                minimumFontScale={0.6}
+              >
                 {SUBSCRIPTIONS_DEMO_MODE ? '$127' : heroMoneyLabel(monthlyTotalCents)}
               </Text>
-              <Text style={styles.hstatLbl}>Monthly total</Text>
+              <Text style={styles.hstatLbl} numberOfLines={1}>
+                Monthly total
+              </Text>
             </View>
             <View style={styles.hstat}>
-              <Text style={styles.hstatVal}>
+              <Text
+                style={styles.hstatVal}
+                adjustsFontSizeToFit
+                numberOfLines={1}
+                minimumFontScale={0.6}
+              >
                 {SUBSCRIPTIONS_DEMO_MODE ? '$28' : heroMoneyLabel(yourShareCents)}
               </Text>
-              <Text style={styles.hstatLbl}>Your share</Text>
+              <Text style={styles.hstatLbl} numberOfLines={1}>
+                Your share
+              </Text>
             </View>
             <View style={styles.hstat}>
-              <Text style={styles.hstatVal}>{SUBSCRIPTIONS_DEMO_MODE ? '4' : String(activeCount)}</Text>
-              <Text style={styles.hstatLbl}>Active splits</Text>
+              <Text
+                style={styles.hstatVal}
+                adjustsFontSizeToFit
+                numberOfLines={1}
+                minimumFontScale={0.6}
+              >
+                {SUBSCRIPTIONS_DEMO_MODE ? '4' : String(activeCount)}
+              </Text>
+              <Text style={styles.hstatLbl} numberOfLines={1}>
+                Active splits
+              </Text>
             </View>
           </View>
 
@@ -538,6 +561,7 @@ const styles = StyleSheet.create({
   },
   hstat: {
     flex: 1,
+    minWidth: 0,
     backgroundColor: 'rgba(255,255,255,0.1)',
     borderRadius: 14,
     paddingVertical: 12,
@@ -549,6 +573,7 @@ const styles = StyleSheet.create({
     color: '#fff',
     marginBottom: 2,
     letterSpacing: -0.4,
+    width: '100%',
   },
   hstatLbl: {
     fontSize: 13,
