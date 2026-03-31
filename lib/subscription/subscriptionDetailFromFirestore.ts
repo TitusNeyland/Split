@@ -111,6 +111,49 @@ function inviteExpiresAtMsFromRow(row: ShareRow): number | null {
   return null;
 }
 
+/** Roster `members[].percentage` when `splitMemberShares` row omits percent (legacy). */
+function rosterPercentForMemberId(data: Record<string, unknown>, memberId: string): number | null {
+  const members = data.members;
+  if (!Array.isArray(members)) return null;
+  for (const m of members) {
+    if (!m || typeof m !== 'object') continue;
+    const uid = String((m as { uid?: string }).uid ?? '');
+    if (uid === memberId) {
+      const p = (m as { percentage?: number }).percentage;
+      if (typeof p === 'number' && Number.isFinite(p)) {
+        return Math.round(p * 100) / 100;
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Steady-state share for the detail UI. `splitMemberShares[].amountCents` may inflate the owner's
+ * row to the full subscription total while invites are still pending (billing Option A); `percent`
+ * still reflects the planned split — use it for display so every row shows proportional shares.
+ */
+function displayShareAmountCents(
+  totalCents: number,
+  row: ShareRow,
+  data: Record<string, unknown>,
+  memberId: string
+): number {
+  const rosterPct = rosterPercentForMemberId(data, memberId);
+  const pFloat =
+    typeof row.percent === 'number' && Number.isFinite(row.percent)
+      ? Math.round(row.percent * 100) / 100
+      : rosterPct != null
+        ? rosterPct
+        : null;
+  if (pFloat != null && pFloat >= 0 && pFloat <= 100 && totalCents > 0) {
+    return Math.round((totalCents * pFloat) / 100);
+  }
+  const raw =
+    typeof row.amountCents === 'number' && Number.isFinite(row.amountCents) ? Math.round(row.amountCents) : 0;
+  return raw;
+}
+
 /**
  * Maps `subscriptions/{id}` document data to the subscription detail UI model.
  */
@@ -155,14 +198,15 @@ export function mapFirestoreSubscriptionToDetailModel(
     const isViewer = Boolean(viewerUid && memberId === viewerUid);
     const st = statusByMember[memberId];
     const cycleStatus = toCycleStatus(st);
-    const amountCents =
-      typeof row.amountCents === 'number' && Number.isFinite(row.amountCents)
-        ? Math.round(row.amountCents)
-        : 0;
+    const rosterPct = rosterPercentForMemberId(data, memberId);
     let percent = 0;
     if (typeof row.percent === 'number' && Number.isFinite(row.percent)) {
       percent = Math.round(row.percent);
-    } else if (totalCents > 0) {
+    } else if (rosterPct != null) {
+      percent = Math.round(rosterPct);
+    }
+    const amountCents = displayShareAmountCents(totalCents, row, data, memberId);
+    if (percent === 0 && totalCents > 0 && amountCents > 0) {
       percent = Math.round((100 * amountCents) / totalCents);
     }
     const inviteExpired = isInviteSlotExpired(data, row);
