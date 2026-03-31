@@ -864,17 +864,35 @@ export default function ActivityScreen() {
               {statsLoading ? (
                 <HeroStatValueSkeleton style={styles.heroStatSkeleton} />
               ) : (
-                <Text style={styles.hstatValGreen}>{collectedDisplay}</Text>
+                <Text
+                  style={styles.hstatValGreen}
+                  adjustsFontSizeToFit
+                  numberOfLines={1}
+                  minimumFontScale={0.6}
+                >
+                  {collectedDisplay}
+                </Text>
               )}
-              <Text style={styles.hstatLbl}>Collected this month</Text>
+              <Text style={styles.hstatLbl} numberOfLines={1}>
+                Collected this month
+              </Text>
             </View>
             <View style={styles.hstat}>
               {statsLoading ? (
                 <HeroStatValueSkeleton style={styles.heroStatSkeleton} />
               ) : (
-                <Text style={styles.hstatValWhite}>{pendingDisplay}</Text>
+                <Text
+                  style={styles.hstatValWhite}
+                  adjustsFontSizeToFit
+                  numberOfLines={1}
+                  minimumFontScale={0.6}
+                >
+                  {pendingDisplay}
+                </Text>
               )}
-              <Text style={styles.hstatLbl}>Pending payments</Text>
+              <Text style={styles.hstatLbl} numberOfLines={1}>
+                Pending payments
+              </Text>
               {pendingBreakdown ? (
                 <Text style={styles.hstatSubAmber}>{pendingBreakdown}</Text>
               ) : null}
@@ -1059,6 +1077,7 @@ const styles = StyleSheet.create({
   },
   hstat: {
     flex: 1,
+    minWidth: 0,
     backgroundColor: 'rgba(255,255,255,0.1)',
     borderRadius: 18,
     paddingVertical: 15,
@@ -1072,6 +1091,7 @@ const styles = StyleSheet.create({
     color: '#86efac',
     marginBottom: 4,
     letterSpacing: -0.5,
+    width: '100%',
   },
   hstatValWhite: {
     fontSize: 30,
@@ -1079,6 +1099,7 @@ const styles = StyleSheet.create({
     color: '#fff',
     marginBottom: 4,
     letterSpacing: -0.5,
+    width: '100%',
   },
   heroStatSkeleton: {
     height: 34,
