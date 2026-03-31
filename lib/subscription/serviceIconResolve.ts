@@ -1,3 +1,5 @@
+import type { CatalogService } from './servicesCatalogTypes';
+
 const UNKNOWN_BG = '#5F5E5A';
 const UNKNOWN_FG = '#ffffff';
 
@@ -56,6 +58,18 @@ const BRAND_RULES: BrandRule[] = [
     glyph: 'tv-panel',
   },
   {
+    match: (n) => n.includes('walmart'),
+    backgroundColor: '#0071CE',
+    iconColor: '#ffffff',
+    glyph: 'box-open',
+  },
+  {
+    match: (n) => n.includes('playstation') || n.includes('ps plus') || n.includes('ps+'),
+    backgroundColor: '#003791',
+    iconColor: '#ffffff',
+    glyph: 'gamepad',
+  },
+  {
     match: (n) => n.includes('xbox') || n.includes('game pass'),
     backgroundColor: '#107C10',
     iconColor: '#ffffff',
@@ -82,6 +96,50 @@ function firstLetter(raw: string): string {
   if (!t) return '?';
   const m = t.match(/[\p{L}\p{N}]/u);
   return m ? m[0]!.toUpperCase() : '?';
+}
+
+/** First letter / digit for icon tiles (unicode-aware). */
+export function serviceLetterMark(raw: string): string {
+  return firstLetter(raw);
+}
+
+/** Normalize service ids for fuzzy catalog match (hyphens, case, underscores). */
+export function normalizeServiceIdForLookup(id: string): string {
+  return id.trim().toLowerCase().replace(/[\s_]+/g, '-').replace(/-+/g, '-');
+}
+
+/** Resolve catalog row when subscription / activity `serviceId` differs slightly from `services` docs. */
+export function findCatalogServiceByServiceId(
+  services: CatalogService[],
+  serviceId: string | undefined | null
+): CatalogService | null {
+  if (!serviceId?.trim() || !services.length) return null;
+  const raw = serviceId.trim();
+  const norm = normalizeServiceIdForLookup(raw);
+  const direct = services.find(
+    (s) => s.id === raw || s.serviceId === raw || s.id === norm || s.serviceId === norm
+  );
+  if (direct) return direct;
+  return (
+    services.find(
+      (s) =>
+        normalizeServiceIdForLookup(s.id) === norm || normalizeServiceIdForLookup(s.serviceId) === norm
+    ) ?? null
+  );
+}
+
+export function findCatalogServiceByNameLoose(
+  services: CatalogService[],
+  name: string | undefined | null
+): CatalogService | null {
+  const t = name?.trim();
+  if (!t || !services.length) return null;
+  const lower = t.toLowerCase();
+  return (
+    services.find((s) => s.name.trim().toLowerCase() === lower) ??
+    services.find((s) => normalizeServiceIdForLookup(s.name) === normalizeServiceIdForLookup(t)) ??
+    null
+  );
 }
 
 export type ResolvedServiceIcon = {

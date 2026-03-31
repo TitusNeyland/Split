@@ -1,5 +1,4 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-;
 import {
   View,
   Text,
@@ -30,6 +29,10 @@ import {
   type ServiceTier,
 } from '../../../lib/subscription/serviceTiers';
 import { loadServiceTiersWithFallback } from '../../../lib/subscription/serviceTiersFirestore';
+import {
+  findCatalogServiceByNameLoose,
+  findCatalogServiceByServiceId,
+} from '../../../lib/subscription/serviceIconResolve';
 import { useServices } from '../../contexts/ServicesContext';
 
 const C = {
@@ -95,11 +98,11 @@ export default function AddSubscriptionDetailsScreen() {
   const { tiersMap, services: catalogServices } = useServices();
   const serviceIdParam = typeof serviceIdParamRaw === 'string' ? serviceIdParamRaw.trim() : '';
   const catalogForIcon =
-    (serviceIdParam && catalogServices.find((s) => s.id === serviceIdParam || s.serviceId === serviceIdParam)) ||
-    (baseServiceName
-      ? catalogServices.find((s) => s.name.trim().toLowerCase() === baseServiceName.toLowerCase())
-      : null) ||
+    (serviceIdParam && findCatalogServiceByServiceId(catalogServices, serviceIdParam)) ||
+    (baseServiceName ? findCatalogServiceByNameLoose(catalogServices, baseServiceName) : null) ||
     null;
+  /** Canonical catalog id for `tiersMap` when URL param differs (e.g. underscore vs hyphen). */
+  const tierLookupKey = catalogForIcon?.id ?? catalogForIcon?.serviceId ?? serviceIdParam;
   const iconTint =
     typeof iconColor === 'string' && /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/.test(iconColor.trim())
       ? iconColor.trim()
@@ -167,8 +170,8 @@ export default function AddSubscriptionDetailsScreen() {
     setUseCustomPrice(false);
 
     const fromCatalog =
-      serviceIdParam && tiersMap[serviceIdParam]?.length
-        ? firestoreTierRowsToServiceTiers(tiersMap[serviceIdParam])
+      tierLookupKey && tiersMap[tierLookupKey]?.length
+        ? firestoreTierRowsToServiceTiers(tiersMap[tierLookupKey])
         : null;
     if (fromCatalog && fromCatalog.length > 0) {
       setTiers(fromCatalog);
@@ -186,7 +189,7 @@ export default function AddSubscriptionDetailsScreen() {
     return () => {
       cancelled = true;
     };
-  }, [baseServiceName, serviceIdParam, tiersMap]);
+  }, [baseServiceName, serviceIdParam, tierLookupKey, tiersMap]);
 
   const applyTier = useCallback(
     (index: number, tierList: ServiceTier[]) => {
