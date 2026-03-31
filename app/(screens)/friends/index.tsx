@@ -9,7 +9,6 @@ import {
   ActivityIndicator,
   Alert,
   Image,
-  Animated,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -17,6 +16,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { Swipeable } from 'react-native-gesture-handler';
+import { Toast } from '../../components/shared/Toast';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { getFirebaseAuth, isFirebaseConfigured } from '../../../lib/firebase';
 import {
@@ -156,8 +156,6 @@ export default function FriendsScreen() {
   const [pendingRefresh, setPendingRefresh] = useState(0);
   const [connectingUid, setConnectingUid] = useState<string | null>(null);
   const [connectToast, setConnectToast] = useState<string | null>(null);
-  const toastOpacity = useRef(new Animated.Value(0)).current;
-  const toastTranslate = useRef(new Animated.Value(12)).current;
   const [inviteModalOpen, setInviteModalOpen] = useState(false);
   const [prefilledInviteId, setPrefilledInviteId] = useState<string | null>(null);
 
@@ -262,40 +260,9 @@ export default function FriendsScreen() {
     searchInputRef.current?.focus();
   }, []);
 
-  const showConnectToast = useCallback(
-    (message: string) => {
-      setConnectToast(message);
-      toastOpacity.setValue(0);
-      toastTranslate.setValue(12);
-      Animated.parallel([
-        Animated.timing(toastOpacity, {
-          toValue: 1,
-          duration: 180,
-          useNativeDriver: true,
-        }),
-        Animated.timing(toastTranslate, {
-          toValue: 0,
-          duration: 220,
-          useNativeDriver: true,
-        }),
-      ]).start();
-      setTimeout(() => {
-        Animated.parallel([
-          Animated.timing(toastOpacity, {
-            toValue: 0,
-            duration: 200,
-            useNativeDriver: true,
-          }),
-          Animated.timing(toastTranslate, {
-            toValue: 12,
-            duration: 200,
-            useNativeDriver: true,
-          }),
-        ]).start(() => setConnectToast(null));
-      }, 2600);
-    },
-    [toastOpacity, toastTranslate]
-  );
+  const showConnectToast = useCallback((message: string) => {
+    setConnectToast(message);
+  }, []);
 
   const onConnect = useCallback(
     async (row: FriendSearchUserRow) => {
@@ -719,22 +686,14 @@ export default function FriendsScreen() {
         ) : null}
       </ScrollView>
 
-      {connectToast ? (
-        <Animated.View
-          pointerEvents="none"
-          style={[
-            styles.connectToast,
-            {
-              bottom: insets.bottom + 20,
-              opacity: toastOpacity,
-              transform: [{ translateY: toastTranslate }],
-            },
-          ]}
-        >
-          <Ionicons name="checkmark" size={18} color="#fff" />
-          <Text style={styles.connectToastTxt}>{connectToast}</Text>
-        </Animated.View>
-      ) : null}
+      <Toast
+        message={connectToast}
+        onDismiss={() => setConnectToast(null)}
+        duration={3000}
+        type="success"
+        showIcon
+        bottomInsetExtra={20}
+      />
 
       {inviteModalOpen ? (
         <FriendsInviteModal
@@ -1206,30 +1165,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 19,
     marginBottom: 16,
-  },
-  connectToast: {
-    position: 'absolute',
-    left: 13,
-    right: 13,
-    backgroundColor: '#1D9E75',
-    borderRadius: 14,
-    paddingVertical: 11,
-    paddingHorizontal: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    zIndex: 50,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 6,
-    elevation: 4,
-  },
-  connectToastTxt: {
-    flex: 1,
-    fontSize: 12,
-    fontWeight: '500',
-    color: '#fff',
   },
   discoveryInviteBtn: {
     marginTop: 12,

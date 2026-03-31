@@ -9,7 +9,6 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   ScrollView,
-  Animated,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -23,6 +22,7 @@ import * as LocalAuthentication from 'expo-local-authentication';
 import { getFirebaseAuth } from '../../lib/firebase';
 import { signInWithEmail, signInWithApple } from '../../lib/auth/authProviders';
 import { setOnboardingCompleteInStorage } from '../../lib/onboarding/onboardingStorage';
+import { Toast, type ToastType } from '../components/shared/Toast';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -46,31 +46,6 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MAX_ATTEMPTS = 5;
 
 // ---------------------------------------------------------------------------
-// Toast hook
-// ---------------------------------------------------------------------------
-function useToast() {
-  const [message, setMessage] = useState<string | null>(null);
-  const [variant, setVariant] = useState<'green' | 'dark'>('dark');
-  const opacity = useRef(new Animated.Value(0)).current;
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  function show(msg: string, v: 'green' | 'dark' = 'dark') {
-    if (timer.current) clearTimeout(timer.current);
-    setMessage(msg);
-    setVariant(v);
-    opacity.setValue(0);
-    Animated.timing(opacity, { toValue: 1, duration: 220, useNativeDriver: true }).start();
-    timer.current = setTimeout(() => {
-      Animated.timing(opacity, { toValue: 0, duration: 220, useNativeDriver: true }).start(
-        () => setMessage(null)
-      );
-    }, 3500);
-  }
-
-  return { message, variant, opacity, show };
-}
-
-// ---------------------------------------------------------------------------
 // Screen
 // ---------------------------------------------------------------------------
 export default function SignInScreen() {
@@ -78,7 +53,12 @@ export default function SignInScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ passwordReset?: string }>();
   const auth = getFirebaseAuth();
-  const toast = useToast();
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const [toastType, setToastType] = useState<ToastType>('info');
+  const showToast = useCallback((msg: string, v: 'green' | 'dark' = 'dark') => {
+    setToastType(v === 'green' ? 'success' : 'info');
+    setToastMsg(msg);
+  }, []);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -95,9 +75,9 @@ export default function SignInScreen() {
   // Show success toast if returning from password reset
   useEffect(() => {
     if (params.passwordReset === '1') {
-      toast.show('Password reset successfully — sign in below', 'green');
+      showToast('Password reset successfully — sign in below', 'green');
     }
-  }, []);
+  }, [params.passwordReset, showToast]);
 
   // Autofocus email on mount
   useEffect(() => {
@@ -127,7 +107,7 @@ export default function SignInScreen() {
     const credential = GoogleAuthProvider.credential(id_token);
     signInWithCredential(auth, credential)
       .then(() => router.replace('/'))
-      .catch((e) => toast.show(socialError(e)))
+      .catch((e) => showToast(socialError(e)))
       .finally(() => setLoading(false));
   }, [response]);
 
@@ -164,7 +144,7 @@ export default function SignInScreen() {
       router.replace('/');
     } catch (e: any) {
       if (e?.code !== 'ERR_REQUEST_CANCELED') {
-        toast.show(socialError(e));
+        showToast(socialError(e));
       }
     } finally {
       setLoading(false);
@@ -391,23 +371,14 @@ export default function SignInScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* Toast */}
-      {toast.message ? (
-        <Animated.View
-          style={[
-            styles.toast,
-            { bottom: insets.bottom + 20, opacity: toast.opacity },
-            toast.variant === 'green' && styles.toastGreen,
-          ]}
-        >
-          <Ionicons
-            name={toast.variant === 'green' ? 'checkmark' : 'alert-circle-outline'}
-            size={16}
-            color="#fff"
-          />
-          <Text style={styles.toastTxt}>{toast.message}</Text>
-        </Animated.View>
-      ) : null}
+      <Toast
+        message={toastMsg}
+        onDismiss={() => setToastMsg(null)}
+        duration={3000}
+        type={toastType}
+        showIcon
+        bottomInsetExtra={20}
+      />
     </View>
   );
 }
@@ -666,25 +637,4 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 
-  toast: {
-    position: 'absolute',
-    left: 16,
-    right: 16,
-    backgroundColor: '#1a1a18',
-    borderRadius: 16,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  toastGreen: {
-    backgroundColor: C.green,
-  },
-  toastTxt: {
-    color: '#fff',
-    fontSize: 13,
-    fontWeight: '500',
-    flex: 1,
-  },
 });
