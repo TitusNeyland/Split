@@ -36,7 +36,6 @@ import { UserAvatarCircle } from '../../components/shared/UserAvatarCircle';
 import { getFirebaseAuth, isFirebaseConfigured } from '../../../lib/firebase';
 import { searchUsersForFriendConnect, type FriendSearchUserRow } from '../../../lib/friends/userSearchFirestore';
 import { getFriendAvatarColors } from '../../../lib/friends/friendAvatar';
-import { normalizeInviteEmail } from '../../../lib/friends/friendSystemFirestore';
 import { initialsFromName } from '../../../lib/profile';
 import { useProfileAvatarUrl } from '../../hooks/useProfileAvatarUrl';
 import { useKeyboardHeight } from '../../hooks/useKeyboardHeight';
@@ -115,23 +114,6 @@ function friendSearchRowToSheetFriend(row: FriendSearchUserRow): SheetFriend {
     mutualSubscriptionsCount: 0,
     avatarUrl: row.avatarUrl,
   };
-}
-
-function memberIdForPendingInvite(raw: string): string {
-  const n = normalizeInviteEmail(raw);
-  const slug = n.replace(/[^a-z0-9]/g, '').slice(0, 40) || 'invite';
-  return `invite-email-${slug}`;
-}
-
-function initialsForPendingInvite(raw: string): string {
-  const t = raw.trim();
-  if (!t) return '?';
-  if (t.includes('@')) {
-    const local = t.split('@')[0] ?? '';
-    const fromName = initialsFromName(local.replace(/[._]/g, ' '));
-    return fromName || '✉';
-  }
-  return initialsFromName(t) || '?';
 }
 
 const METHODS: {
@@ -501,29 +483,6 @@ export default function AddSubscriptionMembersScreen() {
         setSearchingFriends(false);
       });
   }, [debouncedFriendQuery, searchUid]);
-
-  const inviteQueryToSplit = useCallback(() => {
-    const trim = friendQuery.trim();
-    if (!trim) return;
-    const mid = memberIdForPendingInvite(trim);
-    if (members.some((m) => m.memberId === mid)) return;
-    const emailRaw = trim.includes('@') ? normalizeInviteEmail(trim) : undefined;
-    const ok = appendMemberCore({
-      memberId: mid,
-      displayName: trim,
-      initials: initialsForPendingInvite(trim),
-      avatarBg: C.purpleTint,
-      avatarColor: C.purple,
-      isOwner: false,
-      invitePending: true,
-      pendingInviteEmail: emailRaw,
-    });
-    if (ok) {
-      setSheetSessionAddedIds((prev) => (prev.includes(mid) ? prev : [...prev, mid]));
-      setFriendQuery('');
-      setTimeout(() => sheetSearchInputRef.current?.focus(), 0);
-    }
-  }, [friendQuery, members, appendMemberCore]);
 
   const validationBarVisible = mode === 'customPercent';
   const canContinue =
@@ -931,17 +890,6 @@ export default function AddSubscriptionMembersScreen() {
                     <Text style={styles.sheetEmptyBody}>
                       {`${friendQuery.trim()} isn't on mySplit yet. Invite them to join this split.`}
                     </Text>
-                    <Pressable
-                      style={styles.sheetInviteSplitBtn}
-                      onPress={inviteQueryToSplit}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Invite ${friendQuery.trim()} to this split`}
-                    >
-                      <Ionicons name="share-outline" size={20} color="#fff" />
-                      <Text style={styles.sheetInviteSplitBtnTxt}>
-                        {`Invite ${friendQuery.trim()} to this split`}
-                      </Text>
-                    </Pressable>
                   </View>
                 ) : (
                   <Text style={styles.sheetEmpty}>No matches.</Text>
@@ -1474,22 +1422,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 22,
     marginBottom: 18,
-  },
-  sheetInviteSplitBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    backgroundColor: C.purple,
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    borderRadius: 14,
-    alignSelf: 'stretch',
-  },
-  sheetInviteSplitBtnTxt: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#fff',
   },
   sheetFriendPhotoWrap: {
     overflow: 'hidden',
