@@ -13,61 +13,10 @@ export type PaymentHistoryEvent = {
   notes: string;
 };
 
-/** Replace with a Firestore query when payment events are stored server-side. */
+/** Returns stored payment events for export (empty until wired to persistent payment history). */
 export function getPaymentHistoryForExport(): PaymentHistoryEvent[] {
-  return [...MOCK_PAYMENT_EVENTS].sort((a, b) => b.at.getTime() - a.at.getTime());
+  return [];
 }
-
-const MOCK_PAYMENT_EVENTS: PaymentHistoryEvent[] = [
-  {
-    at: new Date('2025-03-18T14:22:00Z'),
-    subscription: 'Netflix Premium',
-    amount: 22.99,
-    status: 'Completed',
-    method: 'Visa •••• 4242',
-    notes: 'March cycle',
-  },
-  {
-    at: new Date('2025-03-15T09:05:00Z'),
-    subscription: 'Spotify Family',
-    amount: 16.99,
-    status: 'Completed',
-    method: 'Apple Pay',
-    notes: 'Your share collected',
-  },
-  {
-    at: new Date('2025-03-10T18:40:00Z'),
-    subscription: 'iCloud+ 200GB',
-    amount: 2.99,
-    status: 'Pending',
-    method: 'Bank transfer',
-    notes: 'Awaiting confirmation',
-  },
-  {
-    at: new Date('2025-02-22T11:30:00Z'),
-    subscription: 'Spotify Family',
-    amount: 16.99,
-    status: 'Completed',
-    method: 'Visa •••• 4242',
-    notes: '',
-  },
-  {
-    at: new Date('2025-02-18T08:00:00Z'),
-    subscription: 'Netflix Premium',
-    amount: 22.99,
-    status: 'Failed',
-    method: 'Visa •••• 4242',
-    notes: 'Card declined — retried next day',
-  },
-  {
-    at: new Date('2025-02-18T15:12:00Z'),
-    subscription: 'Netflix Premium',
-    amount: 22.99,
-    status: 'Completed',
-    method: 'Visa •••• 4242',
-    notes: 'Retry succeeded',
-  },
-];
 
 function escapeCsvCell(v: string): string {
   if (/[",\n\r]/.test(v)) return `"${v.replace(/"/g, '""')}"`;

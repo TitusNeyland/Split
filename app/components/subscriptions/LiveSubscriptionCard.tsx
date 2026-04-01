@@ -50,7 +50,6 @@ export function LiveSubscriptionCard({
       uid: viewerUid,
       subscription: priceFields,
       userLastSeenPriceChangeMs: userLastSeen,
-      skipFirestore: false,
     });
 
   const onDismissPriceBanner = () => {

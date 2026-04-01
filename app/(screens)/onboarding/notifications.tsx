@@ -125,13 +125,13 @@ export default function OnboardingNotificationsScreen() {
 
         <NotifCard
           time="now"
-          title="Alex paid Netflix 🎉"
-          body="$7.66 received · you're owed $35.50 total"
+          title="Payment received"
+          body="A friend paid their share · your running balance updates here"
         />
         <NotifCard
           time="2h ago"
-          title="Netflix bills tomorrow"
-          body="Sam hasn't paid yet · send a reminder?"
+          title="Bill coming up"
+          body="Someone hasn’t paid their share yet · tap to send a reminder"
         />
 
         <View style={styles.arrowBlock}>

@@ -342,7 +342,7 @@ export function SubscriptionCard({
 }
 
 const styles = StyleSheet.create({
-  /** 40×40 tile, 12px corners (matches Subscriptions demo cards). */
+  /** 40×40 tile, 12px corners (matches list cards). */
   serviceIconTile: {
     borderRadius: 12,
   },

@@ -1,5 +1,5 @@
 /**
- * Home "This week" billing strip + next-bill preview (demo / local logic until Firestore wiring).
+ * Home "This week" billing strip + next-bill preview helpers.
  */
 
 import { formatUsdDollarsFixed2 } from '../format/currency';
@@ -66,44 +66,6 @@ export function formatUpcomingWhenLabel(billingDate: Date, today: Date): string 
   if (b0.getTime() === t0.getTime()) return 'Today';
   const wk = b0.toLocaleDateString('en-US', { weekday: 'short' });
   return `${wk} ${b0.getDate()}`;
-}
-
-/** Demo bills for filled home preview; empty when no subs. */
-export function getHomeDemoBills(isEmpty: boolean, now: Date = new Date()): HomeCalendarBill[] {
-  if (isEmpty) return [];
-  const t0 = startOfLocalDay(now);
-  return [
-    {
-      id: 'n1',
-      serviceName: 'Netflix Premium',
-      billingDate: t0,
-      amount: 22.99,
-    },
-    {
-      id: 's0',
-      serviceName: 'Spotify Family',
-      billingDate: t0,
-      amount: 16.99,
-    },
-    {
-      id: 'ic',
-      serviceName: 'iCloud+',
-      billingDate: addLocalDays(t0, 5),
-      amount: 2.99,
-    },
-    {
-      id: 'xb',
-      serviceName: 'Xbox Game Pass',
-      billingDate: addLocalDays(t0, 7),
-      amount: 14.99,
-    },
-    {
-      id: 'dupe',
-      serviceName: 'Hulu',
-      billingDate: addLocalDays(t0, 7),
-      amount: 9.99,
-    },
-  ];
 }
 
 export function buildCalendarStripDays(

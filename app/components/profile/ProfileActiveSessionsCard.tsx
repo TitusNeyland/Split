@@ -1,5 +1,4 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-;
 import { View, Text, StyleSheet, Pressable, Alert, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { User } from 'firebase/auth';
@@ -20,27 +19,6 @@ const C = {
   lilac: '#EEEDFE',
   purple: '#534AB7',
 };
-
-const DEMO_SESSIONS: AuthSessionEntry[] = [
-  {
-    id: 'demo_phone',
-    deviceName: 'iPhone 15 Pro',
-    deviceType: 'phone',
-    lastActive: new Date(),
-  },
-  {
-    id: 'demo_laptop',
-    deviceName: 'MacBook Pro',
-    deviceType: 'laptop',
-    lastActive: new Date(2026, 2, 14, 12, 0, 0),
-  },
-  {
-    id: 'demo_tablet',
-    deviceName: 'iPad Air',
-    deviceType: 'tablet',
-    lastActive: new Date(2026, 2, 10, 9, 0, 0),
-  },
-];
 
 function formatLastActive(d: Date): string {
   const now = new Date();
@@ -107,11 +85,11 @@ export default function ProfileActiveSessionsCard({ user, persist }: Props) {
 
   const displayList = useMemo(() => {
     if (persist && user) return sessions;
-    return DEMO_SESSIONS;
+    return [];
   }, [persist, user, sessions]);
 
   const resolveCurrentId = useMemo(() => {
-    if (!persist) return DEMO_SESSIONS[0]!.id;
+    if (!persist) return null;
     return localSessionId;
   }, [persist, localSessionId]);
 
@@ -159,6 +137,12 @@ export default function ProfileActiveSessionsCard({ user, persist }: Props) {
         <View style={styles.loadingRow}>
           <ActivityIndicator size="small" color={C.purple} />
         </View>
+      ) : displayList.length === 0 ? (
+        <Text style={styles.emptyHint}>
+          {persist && user
+            ? 'No other sessions recorded.'
+            : 'Sign in with Firebase to see where your account is active.'}
+        </Text>
       ) : (
         displayList.map((row, i) => {
           const isCurrent = resolveCurrentId != null && row.id === resolveCurrentId;
@@ -225,6 +209,13 @@ const styles = StyleSheet.create({
   loadingRow: {
     paddingVertical: 20,
     alignItems: 'center',
+  },
+  emptyHint: {
+    fontSize: 13,
+    color: C.muted,
+    paddingHorizontal: 14,
+    paddingVertical: 16,
+    lineHeight: 18,
   },
   hairline: {
     height: StyleSheet.hairlineWidth,

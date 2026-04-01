@@ -32,7 +32,6 @@ import {
   percentTotalIsExactly100,
 } from '../../../lib/subscription/addSubscriptionSplitMath';
 import { saveSubscriptionEditSplitToFirestore } from '../../../lib/subscription/editSplitFirestore';
-import { SUBSCRIPTIONS_DEMO_MODE } from '../../../lib/subscription/subscriptionsScreenDemo';
 import { useSubscriptionDetailFromFirestore } from '../../../lib/subscription/subscriptionDetailFromFirestore';
 import type { SubscriptionDetailMember } from '../../../lib/subscription/subscriptionDetailTypes';
 import type { WizardMemberRow, WizardSplitMethod } from '../../../lib/subscription/createSubscriptionWizardFirestore';
@@ -129,7 +128,7 @@ export default function EditSplitScreen() {
     firebaseUid,
     userAvatarUrl,
     viewerFirstName,
-    { enabled: Boolean(subscriptionId.trim()) && !SUBSCRIPTIONS_DEMO_MODE }
+    { enabled: Boolean(subscriptionId.trim()) }
   );
 
   const [rows, setRows] = useState<EditRow[]>([]);
@@ -444,10 +443,6 @@ export default function EditSplitScreen() {
 
   const performSave = async () => {
     if (!canSave || !detail || !firebaseUid) return;
-    if (SUBSCRIPTIONS_DEMO_MODE) {
-      Alert.alert('Demo', 'Editing splits is disabled in demo mode.');
-      return;
-    }
     setSaving(true);
     try {
       const members = buildWizardMembers();
@@ -546,17 +541,6 @@ export default function EditSplitScreen() {
     () => searchResults.filter((f) => !rows.some((r) => r.memberId === f.uid)),
     [searchResults, rows]
   );
-
-  if (SUBSCRIPTIONS_DEMO_MODE) {
-    return (
-      <View style={[styles.screen, { paddingTop: insets.top }]}>
-        <Text style={styles.bodyMuted}>Edit split is not available in demo mode.</Text>
-        <Pressable onPress={() => router.back()} style={styles.textBtn}>
-          <Text style={styles.textBtnLbl}>Go back</Text>
-        </Pressable>
-      </View>
-    );
-  }
 
   if (loading || !detail) {
     return (

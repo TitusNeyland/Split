@@ -27,8 +27,6 @@ import {
   subscriptionIsUserOverdue,
 } from '../../lib/subscription/subscriptionToCardModel';
 import { subscribeAuthAndProfile } from '../../lib/profile';
-import { SUBSCRIPTIONS_DEMO_MODE, DEMO_TAB_BADGES } from '../../lib/subscription/subscriptionsScreenDemo';
-import { SubscriptionsDemoFloatCard, SubscriptionsDemoPanel } from '../components/subscriptions/SubscriptionsDemoPanels';
 import { LiveSubscriptionCard } from '../components/subscriptions/LiveSubscriptionCard';
 import { SubscriptionCardSkeletonList } from '../components/subscriptions/SubscriptionCardSkeleton';
 import { useProfileAvatarUrl } from '../hooks/useProfileAvatarUrl';
@@ -116,21 +114,18 @@ export default function SubscriptionsScreen() {
   }, []);
 
   useEffect(() => {
-    if (SUBSCRIPTIONS_DEMO_MODE) {
-      return;
-    }
     return subscribeAuthAndProfile((s) => {
       setLastSeenPriceMap(s.profile?.lastSeenPriceChangeBySubscription ?? null);
     });
   }, []);
 
-  const memberSubscriptions = SUBSCRIPTIONS_DEMO_MODE ? [] : ctxSubscriptions;
-  const subscriptionsLoading = SUBSCRIPTIONS_DEMO_MODE ? false : ctxSubscriptionsLoading;
+  const memberSubscriptions = ctxSubscriptions;
+  const subscriptionsLoading = ctxSubscriptionsLoading;
 
   const uid = user?.uid ?? '';
 
   useEffect(() => {
-    if (SUBSCRIPTIONS_DEMO_MODE || !uid) {
+    if (!uid) {
       setEndedSubsOrdered([]);
       setEndedLoading(false);
       return;
@@ -209,11 +204,11 @@ export default function SubscriptionsScreen() {
     [confirmDeleteEnded]
   );
 
-  const monthlyTotalCents = SUBSCRIPTIONS_DEMO_MODE ? 0 : liveMonthlyTotalCents;
-  const yourShareCents = SUBSCRIPTIONS_DEMO_MODE ? 0 : liveMyShareCents;
-  const activeCount = SUBSCRIPTIONS_DEMO_MODE ? 4 : liveActiveCount;
+  const monthlyTotalCents = liveMonthlyTotalCents;
+  const yourShareCents = liveMyShareCents;
+  const activeCount = liveActiveCount;
 
-  const overdueBadge = SUBSCRIPTIONS_DEMO_MODE ? DEMO_TAB_BADGES.overdue : overdueSubs.length;
+  const overdueBadge = overdueSubs.length;
 
   return (
     <View style={styles.root}>
@@ -261,7 +256,7 @@ export default function SubscriptionsScreen() {
                 numberOfLines={1}
                 minimumFontScale={0.6}
               >
-                {SUBSCRIPTIONS_DEMO_MODE ? '$127' : heroMoneyLabel(monthlyTotalCents)}
+                {heroMoneyLabel(monthlyTotalCents)}
               </Text>
               <Text style={styles.hstatLbl} numberOfLines={1}>
                 Monthly total
@@ -274,7 +269,7 @@ export default function SubscriptionsScreen() {
                 numberOfLines={1}
                 minimumFontScale={0.6}
               >
-                {SUBSCRIPTIONS_DEMO_MODE ? '$28' : heroMoneyLabel(yourShareCents)}
+                {heroMoneyLabel(yourShareCents)}
               </Text>
               <Text style={styles.hstatLbl} numberOfLines={1}>
                 Your share
@@ -287,7 +282,7 @@ export default function SubscriptionsScreen() {
                 numberOfLines={1}
                 minimumFontScale={0.6}
               >
-                {SUBSCRIPTIONS_DEMO_MODE ? '4' : String(activeCount)}
+                {String(activeCount)}
               </Text>
               <Text style={styles.hstatLbl} numberOfLines={1}>
                 Active splits
@@ -342,31 +337,8 @@ export default function SubscriptionsScreen() {
           </View>
         </LinearGradient>
 
-        {SUBSCRIPTIONS_DEMO_MODE ? <SubscriptionsDemoFloatCard /> : null}
-
         <View style={[styles.body, { minHeight: Math.max(320, width * 0.9) }]}>
-          {SUBSCRIPTIONS_DEMO_MODE ? (
-            <SubscriptionsDemoPanel
-              filter={filter}
-              onDemoEndedDelete={() => {
-                Alert.alert(
-                  'Delete this split?',
-                  'This permanently removes the split and all its history. This cannot be undone.',
-                  [
-                    { text: 'Cancel', style: 'cancel' },
-                    {
-                      text: 'Delete',
-                      style: 'destructive',
-                      onPress: () => {
-                        Alert.alert('Demo mode', 'Deleting subscriptions is not available in the demo.');
-                      },
-                    },
-                  ]
-                );
-              }}
-            />
-          ) : (
-            <>
+          <>
               {filter === 'active' ? (
                 <View style={styles.panel}>
                   <View style={styles.sh}>
@@ -483,8 +455,7 @@ export default function SubscriptionsScreen() {
                   )}
                 </View>
               ) : null}
-            </>
-          )}
+          </>
         </View>
       </ScrollView>
 

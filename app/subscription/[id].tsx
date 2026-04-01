@@ -7,6 +7,7 @@ import {
   Pressable,
   TouchableOpacity,
   Modal,
+  Image,
   Alert,
   Share,
   BackHandler,
@@ -16,34 +17,34 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
-import { ServiceIcon } from '../../components/shared/ServiceIcon';
-import { UserAvatarCircle } from '../../components/shared/UserAvatarCircle';
-import { SubscriptionDetailSkeleton } from '../../components/subscriptions/SubscriptionDetailSkeleton';
-import { spacing } from '../../../constants/theme';
+import { ServiceIcon } from '../components/shared/ServiceIcon';
+import { SubscriptionDetailSkeleton } from '../components/subscriptions/SubscriptionDetailSkeleton';
+import { SubscriptionSplitEditor } from '../components/subscriptions/SubscriptionSplitEditor';
+import { spacing } from '../../constants/theme';
 import type {
   CyclePaymentStatus,
   SubscriptionDetailMember,
   SubscriptionHistoryCycle,
-} from '../../../lib/subscription/subscriptionDetailTypes';
-import { resendSplitInvite } from '../../../lib/subscription/resendSplitInvite';
-import { buildSplitInviteShareMessage } from '../../../lib/friends/inviteLinks';
-import { useSubscriptionDetailFromFirestore } from '../../../lib/subscription/subscriptionDetailFromFirestore';
-import { fmtCents } from '../../../lib/subscription/addSubscriptionSplitMath';
-import { useFirebaseUid } from '../../../lib/auth/useFirebaseUid';
-import { useProfileAvatarUrl } from '../../hooks/useProfileAvatarUrl';
-import { useViewerFirstName } from '../../hooks/useViewerFirstName';
-import { EndSplitConfirmSheet } from '../../components/subscriptions/EndSplitConfirmSheet';
-import { endSubscriptionSplit } from '../../../lib/subscription/endSplitFirestore';
-import { formatSettingsPercentsLine, membersOwingBeforeEndSplit } from '../../../lib/subscription/endSplitHelpers';
+} from '../../lib/subscription/subscriptionDetailTypes';
+import { resendSplitInvite } from '../../lib/subscription/resendSplitInvite';
+import { buildSplitInviteShareMessage } from '../../lib/friends/inviteLinks';
+import { useSubscriptionDetailFromFirestore } from '../../lib/subscription/subscriptionDetailFromFirestore';
+import { fmtCents } from '../../lib/subscription/addSubscriptionSplitMath';
+import { useFirebaseUid } from '../../lib/auth/useFirebaseUid';
+import { useProfileAvatarUrl } from '../hooks/useProfileAvatarUrl';
+import { useViewerFirstName } from '../hooks/useViewerFirstName';
+import { EndSplitConfirmSheet } from '../components/subscriptions/EndSplitConfirmSheet';
+import { endSubscriptionSplit } from '../../lib/subscription/endSplitFirestore';
+import { formatSettingsPercentsLine, membersOwingBeforeEndSplit } from '../../lib/subscription/endSplitHelpers';
 import {
   setPendingEndSplitToast,
   setPendingSubscriptionsTabToast,
-} from '../../../lib/subscription/endSplitNavigationToast';
-import { LeaveSplitConfirmSheet } from '../../components/subscriptions/LeaveSplitConfirmSheet';
-import { leaveSubscriptionSplit } from '../../../lib/subscription/leaveSplitFirestore';
-import { clearOwnerMemberLeftBanner } from '../../../lib/subscription/clearOwnerMemberLeftBannerFirestore';
-import { clearSplitInviteDeclineNotices } from '../../../lib/subscription/splitInviteDeclineNoticesFirestore';
-import { removePendingSplitInvite } from '../../../lib/subscription/removePendingSplitInviteFirestore';
+} from '../../lib/subscription/endSplitNavigationToast';
+import { LeaveSplitConfirmSheet } from '../components/subscriptions/LeaveSplitConfirmSheet';
+import { leaveSubscriptionSplit } from '../../lib/subscription/leaveSplitFirestore';
+import { clearOwnerMemberLeftBanner } from '../../lib/subscription/clearOwnerMemberLeftBannerFirestore';
+import { clearSplitInviteDeclineNotices } from '../../lib/subscription/splitInviteDeclineNoticesFirestore';
+import { removePendingSplitInvite } from '../../lib/subscription/removePendingSplitInviteFirestore';
 
 const C = {
   bg: '#F2F0EB',
@@ -66,6 +67,16 @@ function statusMeta(status: CyclePaymentStatus): { label: string; bg: string; fg
   if (status === 'paid') return { label: 'Paid', bg: '#E1F5EE', fg: C.greenDark };
   if (status === 'overdue') return { label: 'Overdue', bg: '#FCEBEB', fg: '#A32D2D' };
   return { label: 'Pending', bg: C.cream, fg: C.amber };
+}
+
+function useNextBillingCycleStart() {
+  return useMemo(() => {
+    const d = new Date();
+    d.setMonth(d.getMonth() + 1);
+    d.setDate(1);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }, []);
 }
 
 function daysLeftFromMs(ms: number | null | undefined): number {
@@ -123,6 +134,9 @@ export default function SubscriptionDetailScreen() {
   const { avatarUrl: userAvatarUrl, displayName: profileDisplayName } = useProfileAvatarUrl();
   const { firstName: viewerFirstName } = useViewerFirstName();
   const firebaseUid = useFirebaseUid();
+  const nextCycleStart = useNextBillingCycleStart();
+
+  const [editorOpen, setEditorOpen] = useState(false);
   const [historyModalCycle, setHistoryModalCycle] = useState<SubscriptionHistoryCycle | null>(null);
   const [detailRetryKey, setDetailRetryKey] = useState(0);
   const [resendBusyId, setResendBusyId] = useState<string | null>(null);
@@ -164,10 +178,8 @@ export default function SubscriptionDetailScreen() {
     }
   }, [subscriptionId, router]);
 
-  const navigateToEditSplit = useCallback(() => {
-    if (!subscriptionId.trim()) return;
-    router.push(`/subscription/${subscriptionId.trim()}/edit-split` as never);
-  }, [router, subscriptionId]);
+  const openEditor = useCallback(() => setEditorOpen(true), []);
+  const closeEditor = useCallback(() => setEditorOpen(false), []);
 
   const handleEndSplit = () => {
     setEndSplitSheetOpen(true);
@@ -217,11 +229,6 @@ export default function SubscriptionDetailScreen() {
   const viewerMemberRow = useMemo(() => {
     if (!detail || !firebaseUid) return null;
     return detail.members.find((m) => m.memberId === firebaseUid) ?? null;
-  }, [detail, firebaseUid]);
-
-  const viewerIsMember = useMemo(() => {
-    if (!detail || !firebaseUid) return true;
-    return detail.members.some((m) => m.memberId === firebaseUid);
   }, [detail, firebaseUid]);
 
   const leaveSplitSheetModel = useMemo(() => {
@@ -334,7 +341,7 @@ export default function SubscriptionDetailScreen() {
                     `You removed ${name} from this split. Update the split percentages to redistribute their share.`,
                     [
                       { text: 'Later', style: 'cancel' },
-                      { text: 'Edit split', onPress: () => navigateToEditSplit() },
+                      { text: 'Edit split', onPress: () => setEditorOpen(true) },
                     ]
                   );
                 } catch (e) {
@@ -348,7 +355,7 @@ export default function SubscriptionDetailScreen() {
         ]
       );
     },
-    [detail?.isOwner, firebaseUid, subscriptionId, navigateToEditSplit],
+    [detail?.isOwner, firebaseUid, subscriptionId],
   );
 
   if (subscriptionId.trim() && firebaseUid && liveLoading) {
@@ -453,35 +460,6 @@ export default function SubscriptionDetailScreen() {
         </Pressable>
         <Text style={styles.unknownTitle}>This subscription could not be found</Text>
         <Text style={styles.unknownSub}>It may have been removed, or the link is invalid.</Text>
-      </View>
-    );
-  }
-
-  if (firebaseUid && !detail.isOwner && !viewerIsMember) {
-    return (
-      <View style={[styles.unknownRoot, { paddingTop: insets.top + 12 }]}>
-        <StatusBar style="dark" />
-        <Pressable
-          onPress={navigateBack}
-          style={styles.unknownBack}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-        >
-          <Ionicons name="chevron-back" size={28} color={C.purple} />
-        </Pressable>
-        <Ionicons name="information-circle-outline" size={40} color={C.muted} style={{ marginBottom: 12 }} />
-        <Text style={styles.unknownTitle}>You don&apos;t have access to this split</Text>
-        <Text style={styles.unknownSub}>
-          {`You’re no longer a member of ${detail.displayName.trim() || 'this subscription'}. If you were removed, ask the owner to re-invite you.`}
-        </Text>
-        <Pressable
-          style={styles.unknownPrimaryBtn}
-          onPress={navigateBack}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-        >
-          <Text style={styles.unknownPrimaryBtnTxt}>Go back</Text>
-        </Pressable>
       </View>
     );
   }
@@ -595,7 +573,7 @@ export default function SubscriptionDetailScreen() {
               </View>
               <View style={styles.declinedBannerActions}>
                 <Pressable
-                  onPress={() => navigateToEditSplit()}
+                  onPress={() => setEditorOpen(true)}
                   style={({ pressed }) => [styles.declinedBannerBtn, pressed && styles.declinedBannerBtnPressed]}
                   accessibilityRole="button"
                   accessibilityLabel="Invite someone else"
@@ -645,7 +623,7 @@ export default function SubscriptionDetailScreen() {
           {!ended && detail.isOwner && detail.customSplitNeedsRebalance ? (
             <Pressable
               style={styles.ownerRebalanceBanner}
-              onPress={() => navigateToEditSplit()}
+              onPress={() => setEditorOpen(true)}
               accessibilityRole="button"
               accessibilityLabel="Edit split to fix percentages"
             >
@@ -747,14 +725,7 @@ export default function SubscriptionDetailScreen() {
                         <Text style={[styles.splitPct, styles.splitTextEnded]}>Invite not accepted</Text>
                       </View>
                       <View style={styles.splitRowRight}>
-                        <Text
-                          style={[styles.splitAmt, styles.splitTextEnded]}
-                          adjustsFontSizeToFit
-                          numberOfLines={1}
-                          minimumFontScale={0.6}
-                        >
-                          {fmtCents(m.amountCents)}
-                        </Text>
+                        <Text style={[styles.splitAmt, styles.splitTextEnded]}>{fmtCents(m.amountCents)}</Text>
                         <View style={[styles.statusBadge, { backgroundColor: '#F0EEE9' }]}>
                           <Text style={[styles.statusBadgeTxt, { color: C.muted }]}>Ended</Text>
                         </View>
@@ -812,17 +783,26 @@ export default function SubscriptionDetailScreen() {
                 : statusMeta(m.cycleStatus);
               return (
                 <View key={m.memberId} style={styles.splitRow}>
-                  <View style={[styles.splitPip, styles.splitPipPhoto, ended && styles.splitPipEnded]}>
-                    <UserAvatarCircle
-                      size={36}
-                      uid={m.memberId}
-                      initials={m.initials}
-                      imageUrl={m.avatarUrl}
-                      initialsBackgroundColor={ended ? '#F0EEE9' : m.avatarBg}
-                      initialsTextColor={ended ? C.muted : m.avatarColor}
-                      accessibilityLabel={m.displayName}
-                    />
-                  </View>
+                  {m.avatarUrl ? (
+                    <View style={[styles.splitPip, styles.splitPipPhoto, ended && styles.splitPipEnded]}>
+                      <Image
+                        source={{ uri: m.avatarUrl }}
+                        style={styles.splitPipImg}
+                        accessibilityLabel={m.displayName}
+                      />
+                    </View>
+                  ) : (
+                    <View
+                      style={[
+                        styles.splitPip,
+                        { backgroundColor: ended ? '#F0EEE9' : m.avatarBg },
+                      ]}
+                    >
+                      <Text style={[styles.splitPipTxt, { color: ended ? C.muted : m.avatarColor }]}>
+                        {m.initials}
+                      </Text>
+                    </View>
+                  )}
                   <View style={styles.splitRowMid}>
                     <Text style={[styles.splitName, ended && styles.splitTextEnded]} numberOfLines={1}>
                       {m.displayName}
@@ -830,14 +810,7 @@ export default function SubscriptionDetailScreen() {
                     <Text style={[styles.splitPct, ended && styles.splitTextEnded]}>{m.percent}%</Text>
                   </View>
                   <View style={styles.splitRowRight}>
-                    <Text
-                      style={[styles.splitAmt, ended && styles.splitTextEnded]}
-                      adjustsFontSizeToFit
-                      numberOfLines={1}
-                      minimumFontScale={0.6}
-                    >
-                      {fmtCents(m.amountCents)}
-                    </Text>
+                    <Text style={[styles.splitAmt, ended && styles.splitTextEnded]}>{fmtCents(m.amountCents)}</Text>
                     <View style={[styles.statusBadge, { backgroundColor: st.bg }]}>
                       <Text style={[styles.statusBadgeTxt, { color: st.fg }]}>{st.label}</Text>
                     </View>
@@ -860,28 +833,33 @@ export default function SubscriptionDetailScreen() {
                 <View style={styles.progTrack}>
                   <View style={[styles.progFill, { width: `${pctCollected}%` }]} />
                 </View>
-                <Text
-                  style={styles.progCaption}
-                  adjustsFontSizeToFit
-                  numberOfLines={2}
-                  minimumFontScale={0.6}
-                >
+                <Text style={styles.progCaption}>
                   {detail.paidMemberCount} of {activeMemberCount} members paid ·{' '}
                   {fmtCents(detail.collectedCents)} collected of {fmtCents(activeTotal)} total
                 </Text>
               </>
             ) : null}
-            {!ended && detail.isOwner ? (
+            {!ended && !editorOpen ? (
               <Pressable
                 style={({ pressed }) => [styles.editLinkRow, pressed && styles.editLinkRowPressed]}
-                onPress={navigateToEditSplit}
+                onPress={openEditor}
                 hitSlop={{ top: 10, bottom: 10, left: 12, right: 12 }}
                 accessibilityRole="button"
-                accessibilityLabel="Edit split"
+                accessibilityLabel="Edit split for next billing cycle"
               >
                 <Ionicons name="create-outline" size={14} color={C.editLink} />
                 <Text style={styles.editLinkTxt}>Edit split</Text>
               </Pressable>
+            ) : null}
+            {!ended && editorOpen ? (
+              <SubscriptionSplitEditor
+                subscriptionId={detail.id}
+                totalCents={detail.totalCents}
+                members={detail.editorMembers}
+                nextCycleEffectiveFrom={nextCycleStart}
+                onCancel={closeEditor}
+                onSaved={closeEditor}
+              />
             ) : null}
           </View>
 
@@ -895,19 +873,8 @@ export default function SubscriptionDetailScreen() {
                 accessibilityRole="button"
                 accessibilityLabel={`${row.label}, ${row.allPaid ? 'all paid' : 'partial'}`}
               >
-                <Text style={styles.historyMonth} numberOfLines={1}>
-                  {row.label}
-                </Text>
-                <View style={styles.historyTotalWrap}>
-                  <Text
-                    style={styles.historyTotal}
-                    adjustsFontSizeToFit
-                    numberOfLines={1}
-                    minimumFontScale={0.6}
-                  >
-                    {fmtCents(row.totalCents)}
-                  </Text>
-                </View>
+                <Text style={styles.historyMonth}>{row.label}</Text>
+                <Text style={styles.historyTotal}>{fmtCents(row.totalCents)}</Text>
                 <View
                   style={[
                     styles.historyPill,
@@ -1482,7 +1449,6 @@ const styles = StyleSheet.create({
     color: C.muted,
     marginTop: 8,
     lineHeight: 17,
-    width: '100%',
   },
   editLinkRow: {
     flexDirection: 'row',
@@ -1514,24 +1480,15 @@ const styles = StyleSheet.create({
   },
   historyMonth: {
     flex: 1,
-    minWidth: 0,
     fontSize: 16,
     fontWeight: '500',
     color: C.text,
-  },
-  historyTotalWrap: {
-    flexShrink: 1,
-    minWidth: 0,
-    maxWidth: '38%',
-    marginRight: 4,
-    alignItems: 'flex-end',
   },
   historyTotal: {
     fontSize: 15,
     fontWeight: '600',
     color: C.text,
-    width: '100%',
-    textAlign: 'right',
+    marginRight: 4,
   },
   historyPill: {
     paddingHorizontal: 10,

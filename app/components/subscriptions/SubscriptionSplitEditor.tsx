@@ -54,8 +54,6 @@ export type SubscriptionSplitEditorProps = {
   nextCycleEffectiveFrom: Date;
   onCancel: () => void;
   onSaved?: () => void;
-  /** If true, skip Firestore (e.g. design demo). */
-  skipFirestore?: boolean;
 };
 
 function methodToFirestore(m: SplitEditorMode): FirestoreSplitMethod {
@@ -71,7 +69,6 @@ export function SubscriptionSplitEditor({
   nextCycleEffectiveFrom,
   onCancel,
   onSaved,
-  skipFirestore = false,
 }: SubscriptionSplitEditorProps) {
   const n = members.length;
 
@@ -215,21 +212,19 @@ export function SubscriptionSplitEditor({
     setSaving(true);
     try {
       const shares = buildMemberShares();
-      if (!skipFirestore) {
-        const auth = getFirebaseAuth();
-        const uid = auth?.currentUser?.uid;
-        if (!uid) {
-          throw new Error('Sign in to save split changes.');
-        }
-        await saveSubscriptionSplitToFirestore({
-          subscriptionId,
-          actorUid: uid,
-          method: methodToFirestore(mode),
-          memberShares: shares,
-          effectiveFrom: nextCycleEffectiveFrom,
-          previousSnapshot: null,
-        });
+      const auth = getFirebaseAuth();
+      const uid = auth?.currentUser?.uid;
+      if (!uid) {
+        throw new Error('Sign in to save split changes.');
       }
+      await saveSubscriptionSplitToFirestore({
+        subscriptionId,
+        actorUid: uid,
+        method: methodToFirestore(mode),
+        memberShares: shares,
+        effectiveFrom: nextCycleEffectiveFrom,
+        previousSnapshot: null,
+      });
       onSaved?.();
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);

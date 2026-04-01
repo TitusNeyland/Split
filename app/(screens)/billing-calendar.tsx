@@ -15,8 +15,6 @@ import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { getFirebaseAuth } from '../../lib/firebase';
-import { SUBSCRIPTIONS_DEMO_MODE } from '../../lib/subscription/subscriptionsScreenDemo';
-import { getBillingCalendarDemoSubscriptions } from '../../lib/subscription/billingCalendarDemo';
 import { subscribeBillingCalendarSubscriptions } from '../../lib/subscription/billingCalendarFirestore';
 import {
   billsForMonth,
@@ -74,10 +72,6 @@ export default function BillingCalendarScreen() {
   }, []);
 
   useEffect(() => {
-    if (SUBSCRIPTIONS_DEMO_MODE) {
-      setSubs(getBillingCalendarDemoSubscriptions());
-      return;
-    }
     const uid = user?.uid;
     if (!uid) {
       setSubs([]);

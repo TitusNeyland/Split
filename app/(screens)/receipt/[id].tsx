@@ -1,5 +1,4 @@
 import React, { useMemo } from 'react';
-;
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { useLocalSearchParams, Stack } from 'expo-router';
 import { ServiceIcon } from '../../components/shared/ServiceIcon';

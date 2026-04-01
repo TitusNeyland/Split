@@ -9,16 +9,14 @@ import { acknowledgeSubscriptionPriceChange } from './subscriptionPriceChangeAck
 
 export type UseSubscriptionPriceBannerArgs = {
   subscriptionId: string;
-  /** Current user; required to persist dismiss unless skipFirestore. */
+  /** Current user; required to persist dismiss to Firestore. */
   uid: string | null;
-  /** Subset of subscription fields from Firestore (or demo). */
+  /** Subset of subscription fields from Firestore. */
   subscription: SubscriptionPriceBannerFields | null;
   /**
    * `users/{uid}.lastSeenPriceChangeBySubscription[subscriptionId]` as millis, if any.
    */
   userLastSeenPriceChangeMs: number | null;
-  /** Demo / offline: only hide locally, no Firestore. */
-  skipFirestore?: boolean;
 };
 
 export function useSubscriptionPriceBanner({
@@ -26,7 +24,6 @@ export function useSubscriptionPriceBanner({
   uid,
   subscription,
   userLastSeenPriceChangeMs,
-  skipFirestore = false,
 }: UseSubscriptionPriceBannerArgs) {
   const [optimisticDismissed, setOptimisticDismissed] = useState(false);
 
@@ -53,14 +50,14 @@ export function useSubscriptionPriceBanner({
 
   const dismiss = useCallback(async () => {
     setOptimisticDismissed(true);
-    if (skipFirestore || !uid) return;
+    if (!uid) return;
     try {
       await acknowledgeSubscriptionPriceChange(uid, subscriptionId);
     } catch (e) {
       setOptimisticDismissed(false);
       throw e;
     }
-  }, [skipFirestore, uid, subscriptionId]);
+  }, [uid, subscriptionId]);
 
   return {
     visible,

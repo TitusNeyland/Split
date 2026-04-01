@@ -12,12 +12,6 @@ const C = {
   skeleton: '#E5E2DC',
 };
 
-const DEMO_STATS: ProfileStats = {
-  collectedTotalCents: 31800,
-  friends: 7,
-  loading: { collectedTotal: false, friends: false },
-};
-
 function PulsingBar({ style }: { style: ViewStyle }) {
   const op = useRef(new Animated.Value(0.45)).current;
   useEffect(() => {
@@ -62,35 +56,27 @@ function StatColumn({
 
 type Props = {
   uid: string | null;
-  /** When true, show design-time demo numbers (no Firestore). */
-  demoMode: boolean;
 };
 
-export default function ProfileStatsCard({ uid, demoMode }: Props) {
+export default function ProfileStatsCard({ uid }: Props) {
   const { activeCount: liveActiveSplits, loading: subscriptionsLoading } = useSubscriptions();
-  const [stats, setStats] = useState<ProfileStats>(() =>
-    demoMode ? DEMO_STATS : emptyIdle()
-  );
+  const [stats, setStats] = useState<ProfileStats>(() => emptyIdle());
 
   useEffect(() => {
-    if (demoMode) {
-      setStats(DEMO_STATS);
-      return;
-    }
     if (!uid) {
       setStats(emptyIdle());
       return;
     }
     setStats(allLoading());
     return subscribeProfileStats(uid, setStats);
-  }, [uid, demoMode]);
+  }, [uid]);
 
   return (
     <View style={styles.card}>
       <View style={styles.row}>
         <StatColumn
-          loading={demoMode ? false : Boolean(uid) && subscriptionsLoading}
-          value={demoMode ? 4 : liveActiveSplits}
+          loading={Boolean(uid) && subscriptionsLoading}
+          value={liveActiveSplits}
           label="Active splits"
         />
         <View style={styles.divider} />

@@ -22,6 +22,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useScrollToTop } from '@react-navigation/native';
 import { getFriendFilterDisplayName } from '../../lib/profile';
+import { useHomeFriendDirectory } from '../../lib/home/useFriendUidsFromFirestore';
 import { ServiceIcon } from '../components/shared/ServiceIcon';
 import { UserAvatarCircle } from '../components/shared/UserAvatarCircle';
 import { recordManualSettlement } from '../../lib/payment/paymentsFirestore';
@@ -656,6 +657,7 @@ export default function ActivityScreen() {
   const scrollRef = useRef<ScrollView>(null);
   useScrollToTop(scrollRef);
   const uid = useFirebaseUid();
+  const { displayNameByUid } = useHomeFriendDirectory(uid);
   const { subscriptions, loading: subscriptionsLoading, owedToYouCents } = useSubscriptions();
   const router = useRouter();
   const params = useLocalSearchParams<{
@@ -681,6 +683,11 @@ export default function ActivityScreen() {
     const v = Array.isArray(raw) ? raw[0] : raw;
     return v && String(v).trim() !== '' ? String(v).trim() : null;
   }, [params.friendId]);
+
+  const friendFilterDisplayName = useMemo(
+    () => (friendIdFilter ? getFriendFilterDisplayName(friendIdFilter, displayNameByUid) : ''),
+    [friendIdFilter, displayNameByUid]
+  );
 
   useEffect(() => {
     if (friendIdFilter) {
@@ -951,7 +958,7 @@ export default function ActivityScreen() {
           {friendIdFilter ? (
             <View style={styles.friendFilterBar}>
               <Text style={styles.friendFilterLabel} numberOfLines={1}>
-                With {getFriendFilterDisplayName(friendIdFilter)}
+                With {friendFilterDisplayName}
               </Text>
               <Pressable
                 onPress={() => router.replace('/activity')}
@@ -1053,7 +1060,7 @@ export default function ActivityScreen() {
             <View style={styles.feedEmpty}>
               <Text style={styles.feedEmptyText}>
                 {friendIdFilter
-                  ? `No activity with ${getFriendFilterDisplayName(friendIdFilter)} yet.`
+                  ? `No activity with ${friendFilterDisplayName} yet.`
                   : filter === 'payments'
                     ? 'No payment activity yet.'
                     : filter === 'splits'

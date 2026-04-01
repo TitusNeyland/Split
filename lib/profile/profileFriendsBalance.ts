@@ -26,46 +26,6 @@ export type ProfileFriendBalanceRow =
       amount: number;
     };
 
-/** Total friends for collapsed summary (e.g. avatar stack + “+3”). Wire from Firestore later. */
-export const PROFILE_TOTAL_FRIEND_COUNT = 7;
-
-/** Demo / design-time rows; replace with Firestore-derived data later. */
-export const PROFILE_FRIEND_BALANCES: ProfileFriendBalanceRow[] = [
-  {
-    id: 'sam',
-    kind: 'they_owe_overdue',
-    displayName: 'Sam M.',
-    initials: 'SM',
-    subLine: 'Netflix · 3 days overdue',
-    subscriptionCountLabel: '2 subscriptions',
-    amount: 5.33,
-  },
-  {
-    id: 'alex',
-    kind: 'they_owe_pending',
-    displayName: 'Alex L.',
-    initials: 'AL',
-    subLine: 'Spotify Family · due in 7 days',
-    subscriptionCountLabel: '3 subscriptions',
-    amount: 3.4,
-  },
-  {
-    id: 'taylor',
-    kind: 'settled',
-    displayName: 'Taylor R.',
-    initials: 'TR',
-    subLine: 'Xbox Game Pass · all caught up',
-    subscriptionCountLabel: '1 subscription',
-  },
-  {
-    id: 'casey',
-    kind: 'you_owe',
-    counterpartyShortName: 'Casey P.',
-    subscriptionCountLabel: 'Dinner split',
-    amount: 7.0,
-  },
-];
-
 export function computeNetBarTotals(rows: ProfileFriendBalanceRow[]): {
   owedToYou: number;
   youOwe: number;
@@ -164,16 +124,14 @@ export function getStackEntriesFromProfileRows(
   });
 }
 
-/** @deprecated Demo-only; prefer `getStackEntriesFromProfileRows` with live rows. */
-export function getProfileFriendStackEntries(): { id: string; initials: string }[] {
-  return getStackEntriesFromProfileRows(PROFILE_FRIEND_BALANCES);
-}
-
-export function getFriendFilterDisplayName(friendId: string): string {
-  const r = PROFILE_FRIEND_BALANCES.find((x) => x.id === friendId);
-  if (!r) return friendId;
-  if (r.kind === 'you_owe') return r.counterpartyShortName;
-  return r.displayName;
+/** Resolve a friend id for Activity filter UI; pass `displayNameByUid` from `useHomeFriendDirectory`. */
+export function getFriendFilterDisplayName(
+  friendId: string,
+  displayNameByUid?: Record<string, string> | null
+): string {
+  const n = displayNameByUid?.[friendId]?.trim();
+  if (n) return n;
+  return 'Friend';
 }
 
 /** Row for the Friends hub list (avatar, net line, shared subs). */
@@ -189,15 +147,6 @@ export type FriendsHubFriendRow = {
   /** Primary amount color for the main balance line. */
   balanceTone: 'green' | 'red' | 'amber' | 'gray';
 };
-
-function toSharedSubsLabel(subscriptionCountLabel: string): string {
-  const m = subscriptionCountLabel.match(/^(\d+)\s+/);
-  if (m) {
-    const n = Number(m[1]);
-    return `${n} shared subscription${n === 1 ? '' : 's'}`;
-  }
-  return subscriptionCountLabel.replace(/\bsubscription\b/i, 'shared subscription');
-}
 
 /**
  * Friends hub list rows from live subscriptions + friendships + display names.
@@ -271,56 +220,3 @@ export function buildFriendsHubFriendRowsFromSubscriptions(
   });
 }
 
-/** @deprecated Demo-only; use buildFriendsHubFriendRowsFromSubscriptions with Firestore data. */
-export function getFriendsHubFriendRows(): FriendsHubFriendRow[] {
-  return PROFILE_FRIEND_BALANCES.map((row): FriendsHubFriendRow => {
-    if (row.kind === 'you_owe') {
-      return {
-        id: row.id,
-        displayName: row.counterpartyShortName.replace(/\.$/, '') || row.counterpartyShortName,
-        initials: (() => {
-          const parts = row.counterpartyShortName.trim().split(/\s+/).filter(Boolean);
-          if (parts.length >= 2) {
-            return `${parts[0]![0] ?? ''}${parts[1]![0] ?? ''}`.toUpperCase();
-          }
-          return row.counterpartyShortName.slice(0, 2).toUpperCase() || '?';
-        })(),
-        sharedSubsLabel: toSharedSubsLabel(row.subscriptionCountLabel),
-        balanceMain: `you owe ${formatUsdDollarsFixed2(row.amount)}`,
-        balanceSub: 'Tap activity for details',
-        balanceTone: 'red',
-      };
-    }
-    if (row.kind === 'they_owe_overdue') {
-      return {
-        id: row.id,
-        displayName: row.displayName,
-        initials: row.initials,
-        sharedSubsLabel: toSharedSubsLabel(row.subscriptionCountLabel),
-        balanceMain: `owes ${formatUsdDollarsFixed2(row.amount ?? 0)}`,
-        balanceSub: row.subLine,
-        balanceTone: 'red',
-      };
-    }
-    if (row.kind === 'they_owe_pending') {
-      return {
-        id: row.id,
-        displayName: row.displayName,
-        initials: row.initials,
-        sharedSubsLabel: toSharedSubsLabel(row.subscriptionCountLabel),
-        balanceMain: `owes ${formatUsdDollarsFixed2(row.amount ?? 0)}`,
-        balanceSub: row.subLine,
-        balanceTone: 'green',
-      };
-    }
-    return {
-      id: row.id,
-      displayName: row.displayName,
-      initials: row.initials,
-      sharedSubsLabel: toSharedSubsLabel(row.subscriptionCountLabel),
-      balanceMain: 'settled',
-      balanceSub: 'all clear',
-      balanceTone: 'gray',
-    };
-  });
-}

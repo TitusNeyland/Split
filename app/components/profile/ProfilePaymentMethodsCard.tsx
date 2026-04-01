@@ -1,5 +1,4 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-;
 import {
   View,
   Text,
@@ -124,32 +123,10 @@ function CardRowInner({
   );
 }
 
-const DEMO_CARD: SavedCardPm = {
-  id: 'demo',
-  brand: 'visa',
-  last4: '4242',
-  expMonth: 8,
-  expYear: 2027,
-  isDefault: true,
-};
-
-function ProfilePaymentMethodsDemo() {
+function ProfilePaymentMethodsUnavailable() {
   return (
     <View style={styles.card}>
-      <View style={styles.pmRow}>
-        <BrandMark brand={DEMO_CARD.brand} />
-        <View style={styles.pmMid}>
-          <View style={styles.titleRow}>
-            <Text style={styles.pmTitle}>Visa •••• 4242</Text>
-            <View style={styles.defaultPill}>
-              <Text style={styles.defaultPillTxt}>Default</Text>
-            </View>
-          </View>
-          <Text style={styles.pmSub}>Expires 08/27 · default</Text>
-        </View>
-        <Ionicons name="chevron-forward" size={18} color="#C8C6C0" />
-      </View>
-      <View style={styles.hairline} />
+      <Text style={styles.emptyHint}>No cards saved yet.</Text>
       <Pressable
         style={({ pressed }) => [styles.addRow, pressed && styles.rowPressed]}
         onPress={() =>
@@ -160,6 +137,8 @@ function ProfilePaymentMethodsDemo() {
               : 'Set EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY and run the API server with STRIPE_SECRET_KEY to add cards.'
           )
         }
+        accessibilityRole="button"
+        accessibilityLabel="Add payment method"
       >
         <View style={styles.addIconBox}>
           <Ionicons name="add" size={22} color={C.purple} />
@@ -435,10 +414,10 @@ function ProfilePaymentMethodsLive({ user, userEmail, stripeCustomerId }: BasePr
 
 export default function ProfilePaymentMethodsCard(props: BaseProps) {
   if (Platform.OS === 'web' || !hasStripePublishableKey()) {
-    return <ProfilePaymentMethodsDemo />;
+    return <ProfilePaymentMethodsUnavailable />;
   }
   if (!isFirebaseConfigured() || !props.user) {
-    return <ProfilePaymentMethodsDemo />;
+    return <ProfilePaymentMethodsUnavailable />;
   }
   return <ProfilePaymentMethodsLive {...props} />;
 }
