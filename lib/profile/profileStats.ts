@@ -1,5 +1,6 @@
 import {
   collection,
+  doc,
   onSnapshot,
   query,
   where,
@@ -8,45 +9,40 @@ import {
 import { getFirebaseFirestore } from '../firebase';
 
 /**
- * Firestore shape (create composite indexes as prompted by the SDK):
- * - subscriptions: members (array-contains) + status == "active"
- * - payments: recipient == uid + status == "paid" (documents use numeric `amount` in dollars)
- * - friendships: `users` array-contains current uid (top-level collection)
+ * Firestore shape:
+ * - `users/{uid}.stats.lifetimeCollected` — integer cents (maintained when payments are confirmed)
+ * - friendships: `users` array-contains current uid
  */
 export type ProfileStatsLoading = {
-  activeSplits: boolean;
   collectedTotal: boolean;
   friends: boolean;
 };
 
 export type ProfileStats = {
-  activeSplits: number;
-  collectedTotal: number;
+  /** Lifetime total received as split owner (cents). */
+  collectedTotalCents: number;
   friends: number;
   loading: ProfileStatsLoading;
 };
 
 function emptyStats(loadingAll: boolean): ProfileStats {
   return {
-    activeSplits: 0,
-    collectedTotal: 0,
+    collectedTotalCents: 0,
     friends: 0,
     loading: {
-      activeSplits: loadingAll,
       collectedTotal: loadingAll,
       friends: loadingAll,
     },
   };
 }
 
-function sumPaymentAmounts(docs: { data: () => Record<string, unknown> }[]): number {
-  let total = 0;
-  for (const d of docs) {
-    const x = d.data();
-    const a = x.amount;
-    if (typeof a === 'number' && Number.isFinite(a)) total += a;
+function readLifetimeCollectedCents(data: Record<string, unknown>): number {
+  const stats = data.stats;
+  if (stats && typeof stats === 'object' && !Array.isArray(stats)) {
+    const v = (stats as { lifetimeCollected?: unknown }).lifetimeCollected;
+    if (typeof v === 'number' && Number.isFinite(v)) return Math.max(0, Math.round(v));
   }
-  return total;
+  return 0;
 }
 
 export function subscribeProfileStats(uid: string, onUpdate: (stats: ProfileStats) => void): () => void {
@@ -62,8 +58,7 @@ export function subscribeProfileStats(uid: string, onUpdate: (stats: ProfileStat
   const emit = () => {
     if (!alive) return;
     onUpdate({
-      activeSplits: data.activeSplits,
-      collectedTotal: data.collectedTotal,
+      collectedTotalCents: data.collectedTotalCents,
       friends: data.friends,
       loading: { ...data.loading },
     });
@@ -73,34 +68,15 @@ export function subscribeProfileStats(uid: string, onUpdate: (stats: ProfileStat
 
   unsubs.push(
     onSnapshot(
-      query(
-        collection(db, 'subscriptions'),
-        where('members', 'array-contains', uid),
-        where('status', '==', 'active')
-      ),
+      doc(db, 'users', uid),
       (snap) => {
-        data.activeSplits = snap.size;
-        data.loading.activeSplits = false;
-        emit();
-      },
-      () => {
-        data.activeSplits = 0;
-        data.loading.activeSplits = false;
-        emit();
-      }
-    )
-  );
-
-  unsubs.push(
-    onSnapshot(
-      query(collection(db, 'payments'), where('recipient', '==', uid), where('status', '==', 'paid')),
-      (snap) => {
-        data.collectedTotal = sumPaymentAmounts(snap.docs);
+        const raw = snap.exists() ? (snap.data() as Record<string, unknown>) : {};
+        data.collectedTotalCents = readLifetimeCollectedCents(raw);
         data.loading.collectedTotal = false;
         emit();
       },
       () => {
-        data.collectedTotal = 0;
+        data.collectedTotalCents = 0;
         data.loading.collectedTotal = false;
         emit();
       }

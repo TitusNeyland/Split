@@ -5,7 +5,6 @@ import {
   subscriptionDisplayName,
   type BillingMemberStatus,
 } from './billingCalendarModel';
-import { hasInvitePendingInShares } from './subscriptionSplitRecalc';
 import {
   formatFirstChargeDateShort,
   getNextFirstChargeDate,
@@ -331,39 +330,86 @@ function getSplitShares(data: Record<string, unknown>): ShareRow[] {
   return arr.filter((x) => x && typeof x === 'object') as ShareRow[];
 }
 
-/** Viewer share in cents (legacy splitMemberShares or object members). */
-export function getViewerShareCents(data: Record<string, unknown>, viewerUid: string): number {
-  const total = getTotalCents(data);
+/**
+ * Single source of truth for a member's share of `totalCost` / `totalCents` (always integer cents).
+ * Prefer denormalized `splitMemberShares[].amountCents` when present (includes Option A owner = full total
+ * while invites are pending); otherwise compute from the `members` roster.
+ */
+export function getMemberAmountCents(data: Record<string, unknown>, memberUid: string): number {
+  if (!memberUid) return 0;
   const shares = getSplitShares(data);
   if (shares.length > 0) {
-    const ownerId = getOwnerId(data);
-    if (
-      viewerUid &&
-      ownerId === viewerUid &&
-      hasInvitePendingInShares(shares as { role?: string; invitePending?: boolean; inviteExpired?: boolean }[])
-    ) {
-      return Math.round(total);
-    }
-    const row = shares.find((s) => String(s.memberId) === viewerUid);
+    const row = shares.find((s) => String(s.memberId) === memberUid);
     if (row && typeof row.amountCents === 'number' && Number.isFinite(row.amountCents)) {
+      if (isShareRowUnfilledInviteSlot(data, row as ShareRow)) return 0;
       return Math.round(row.amountCents);
     }
   }
+
+  return computeMemberShareFromRosterOnly(data, memberUid);
+}
+
+/**
+ * Planned personal share from the `members` roster only (fixed / % / equal among participants).
+ * Includes **pending** invitees (not yet accepted) so Subscriptions "Your share" matches the planned
+ * split. Excludes `left` / `expired` / unknown. When there is no object roster, falls back to
+ * {@link getMemberAmountCents}.
+ */
+export function getMemberPlannedShareCents(data: Record<string, unknown>, memberUid: string): number {
   const members = data.members;
-  if (Array.isArray(members) && members.length && typeof members[0] === 'object') {
-    const m = (members as { uid?: string; fixedAmount?: number; percentage?: number }[]).find(
-      (x) => x.uid === viewerUid
-    );
-    if (m) {
-      if (typeof m.fixedAmount === 'number' && Number.isFinite(m.fixedAmount)) {
-        return Math.round(m.fixedAmount);
-      }
-      if (typeof m.percentage === 'number' && Number.isFinite(m.percentage)) {
-        return Math.round((total * m.percentage) / 100);
-      }
-    }
+  if (!Array.isArray(members) || !members.length || typeof members[0] !== 'object') {
+    return getMemberAmountCents(data, memberUid);
   }
-  return 0;
+  return computeMemberShareFromRosterOnly(data, memberUid);
+}
+
+/** Roster rows that still count toward the planned split (invited-but-not-accepted = pending). */
+function rosterMemberIncludedInPlannedShare(memberStatus: string): boolean {
+  const s = memberStatus.toLowerCase();
+  return s === 'active' || s === 'pending';
+}
+
+function rosterParticipantCountForEqualSplit(members: Record<string, unknown>[]): number {
+  let n = 0;
+  for (const x of members) {
+    if (!x || typeof x !== 'object') continue;
+    const st = String((x as { memberStatus?: string }).memberStatus ?? '').toLowerCase();
+    if (rosterMemberIncludedInPlannedShare(st)) n += 1;
+  }
+  return n;
+}
+
+function computeMemberShareFromRosterOnly(data: Record<string, unknown>, memberUid: string): number {
+  if (!memberUid) return 0;
+  const total = getTotalCents(data);
+  const members = data.members as Record<string, unknown>[];
+  const m = members.find(
+    (x) => x && typeof x === 'object' && (x as { uid?: string }).uid === memberUid
+  );
+  if (!m) return 0;
+  const memberStatus = String((m as { memberStatus?: string }).memberStatus ?? '').toLowerCase();
+  if (!rosterMemberIncludedInPlannedShare(memberStatus)) {
+    return 0;
+  }
+
+  const sm = String((m as { splitMethod?: string }).splitMethod ?? '').toLowerCase();
+  if ((sm === 'fixed' || sm === 'fixed_amount') && typeof (m as { fixedAmount?: number }).fixedAmount === 'number') {
+    const fa = (m as { fixedAmount: number }).fixedAmount;
+    if (Number.isFinite(fa)) return Math.round(fa);
+  }
+  const pct = (m as { percentage?: number }).percentage;
+  if (typeof pct === 'number' && Number.isFinite(pct) && pct > 0) {
+    return Math.round((total * pct) / 100);
+  }
+
+  const participantCount = rosterParticipantCountForEqualSplit(members);
+  if (participantCount === 0) return 0;
+  return Math.round(total / participantCount);
+}
+
+/** @deprecated Prefer {@link getMemberAmountCents}; kept for existing call sites. */
+export function getViewerShareCents(data: Record<string, unknown>, viewerUid: string): number {
+  return getMemberAmountCents(data, viewerUid);
 }
 
 export function collectedCentsForSubscription(data: Record<string, unknown>): number {

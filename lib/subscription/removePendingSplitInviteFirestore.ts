@@ -1,6 +1,11 @@
 import { doc, runTransaction, serverTimestamp } from 'firebase/firestore';
 import { getFirebaseFirestore } from '../firebase';
-import { syncOwnerShareForPendingInvites, type SubscriptionMemberRosterRow } from './subscriptionSplitRecalc';
+import { getTotalCents } from './subscriptionToCardModel';
+import {
+  normalizeSoloOwnerMemberRoster,
+  syncOwnerShareForPendingInvites,
+  type SubscriptionMemberRosterRow,
+} from './subscriptionSplitRecalc';
 
 /**
  * Owner removes a pending invite slot (share row + roster) and deletes the invite document.
@@ -39,6 +44,8 @@ export async function removePendingSplitInvite(opts: {
     const rawMembers = data.members;
     const firstM = Array.isArray(rawMembers) && rawMembers.length > 0 ? rawMembers[0] : undefined;
     const isObjectRoster = firstM !== undefined && typeof firstM === 'object' && firstM !== null;
+    const totalCents = getTotalCents(data);
+    const ownerUid = String(data.ownerUid ?? '');
 
     let membersRoster: SubscriptionMemberRosterRow[] | string[];
     if (isObjectRoster) {
@@ -47,6 +54,11 @@ export async function removePendingSplitInvite(opts: {
       })) as SubscriptionMemberRosterRow[];
       const mIdx = membersRoster.findIndex((m) => m && m.inviteId === opts.inviteId);
       if (mIdx >= 0) membersRoster.splice(mIdx, 1);
+      membersRoster = normalizeSoloOwnerMemberRoster(
+        membersRoster as SubscriptionMemberRosterRow[],
+        totalCents,
+        ownerUid
+      ) as SubscriptionMemberRosterRow[];
     } else {
       membersRoster = Array.isArray(rawMembers) ? ([...rawMembers] as string[]) : [];
       const mIdx = membersRoster.findIndex((u) => u === oldMemberId);
@@ -62,8 +74,6 @@ export async function removePendingSplitInvite(opts: {
     const mps = { ...((data.memberPaymentStatus as Record<string, string> | undefined) ?? {}) };
     delete mps[oldMemberId];
 
-    const totalCents =
-      typeof data.totalCents === 'number' && Number.isFinite(data.totalCents) ? data.totalCents : 0;
     const syncedShares = isObjectRoster
       ? syncOwnerShareForPendingInvites(
           shares as Record<string, unknown>[],

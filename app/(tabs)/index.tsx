@@ -31,7 +31,6 @@ import {
 import { getTotalCents } from '../../lib/subscription/subscriptionToCardModel';
 import {
   computeFriendBalances,
-  computeHomeFinancialFromSubscriptions,
   computeHomeFloatCard,
   computeUpcomingSplits,
 } from '../../lib/home/homeSubscriptionMath';
@@ -130,7 +129,13 @@ export default function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [user, setUser] = useState<User | null>(null);
-  const { subscriptions, loading: subscriptionsLoading } = useSubscriptions();
+  const {
+    subscriptions,
+    loading: subscriptionsLoading,
+    youOweCents,
+    owedToYouCents,
+    overdueCents,
+  } = useSubscriptions();
   const { friendUids, displayNameByUid } = useHomeFriendDirectory(user?.uid ?? null);
   const { avatarUrl: homeAvatarUrl, displayName: homeDisplayName, profileLoading: homeProfileLoading } =
     useProfileAvatarUrl();
@@ -149,8 +154,12 @@ export default function HomeScreen() {
 
   const financial = useMemo(() => {
     if (!uid) return { youOwe: 0, owedToYou: 0, overdue: 0 };
-    return computeHomeFinancialFromSubscriptions(subscriptions, uid);
-  }, [subscriptions, uid]);
+    return {
+      youOwe: youOweCents / 100,
+      owedToYou: owedToYouCents / 100,
+      overdue: overdueCents / 100,
+    };
+  }, [uid, youOweCents, owedToYouCents, overdueCents]);
 
   const position: HomeFinancialPosition = useMemo(
     () => ({

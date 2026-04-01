@@ -4,13 +4,19 @@
  */
 import { parseFirestoreBillingCycle } from '../subscription/billingCalendarModel';
 import { getNextFirstChargeDate, ordinalDay } from '../subscription/billingDayFormat';
+import { getMemberAmountCents } from '../subscription/memberAmount';
 import {
   getTotalCents,
   getOwnerId,
-  getViewerShareCents,
   isViewerAcceptedActiveMember,
   normalizeSubscriptionStatus,
 } from '../subscription/subscriptionToCardModel';
+import {
+  computeOwedToYouCents,
+  computeOverdueOwedToOwnerCents,
+  computeYouOweCents,
+  getMemberPaymentStatusNormalized,
+} from '../subscription/subscriptionDerivedMetrics';
 import type { MemberSubscriptionDoc } from '../subscription/memberSubscriptionsFirestore';
 import { subscriptionDisplayName } from '../subscription/billingCalendarModel';
 import { formatUsdDollarsFixed2 } from '../format/currency';
@@ -40,16 +46,16 @@ function effectiveBillingLabel(sub: Record<string, unknown>): string {
 }
 
 export function getMemberShareCents(sub: Record<string, unknown>, memberUid: string): number {
-  return getViewerShareCents(sub, memberUid);
+  return getMemberAmountCents(sub, memberUid);
 }
 
 export function getMemberPaymentStatusRaw(sub: Record<string, unknown>, memberUid: string): string {
-  const m = sub.memberPaymentStatus as Record<string, string> | undefined;
-  return String(m?.[memberUid] ?? '').toLowerCase();
+  return getMemberPaymentStatusNormalized(sub, memberUid);
 }
 
-function isPendingOrOverdue(st: string): boolean {
-  return st === 'pending' || st === 'overdue' || st === 'invited_pending';
+/** Money owed for the current cycle (home hero + float card) — excludes invite placeholders. */
+function isCycleDebt(st: string): boolean {
+  return st === 'pending' || st === 'overdue';
 }
 
 export function isActiveLike(sub: Record<string, unknown>): boolean {
@@ -83,42 +89,10 @@ export function computeHomeFinancialFromSubscriptions(
   uid: string
 ): HomeFinancialFromSubs {
   const chartSubs = subsAcceptedForViewer(subs, uid);
-  let youOweCents = 0;
-  let owedToYouCents = 0;
-  let overdueCents = 0;
-
-  for (const sub of chartSubs) {
-    if (!isActiveLike(sub)) continue;
-    const owner = getOwnerId(sub);
-
-    if (owner !== uid) {
-      const st = getMemberPaymentStatusRaw(sub, uid);
-      if (isPendingOrOverdue(st)) {
-        youOweCents += getMemberShareCents(sub, uid);
-      }
-    } else {
-      const shares = Array.isArray(sub.splitMemberShares) ? sub.splitMemberShares : [];
-      for (const row of shares) {
-        if (!row || typeof row !== 'object') continue;
-        const mid = String((row as { memberId?: string }).memberId ?? '');
-        if (!mid || mid === uid) continue;
-        const st = getMemberPaymentStatusRaw(sub, mid);
-        if (st === 'invited_pending') continue;
-        const amt = getMemberShareCents(sub, mid);
-        if (isPendingOrOverdue(st)) {
-          owedToYouCents += amt;
-        }
-        if (st === 'overdue') {
-          overdueCents += amt;
-        }
-      }
-    }
-  }
-
   return {
-    youOwe: centsToDollars(youOweCents),
-    owedToYou: centsToDollars(owedToYouCents),
-    overdue: centsToDollars(overdueCents),
+    youOwe: centsToDollars(computeYouOweCents(chartSubs, uid)),
+    owedToYou: centsToDollars(computeOwedToYouCents(chartSubs, uid)),
+    overdue: centsToDollars(computeOverdueOwedToOwnerCents(chartSubs, uid)),
   };
 }
 
@@ -202,7 +176,7 @@ export function computeHomeFloatCard(subs: RawSub[], uid: string): HomeFloatCard
     const owner = getOwnerId(sub);
     if (owner === uid) continue;
     const st = getMemberPaymentStatusRaw(sub, uid);
-    if (!isPendingOrOverdue(st)) continue;
+    if (!isCycleDebt(st)) continue;
     const amt = getMemberShareCents(sub, uid);
     if (amt <= 0) continue;
     youOweCandidates.push({
@@ -228,7 +202,7 @@ export function computeHomeFloatCard(subs: RawSub[], uid: string): HomeFloatCard
       if (!mid || mid === uid) continue;
       const st = getMemberPaymentStatusRaw(sub, mid);
       if (st === 'invited_pending') continue;
-      if (!isPendingOrOverdue(st)) continue;
+      if (!isCycleDebt(st)) continue;
       pendingCount += 1;
       pendingTotalCents += getMemberShareCents(sub, mid);
     }
@@ -312,9 +286,12 @@ export function computeUpcomingSplits(subs: RawSub[], uid: string, max = 3): Upc
       if (st === 'paid' || st === 'owner') {
         status = 'paid up';
         statusColor = C.green;
-      } else {
+      } else if (isCycleDebt(st)) {
         status = `you owe ${formatUsdDollarsFixed2(shareD)}`;
         statusColor = C.red;
+      } else {
+        status = 'invited';
+        statusColor = C.muted;
       }
     }
     const when =
@@ -363,13 +340,13 @@ export function computeFriendBalances(
         const st = getMemberPaymentStatusRaw(sub, friendUid);
         if (st === 'invited_pending') {
           /* not yet accepted — no payment obligation */
-        } else if (isPendingOrOverdue(st)) {
+        } else if (isCycleDebt(st)) {
           theyOweMeCents += getMemberShareCents(sub, friendUid);
         }
       }
       if (owner === friendUid) {
         const st = getMemberPaymentStatusRaw(sub, viewerUid);
-        if (isPendingOrOverdue(st)) {
+        if (isCycleDebt(st)) {
           iOweThemCents += getMemberShareCents(sub, viewerUid);
         }
       }

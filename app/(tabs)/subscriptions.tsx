@@ -22,8 +22,6 @@ import {
   type MemberSubscriptionDoc,
 } from '../../lib/subscription/memberSubscriptionsFirestore';
 import {
-  getTotalCents,
-  getViewerShareCents,
   normalizeSubscriptionStatus,
   subscriptionEndedAtMillis,
   subscriptionIsUserOverdue,
@@ -76,7 +74,13 @@ export default function SubscriptionsScreen() {
   const { width } = useWindowDimensions();
   const [user, setUser] = useState<User | null>(null);
   const [filter, setFilter] = useState<FilterId>('active');
-  const { subscriptions: ctxSubscriptions, loading: ctxSubscriptionsLoading } = useSubscriptions();
+  const {
+    subscriptions: ctxSubscriptions,
+    loading: ctxSubscriptionsLoading,
+    monthlyTotalCents: liveMonthlyTotalCents,
+    myShareCents: liveMyShareCents,
+    activeCount: liveActiveCount,
+  } = useSubscriptions();
   const [lastSeenPriceMap, setLastSeenPriceMap] = useState<
     Record<string, { toMillis?: () => number }> | null | undefined
   >(null);
@@ -205,17 +209,9 @@ export default function SubscriptionsScreen() {
     [confirmDeleteEnded]
   );
 
-  const monthlyTotalCents = useMemo(
-    () => activeSubs.reduce((sum, s) => sum + getTotalCents(s), 0),
-    [activeSubs]
-  );
-
-  const yourShareCents = useMemo(
-    () => activeSubs.reduce((sum, s) => sum + (uid ? getViewerShareCents(s, uid) : 0), 0),
-    [activeSubs, uid]
-  );
-
-  const activeCount = activeSubs.length;
+  const monthlyTotalCents = SUBSCRIPTIONS_DEMO_MODE ? 0 : liveMonthlyTotalCents;
+  const yourShareCents = SUBSCRIPTIONS_DEMO_MODE ? 0 : liveMyShareCents;
+  const activeCount = SUBSCRIPTIONS_DEMO_MODE ? 4 : liveActiveCount;
 
   const overdueBadge = SUBSCRIPTIONS_DEMO_MODE ? DEMO_TAB_BADGES.overdue : overdueSubs.length;
 
