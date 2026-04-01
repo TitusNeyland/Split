@@ -11,6 +11,7 @@ import {
   KeyboardAvoidingView,
   Keyboard,
   Platform,
+  unstable_batchedUpdates,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -140,6 +141,8 @@ export default function EditSplitScreen() {
   const debouncedSearch = useDebouncedValue(searchQuery.trim(), 300);
   const [searchResults, setSearchResults] = useState<FriendSearchUserRow[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
+  /** Membership differs from loaded snapshot (add/remove); snapshot compare can miss updates when batched with split arrays. */
+  const [membersDirty, setMembersDirty] = useState(false);
   const initialSnapshotRef = useRef<string | null>(null);
   const initialPercentByMemberIdRef = useRef<Map<string, string>>(new Map());
   const initialFixedByMemberIdRef = useRef<Map<string, string>>(new Map());
@@ -251,17 +254,38 @@ export default function EditSplitScreen() {
     return Math.abs(sum - totalCents) < 2;
   }, [mode, fixedDollarStr, totalCents]);
 
-  const dirty = useMemo(() => {
+  const snapshotDirty = useMemo(() => {
     if (!initialSnapshotRef.current || !detail) return false;
     return (
       JSON.stringify({ rows, mode, customPercentStr, fixedDollarStr }) !== initialSnapshotRef.current
     );
   }, [rows, mode, customPercentStr, fixedDollarStr, detail]);
 
+  /** Roster membership vs initial (IDs only) — avoids Save staying disabled when full snapshot compare misses batched updates after remove. */
+  const membershipChangedFromInitial = useMemo(() => {
+    if (!initialSnapshotRef.current) return false;
+    try {
+      const snap = JSON.parse(initialSnapshotRef.current) as { rows: EditRow[] };
+      const a = snap.rows
+        .map((x) => x.memberId)
+        .sort()
+        .join(',');
+      const b = rows
+        .map((x) => x.memberId)
+        .sort()
+        .join(',');
+      return a !== b;
+    } catch {
+      return false;
+    }
+  }, [rows]);
+
+  const dirty = snapshotDirty || membersDirty || membershipChangedFromInitial;
+
   const canSave =
     !saving &&
     detail &&
-    n >= 2 &&
+    n >= 1 &&
     (mode === 'equal' || (mode === 'customPercent' && customValid) || (mode === 'fixedDollar' && fixedSumOk));
 
   const overageCents = useMemo(() => {
@@ -324,6 +348,7 @@ export default function EditSplitScreen() {
       setMode(p.mode);
       setCustomPercentStr(p.customPercentStr);
       setFixedDollarStr(p.fixedDollarStr);
+      setMembersDirty(false);
     } catch {
       /* ignore */
     }
@@ -341,12 +366,15 @@ export default function EditSplitScreen() {
           text: 'Remove',
           style: 'destructive',
           onPress: () => {
-            setRows((prev) => {
-              const next = prev.filter((x) => x.key !== r.key);
-              const nn = next.length;
-              setCustomPercentStr(equalIntegerPercents(nn).map(String));
-              setFixedDollarStr(equalCentsSplit(totalCents, nn).map((c) => (c / 100).toFixed(2)));
-              return next;
+            unstable_batchedUpdates(() => {
+              setMembersDirty(true);
+              setRows((prev) => {
+                const next = prev.filter((x) => x.key !== r.key);
+                const nn = next.length;
+                setCustomPercentStr(equalIntegerPercents(nn).map(String));
+                setFixedDollarStr(equalCentsSplit(totalCents, nn).map((c) => (c / 100).toFixed(2)));
+                return next;
+              });
             });
           },
         },
@@ -370,6 +398,7 @@ export default function EditSplitScreen() {
       pendingInviteEmail: null,
       inviteId: null,
     };
+    setMembersDirty(true);
     setRows((prev) => {
       const next = [...prev, row];
       const nn = next.length;
@@ -487,6 +516,11 @@ export default function EditSplitScreen() {
       lines.push(`Split method: ${methodLabel(snap.mode)} → ${methodLabel(mode)}`);
     }
     const prevIds = new Set(snap.rows.map((x) => x.memberId));
+    const curIds = new Set(rows.map((x) => x.memberId));
+    const removed = snap.rows.filter((x) => !curIds.has(x.memberId));
+    for (const rm of removed) {
+      lines.push(`${rm.displayName.split('(')[0]?.trim() ?? 'Member'} removed from split`);
+    }
     const added = rows.filter((r) => !prevIds.has(r.memberId));
     for (const a of added) {
       lines.push(`${a.displayName.split('(')[0]?.trim() ?? 'Member'} added · invite sent on save`);
