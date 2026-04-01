@@ -241,6 +241,11 @@ export default function SubscriptionDetailScreen() {
     return detail.members.find((m) => m.memberId === firebaseUid) ?? null;
   }, [detail, firebaseUid]);
 
+  const viewerIsMember = useMemo(() => {
+    if (!detail || !firebaseUid) return true;
+    return detail.members.some((m) => m.memberId === firebaseUid);
+  }, [detail, firebaseUid]);
+
   const leaveSplitSheetModel = useMemo(() => {
     if (!detail || detail.isOwner || !firebaseUid) return null;
     const m = viewerMemberRow;
@@ -476,6 +481,35 @@ export default function SubscriptionDetailScreen() {
         </Pressable>
         <Text style={styles.unknownTitle}>This subscription could not be found</Text>
         <Text style={styles.unknownSub}>It may have been removed, or the link is invalid.</Text>
+      </View>
+    );
+  }
+
+  if (!SUBSCRIPTIONS_DEMO_MODE && firebaseUid && !detail.isOwner && !viewerIsMember) {
+    return (
+      <View style={[styles.unknownRoot, { paddingTop: insets.top + 12 }]}>
+        <StatusBar style="dark" />
+        <Pressable
+          onPress={navigateBack}
+          style={styles.unknownBack}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+        >
+          <Ionicons name="chevron-back" size={28} color={C.purple} />
+        </Pressable>
+        <Ionicons name="information-circle-outline" size={40} color={C.muted} style={{ marginBottom: 12 }} />
+        <Text style={styles.unknownTitle}>You don&apos;t have access to this split</Text>
+        <Text style={styles.unknownSub}>
+          {`You’re no longer a member of ${detail.displayName.trim() || 'this subscription'}. If you were removed, ask the owner to re-invite you.`}
+        </Text>
+        <Pressable
+          style={styles.unknownPrimaryBtn}
+          onPress={navigateBack}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+        >
+          <Text style={styles.unknownPrimaryBtnTxt}>Go back</Text>
+        </Pressable>
       </View>
     );
   }

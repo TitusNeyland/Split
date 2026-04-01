@@ -264,6 +264,8 @@ type ActivityFeedItem = {
   /** Server + optimistic client read state */
   read?: boolean;
   subscriptionId?: string;
+  /** When false, do not navigate to `/subscription/[id]` from this row. */
+  navigateToSubscription?: boolean;
 };
 
 type ActivityFeedGroup = { sectionTitle: string; items: ActivityFeedItem[] };
@@ -860,6 +862,7 @@ export default function ActivityScreen() {
         subscriptionId: item.subscriptionId,
         joinSubscriptionId: item.joinSubscriptionId,
         friendLinkIds: item.friendLinkIds,
+        navigateToSubscription: item.navigateToSubscription,
       });
       if (path) {
         router.push(path as never);
@@ -1547,10 +1550,10 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   drLbl: {
-    fontSize: 13,
+    fontSize: 11,
     color: C.muted,
     flexShrink: 0,
-    lineHeight: 18,
+    lineHeight: 15,
   },
   drValPressable: {
     flex: 1,
@@ -1560,22 +1563,22 @@ const styles = StyleSheet.create({
   },
   drVal: {
     flex: 1,
-    fontSize: 13,
+    fontSize: 11,
     fontWeight: '500',
     color: C.text,
     textAlign: 'right',
-    lineHeight: 18,
+    lineHeight: 15,
   },
   drValAmber: {
     color: C.partialAmber,
     fontWeight: '600',
   },
   drValLinkText: {
-    fontSize: 13,
+    fontSize: 11,
     fontWeight: '500',
     color: C.purple,
     textAlign: 'right',
-    lineHeight: 18,
+    lineHeight: 15,
     textDecorationLine: 'underline',
     maxWidth: '100%',
   },

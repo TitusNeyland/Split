@@ -145,6 +145,11 @@ export type ActivityFeedRow = {
   serviceIconMuted?: boolean;
   /** Friend events: show actor avatar (initials or photo). */
   friendAvatar?: { initials: string; imageUrl?: string | null; uid?: string };
+  /**
+   * When false, Activity tab does not deep-link to `/subscription/[id]` (terminal info only).
+   * Set for e.g. removed user, self left, declined invite.
+   */
+  navigateToSubscription?: boolean;
 };
 
 /**
@@ -417,6 +422,13 @@ export function activityEventToFeedRow(
         badge: 'Declined',
         badgeVariant: 'gray',
         _activityCreatedAtMs: createdMs,
+        navigateToSubscription: false,
+        detail: {
+          rows: [
+            { label: 'Details', value: 'You declined this invite and are not on this split.' },
+            { label: 'Subscription', value: subName },
+          ],
+        },
       };
     }
     case 'split_invite_declined_owner': {
@@ -510,6 +522,27 @@ export function activityEventToFeedRow(
         badge: 'Removed',
         badgeVariant: 'gray',
         _activityCreatedAtMs: createdMs,
+        navigateToSubscription: !youRemoved,
+        detail: youRemoved
+          ? {
+              rows: [
+                {
+                  label: 'Details',
+                  value:
+                    'You no longer have access to this split. Use Subscriptions for splits you belong to.',
+                },
+                { label: 'Subscription', value: subName },
+              ],
+            }
+          : {
+              rows: [
+                {
+                  label: 'Details',
+                  value: 'This member was removed from the split.',
+                },
+                { label: 'Subscription', value: subName },
+              ],
+            },
       };
     }
     case 'split_left': {
@@ -528,6 +561,16 @@ export function activityEventToFeedRow(
         badge: 'Left',
         badgeVariant: 'gray',
         _activityCreatedAtMs: createdMs,
+        navigateToSubscription: false,
+        detail: {
+          rows: [
+            {
+              label: 'Details',
+              value: 'You left this split. You will not be charged for future billing cycles.',
+            },
+            { label: 'Subscription', value: subName },
+          ],
+        },
       };
     }
     case 'split_member_left': {
