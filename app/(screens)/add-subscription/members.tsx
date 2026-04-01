@@ -9,6 +9,7 @@ import {
   Modal,
   FlatList,
   KeyboardAvoidingView,
+  Keyboard,
   Platform,
   ActivityIndicator,
 } from 'react-native';
@@ -468,6 +469,7 @@ export default function AddSubscriptionMembersScreen() {
   );
 
   const closeMemberPicker = useCallback(() => {
+    Keyboard.dismiss();
     setPickerOpen(false);
     setFriendQuery('');
   }, []);
@@ -829,7 +831,12 @@ export default function AddSubscriptionMembersScreen() {
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={styles.modalRoot}
         >
-          <View style={styles.modalBackdrop} pointerEvents="box-none" />
+          <Pressable
+            style={styles.modalBackdrop}
+            onPress={closeMemberPicker}
+            accessibilityRole="button"
+            accessibilityLabel="Close add members"
+          />
           <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 16) }]}>
             <View style={styles.sheetHandle} />
             <Text style={styles.sheetTitle} accessibilityRole="header">
@@ -1343,6 +1350,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingTop: 10,
     maxHeight: '88%',
+    zIndex: 1,
+    elevation: 8,
   },
   sheetHandle: {
     width: 44,
