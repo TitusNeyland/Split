@@ -195,6 +195,8 @@ export default function AddSubscriptionMembersScreen() {
     (totalCents / 100).toFixed(2),
   ]);
   const [pickerOpen, setPickerOpen] = useState(false);
+  /** Non-owner members added while the Add Members sheet is open (order preserved). */
+  const [sheetSessionAddedIds, setSheetSessionAddedIds] = useState<string[]>([]);
   const [friendQuery, setFriendQuery] = useState('');
   const [searchUser, setSearchUser] = useState<User | null>(() => getFirebaseAuth()?.currentUser ?? null);
   const debouncedFriendQuery = useDebouncedValue(friendQuery, 300);
@@ -434,9 +436,10 @@ export default function AddSubscriptionMembersScreen() {
       const isOnSplit = members.some((m) => m.memberId === friend.memberId);
       if (isOnSplit) {
         removeMemberCore(friend.memberId);
+        setSheetSessionAddedIds((prev) => prev.filter((id) => id !== friend.memberId));
         return;
       }
-      appendMemberCore({
+      const ok = appendMemberCore({
         memberId: friend.memberId,
         displayName: friend.displayName,
         initials: friend.initials,
@@ -445,8 +448,23 @@ export default function AddSubscriptionMembersScreen() {
         avatarUrl: friend.avatarUrl ?? null,
         isOwner: false,
       });
+      if (ok) {
+        setSheetSessionAddedIds((prev) =>
+          prev.includes(friend.memberId) ? prev : [...prev, friend.memberId],
+        );
+        setFriendQuery('');
+        setTimeout(() => sheetSearchInputRef.current?.focus(), 0);
+      }
     },
     [members, appendMemberCore, removeMemberCore],
+  );
+
+  const removeFromInvitedSheet = useCallback(
+    (memberId: string) => {
+      removeMemberCore(memberId);
+      setSheetSessionAddedIds((prev) => prev.filter((id) => id !== memberId));
+    },
+    [removeMemberCore],
   );
 
   const closeMemberPicker = useCallback(() => {
@@ -485,13 +503,11 @@ export default function AddSubscriptionMembersScreen() {
   const inviteQueryToSplit = useCallback(() => {
     const trim = friendQuery.trim();
     if (!trim) return;
-    if (members.some((m) => m.memberId === memberIdForPendingInvite(trim))) {
-      closeMemberPicker();
-      return;
-    }
+    const mid = memberIdForPendingInvite(trim);
+    if (members.some((m) => m.memberId === mid)) return;
     const emailRaw = trim.includes('@') ? normalizeInviteEmail(trim) : undefined;
-    appendMemberCore({
-      memberId: memberIdForPendingInvite(trim),
+    const ok = appendMemberCore({
+      memberId: mid,
       displayName: trim,
       initials: initialsForPendingInvite(trim),
       avatarBg: C.purpleTint,
@@ -500,8 +516,12 @@ export default function AddSubscriptionMembersScreen() {
       invitePending: true,
       pendingInviteEmail: emailRaw,
     });
-    closeMemberPicker();
-  }, [friendQuery, members, appendMemberCore, closeMemberPicker]);
+    if (ok) {
+      setSheetSessionAddedIds((prev) => (prev.includes(mid) ? prev : [...prev, mid]));
+      setFriendQuery('');
+      setTimeout(() => sheetSearchInputRef.current?.focus(), 0);
+    }
+  }, [friendQuery, members, appendMemberCore]);
 
   const validationBarVisible = mode === 'customPercent';
   const canContinue =
@@ -556,6 +576,14 @@ export default function AddSubscriptionMembersScreen() {
     friendQuery.trim().length >= 3 && !searchingFriends && friendsForSheet.length === 0;
 
   const addedMemberIds = useMemo(() => new Set(members.map((m) => m.memberId)), [members]);
+
+  const invitedSheetMembers = useMemo(
+    () =>
+      sheetSessionAddedIds
+        .map((id) => members.find((m) => m.memberId === id))
+        .filter((m): m is WizardMember => m != null),
+    [sheetSessionAddedIds, members],
+  );
 
   const nonOwnerMemberCount = useMemo(
     () => members.filter((m) => !m.isOwner).length,
@@ -761,7 +789,10 @@ export default function AddSubscriptionMembersScreen() {
         ) : null}
 
         <Pressable
-          onPress={() => setPickerOpen(true)}
+          onPress={() => {
+            setSheetSessionAddedIds([]);
+            setPickerOpen(true);
+          }}
           style={styles.addMemberBtn}
           accessibilityRole="button"
           accessibilityLabel="Add member"
@@ -838,6 +869,38 @@ export default function AddSubscriptionMembersScreen() {
                 </Pressable>
               ) : null}
             </View>
+            {invitedSheetMembers.length > 0 ? (
+              <View style={styles.sheetInvitedSection}>
+                <Text style={styles.sheetInvitedLabel} accessibilityRole="header">
+                  {`INVITED (${invitedSheetMembers.length})`}
+                </Text>
+                {invitedSheetMembers.map((m) => (
+                  <View key={m.memberId} style={styles.sheetInvitedRow}>
+                    <UserAvatarCircle
+                      size={32}
+                      uid={m.memberId.startsWith('invite-email-') ? null : m.memberId}
+                      initials={m.initials}
+                      imageUrl={m.avatarUrl}
+                      initialsBackgroundColor={m.avatarBg}
+                      initialsTextColor={m.avatarColor}
+                      accessibilityLabel=""
+                    />
+                    <Text style={styles.sheetInvitedName} numberOfLines={1}>
+                      {m.displayName}
+                    </Text>
+                    <Pressable
+                      onPress={() => removeFromInvitedSheet(m.memberId)}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      style={styles.sheetInvitedRemove}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Remove ${m.displayName} from split`}
+                    >
+                      <Ionicons name="close" size={14} color={C.muted} />
+                    </Pressable>
+                  </View>
+                ))}
+              </View>
+            ) : null}
             <Text style={styles.sheetSectionLbl}>Your friends</Text>
             <FlatList
               data={friendsForSheet}
@@ -948,9 +1011,17 @@ export default function AddSubscriptionMembersScreen() {
               onPress={closeMemberPicker}
               style={({ pressed }) => [styles.sheetDoneBtn, pressed && styles.sheetDoneBtnPressed]}
               accessibilityRole="button"
-              accessibilityLabel="Done adding members"
+              accessibilityLabel={
+                sheetSessionAddedIds.length > 0
+                  ? `Add ${sheetSessionAddedIds.length} member${sheetSessionAddedIds.length === 1 ? '' : 's'} and close`
+                  : 'Done adding members'
+              }
             >
-              <Text style={styles.sheetDoneBtnTxt}>Done</Text>
+              <Text style={styles.sheetDoneBtnTxt}>
+                {sheetSessionAddedIds.length > 0
+                  ? `Add ${sheetSessionAddedIds.length} member${sheetSessionAddedIds.length === 1 ? '' : 's'}`
+                  : 'Done'}
+              </Text>
             </Pressable>
           </View>
         </KeyboardAvoidingView>
@@ -1321,6 +1392,33 @@ const styles = StyleSheet.create({
     backgroundColor: C.muted,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  sheetInvitedSection: {
+    marginBottom: 14,
+  },
+  sheetInvitedLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: C.muted,
+    letterSpacing: 0.5,
+    marginBottom: 8,
+  },
+  sheetInvitedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: C.divider,
+  },
+  sheetInvitedName: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '500',
+    color: C.text,
+  },
+  sheetInvitedRemove: {
+    padding: 4,
   },
   sheetSectionLbl: {
     fontSize: 13,
