@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, Image, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
@@ -14,6 +14,7 @@ import {
   type ProfileFriendBalanceRow,
 } from '../../../lib/profile/profileFriendsBalance';
 import { formatUsdDollarsFixed2 } from '../../../lib/format/currency';
+import { UserAvatarCircle } from '../shared/UserAvatarCircle';
 
 const C = {
   text: '#1a1a18',
@@ -83,31 +84,6 @@ function NetBalanceBar({ owedToYou, youOwe }: { owedToYou: number; youOwe: numbe
   );
 }
 
-function FriendAvatarLarge({
-  initials,
-  colors,
-  imageUrl,
-}: {
-  initials: string;
-  colors: { backgroundColor: string; color: string };
-  imageUrl?: string | null;
-}) {
-  if (imageUrl) {
-    return (
-      <View style={avatarLg.circle}>
-        <Image source={{ uri: imageUrl }} style={avatarLg.photo} accessibilityLabel="Your profile photo" />
-      </View>
-    );
-  }
-  return (
-    <View style={[avatarLg.circle, { backgroundColor: colors.backgroundColor }]}>
-      <Text style={[avatarLg.initials, { color: colors.color }]} numberOfLines={1}>
-        {initials}
-      </Text>
-    </View>
-  );
-}
-
 function FriendAvatarStackChip({
   id,
   initials,
@@ -119,15 +95,14 @@ function FriendAvatarStackChip({
 }) {
   const { backgroundColor, color } = getFriendAvatarColors(id);
   return (
-    <View
-      style={[
-        stackStyles.chip,
-        { backgroundColor, marginLeft: index === 0 ? 0 : -11 },
-      ]}
-    >
-      <Text style={[stackStyles.chipTxt, { color }]} numberOfLines={1}>
-        {initials}
-      </Text>
+    <View style={[stackStyles.chip, { marginLeft: index === 0 ? 0 : -11 }]}>
+      <UserAvatarCircle
+        size={32}
+        uid={id}
+        initials={initials}
+        initialsBackgroundColor={backgroundColor}
+        initialsTextColor={color}
+      />
     </View>
   );
 }
@@ -136,11 +111,13 @@ function BalanceRow({
   row,
   userInitials,
   userAvatarUrl,
+  userUid,
   onPress,
 }: {
   row: ProfileFriendBalanceRow;
   userInitials: string;
   userAvatarUrl?: string | null;
+  userUid: string | null;
   onPress: () => void;
 }) {
   const isYouOwe = row.kind === 'you_owe';
@@ -172,10 +149,14 @@ function BalanceRow({
       accessibilityRole="button"
       accessibilityLabel={`${name}, ${rightText}`}
     >
-      <FriendAvatarLarge
+      <UserAvatarCircle
+        size={40}
+        uid={isYouOwe ? userUid : row.id}
         initials={initials}
-        colors={colors}
         imageUrl={isYouOwe ? userAvatarUrl : null}
+        initialsBackgroundColor={colors.backgroundColor}
+        initialsTextColor={colors.color}
+        style={{ marginRight: 12 }}
       />
       <View style={rowStyles.mid}>
         <Text style={rowStyles.name} numberOfLines={1}>
@@ -326,6 +307,7 @@ export default function ProfileFriendsBalancesCard({ userInitials, userAvatarUrl
                     row={row}
                     userInitials={userInitials}
                     userAvatarUrl={userAvatarUrl}
+                    userUid={uid}
                     onPress={() => openFriendActivity(row.id)}
                   />
                 </View>
@@ -421,27 +403,6 @@ const stackStyles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     color: '#5F5E5A',
-  },
-});
-
-const avatarLg = StyleSheet.create({
-  circle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-    overflow: 'hidden',
-  },
-  photo: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-  },
-  initials: {
-    fontSize: 13,
-    fontWeight: '600',
   },
 });
 

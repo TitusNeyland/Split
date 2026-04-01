@@ -19,6 +19,7 @@ import {
   type Unsubscribe,
 } from 'firebase/firestore';
 import { getFirebaseFirestore } from '../firebase';
+import { userDocPhotoUrl } from '../profile/profile';
 
 export const FRIENDSHIPS_COLLECTION = 'friendships';
 export const INVITES_COLLECTION = 'invites';
@@ -210,7 +211,7 @@ export async function fetchUserProfileForInvite(uid: string): Promise<InviteSend
   if (!snap.exists()) return null;
   const d = snap.data();
   const displayName = typeof d.displayName === 'string' ? d.displayName : null;
-  const avatarUrl = typeof d.avatarUrl === 'string' ? d.avatarUrl : null;
+  const avatarUrl = userDocPhotoUrl(d as Record<string, unknown>);
   const createdAt = d.createdAt instanceof Timestamp ? d.createdAt : null;
   const ls = d.lifetime_saved;
   const lifetimeSaved = typeof ls === 'number' && Number.isFinite(ls) ? ls : null;

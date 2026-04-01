@@ -144,7 +144,7 @@ export type ActivityFeedRow = {
   /** Muted / desaturated service tile */
   serviceIconMuted?: boolean;
   /** Friend events: show actor avatar (initials or photo). */
-  friendAvatar?: { initials: string; imageUrl?: string | null };
+  friendAvatar?: { initials: string; imageUrl?: string | null; uid?: string };
 };
 
 /**
@@ -475,6 +475,11 @@ export function activityEventToFeedRow(
         id: event.id,
         kind: 'split_member_joined',
         friendLinkIds: event.actorUid ? [event.actorUid] : undefined,
+        friendAvatar: {
+          initials: initialsFromDisplayName(actor),
+          imageUrl: event.actorAvatarUrl ?? null,
+          uid: event.actorUid || undefined,
+        },
         icon: 'person',
         iconBg: '#E1F5EE',
         iconColor: '#0F6E56',
@@ -533,6 +538,11 @@ export function activityEventToFeedRow(
         serviceMark,
         serviceId: catalogServiceId,
         friendLinkIds: event.actorUid ? [event.actorUid] : undefined,
+        friendAvatar: {
+          initials: initialsFromDisplayName(actor),
+          imageUrl: event.actorAvatarUrl ?? null,
+          uid: event.actorUid || undefined,
+        },
         icon: 'person-outline',
         iconBg: '#FAEEDA',
         iconColor: '#854F0B',
@@ -652,6 +662,7 @@ export function activityEventToFeedRow(
         friendAvatar: {
           initials: initialsFromDisplayName(actor),
           imageUrl: event.actorAvatarUrl ?? null,
+          uid: uid || undefined,
         },
         icon: 'person-outline',
         iconBg: '#EEEDFE',
@@ -675,6 +686,7 @@ export function activityEventToFeedRow(
         friendAvatar: {
           initials: initialsFromDisplayName(actor),
           imageUrl: event.actorAvatarUrl ?? null,
+          uid: uid || undefined,
         },
         icon: 'person-outline',
         iconBg: '#E1F5EE',

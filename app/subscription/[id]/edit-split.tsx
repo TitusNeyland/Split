@@ -8,7 +8,6 @@ import {
   TextInput,
   ActivityIndicator,
   Alert,
-  Image,
   KeyboardAvoidingView,
   Keyboard,
   Platform,
@@ -20,6 +19,7 @@ import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { searchUsersForFriendConnect, type FriendSearchUserRow } from '../../../lib/friends/userSearchFirestore';
 import { getFriendAvatarColors } from '../../../lib/friends/friendAvatar';
+import { UserAvatarCircle } from '../../components/shared/UserAvatarCircle';
 import { initialsFromName } from '../../../lib/profile';
 import {
   allocateCents,
@@ -655,11 +655,14 @@ export default function EditSplitScreen() {
               <View key={r.key} style={styles.memberCard}>
                 <View style={styles.memberTop}>
                   <View style={avStyle}>
-                    {r.avatarUrl ? (
-                      <Image source={{ uri: r.avatarUrl }} style={styles.avImg} />
-                    ) : (
-                      <Text style={[styles.avTxt, { color: r.avatarColor }]}>{r.initials}</Text>
-                    )}
+                    <UserAvatarCircle
+                      size={40}
+                      uid={r.memberId}
+                      initials={r.initials}
+                      imageUrl={r.avatarUrl}
+                      initialsBackgroundColor={r.avatarBg}
+                      initialsTextColor={r.avatarColor}
+                    />
                   </View>
                   <View style={styles.memberTextCol}>
                     <Text style={styles.memberName} numberOfLines={1}>

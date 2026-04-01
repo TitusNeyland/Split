@@ -289,6 +289,7 @@ export default function ProfileScreen() {
               >
                 <UserAvatarCircle
                   size={AVATAR_SIZE}
+                  uid={user?.uid}
                   initials={initials}
                   imageUrl={avatarUrl}
                   loading={avatarLoading}

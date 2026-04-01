@@ -8,7 +8,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import { getFirebaseFirestore, isFirebaseConfigured } from '../../../lib/firebase';
 import { countActiveSubscriptionsForUser, countFriendshipsForUser } from '../../../lib/friends/friendSystemFirestore';
 import { getFriendAvatarColors } from '../../../lib/friends/friendAvatar';
-import { initialsFromName } from '../../../lib/profile';
+import { initialsFromName, userDocPhotoUrl } from '../../../lib/profile';
 import { UserAvatarCircle } from '../../components/shared/UserAvatarCircle';
 
 const C = {
@@ -48,7 +48,7 @@ export default function FriendProfileScreen() {
         const dn =
           typeof d?.displayName === 'string' && d.displayName.trim() ? d.displayName.trim() : 'Friend';
         setDisplayName(dn);
-        setAvatarUrl(typeof d?.avatarUrl === 'string' ? d.avatarUrl : null);
+        setAvatarUrl(userDocPhotoUrl(d as Record<string, unknown>));
         const em = typeof d?.emailNormalized === 'string' ? d.emailNormalized : '';
         if (em) {
           const at = em.indexOf('@');
@@ -100,13 +100,14 @@ export default function FriendProfileScreen() {
       ) : (
         <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
           <View style={styles.hero}>
-            {avatarUrl ? (
-              <UserAvatarCircle size={88} initials={initials} imageUrl={avatarUrl} />
-            ) : (
-              <View style={[styles.fallbackAv, { backgroundColor: colors.backgroundColor }]}>
-                <Text style={[styles.fallbackTxt, { color: colors.color }]}>{initials}</Text>
-              </View>
-            )}
+            <UserAvatarCircle
+              size={88}
+              uid={uid}
+              initials={initials}
+              imageUrl={avatarUrl}
+              initialsBackgroundColor={colors.backgroundColor}
+              initialsTextColor={colors.color}
+            />
             <Text style={styles.name}>{displayName ?? 'Friend'}</Text>
             {username ? <Text style={styles.handle}>{username}</Text> : null}
           </View>
@@ -140,14 +141,6 @@ const styles = StyleSheet.create({
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   body: { paddingHorizontal: 20, paddingBottom: 32 },
   hero: { alignItems: 'center', marginTop: 12 },
-  fallbackAv: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  fallbackTxt: { fontSize: 28, fontWeight: '700' },
   name: { marginTop: 14, fontSize: 22, fontWeight: '700', color: C.text, textAlign: 'center' },
   handle: { marginTop: 6, fontSize: 15, color: C.muted, fontWeight: '500' },
   stats: {

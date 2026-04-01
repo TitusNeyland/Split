@@ -12,6 +12,8 @@ export type WizardMemberRow = {
   initials: string;
   avatarBg: string;
   avatarColor: string;
+  /** Optional; used for review UI only — not persisted on subscription. */
+  avatarUrl?: string | null;
   role: 'owner' | 'member';
   percent: number;
   amountCents: number;

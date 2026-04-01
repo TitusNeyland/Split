@@ -11,7 +11,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
-  Image,
 } from 'react-native';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -32,6 +31,7 @@ import {
   percentTotalIsExactly100,
 } from '../../../lib/subscription/addSubscriptionSplitMath';
 import { getServiceIconBackgroundColor } from '../../components/shared/ServiceIcon';
+import { UserAvatarCircle } from '../../components/shared/UserAvatarCircle';
 import { getFirebaseAuth, isFirebaseConfigured } from '../../../lib/firebase';
 import { searchUsersForFriendConnect, type FriendSearchUserRow } from '../../../lib/friends/userSearchFirestore';
 import { getFriendAvatarColors } from '../../../lib/friends/friendAvatar';
@@ -61,6 +61,8 @@ export type WizardMember = {
   initials: string;
   avatarBg: string;
   avatarColor: string;
+  /** From friend search / profile; owner row uses live profile URL in UI. */
+  avatarUrl?: string | null;
   isOwner: boolean;
   /** Not on the app yet — slot reserved until they join and add payment. */
   invitePending?: boolean;
@@ -181,7 +183,7 @@ export default function AddSubscriptionMembersScreen() {
   const payerDisplay = typeof params.payerDisplay === 'string' ? params.payerDisplay : 'Me (owner)';
   const autoCharge = params.autoCharge === '1';
 
-  const { displayName: profileDisplayName } = useProfileAvatarUrl();
+  const { displayName: profileDisplayName, avatarUrl: profileAvatarUrl } = useProfileAvatarUrl();
 
   const [members, setMembers] = useState<WizardMember[]>(() => [
     buildOwnerMember(null, getFirebaseAuth()?.currentUser ?? null),
@@ -434,6 +436,7 @@ export default function AddSubscriptionMembersScreen() {
         initials: friend.initials,
         avatarBg: friend.avatarBg,
         avatarColor: friend.avatarColor,
+        avatarUrl: friend.avatarUrl ?? null,
         isOwner: false,
       });
     },
@@ -512,6 +515,7 @@ export default function AddSubscriptionMembersScreen() {
       initials: m.initials,
       avatarBg: m.avatarBg,
       avatarColor: m.avatarColor,
+      avatarUrl: m.avatarUrl ?? null,
       role: m.isOwner ? ('owner' as const) : ('member' as const),
       percent: displayPercents[i] ?? 0,
       amountCents: rowCents[i] ?? 0,
@@ -659,8 +663,15 @@ export default function AddSubscriptionMembersScreen() {
 
             return (
               <View key={m.memberId} style={[styles.memberRow, isLast && styles.memberRowLast]}>
-                <View style={[styles.memberAv, { backgroundColor: m.avatarBg }]}>
-                  <Text style={[styles.memberAvTxt, { color: m.avatarColor }]}>{m.initials}</Text>
+                <View style={styles.memberAv}>
+                  <UserAvatarCircle
+                    size={36}
+                    uid={m.memberId === 'owner-self' ? searchUser?.uid ?? null : m.memberId}
+                    initials={m.initials}
+                    imageUrl={m.memberId === 'owner-self' ? profileAvatarUrl : m.avatarUrl}
+                    initialsBackgroundColor={m.avatarBg}
+                    initialsTextColor={m.avatarColor}
+                  />
                 </View>
                 <View style={styles.memberMeta}>
                   <Text style={styles.memberName} numberOfLines={1}>
@@ -828,21 +839,17 @@ export default function AddSubscriptionMembersScreen() {
                     }
                   >
                     <View style={styles.sheetAvatarWrap}>
-                      {item.avatarUrl ? (
-                        <View style={[styles.memberAv, styles.sheetFriendPhotoWrap]}>
-                          <Image
-                            source={{ uri: item.avatarUrl }}
-                            style={styles.sheetFriendImg}
-                            accessibilityLabel=""
-                          />
-                        </View>
-                      ) : (
-                        <View style={[styles.memberAv, { backgroundColor: item.avatarBg }]}>
-                          <Text style={[styles.memberAvTxt, { color: item.avatarColor }]}>
-                            {item.initials}
-                          </Text>
-                        </View>
-                      )}
+                      <View style={[styles.memberAv, item.avatarUrl ? styles.sheetFriendPhotoWrap : null]}>
+                        <UserAvatarCircle
+                          size={36}
+                          uid={item.memberId}
+                          initials={item.initials}
+                          imageUrl={item.avatarUrl}
+                          initialsBackgroundColor={item.avatarBg}
+                          initialsTextColor={item.avatarColor}
+                          accessibilityLabel=""
+                        />
+                      </View>
                       {added ? (
                         <View style={styles.sheetAddedBadge} accessibilityLabel="Selected for split">
                           <Ionicons name="checkmark" size={14} color="#fff" />

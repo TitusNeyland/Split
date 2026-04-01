@@ -7,7 +7,6 @@ import {
   Pressable,
   TouchableOpacity,
   Modal,
-  Image,
   Alert,
   Share,
   BackHandler,
@@ -18,6 +17,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { ServiceIcon } from '../../components/shared/ServiceIcon';
+import { UserAvatarCircle } from '../../components/shared/UserAvatarCircle';
 import { SubscriptionDetailSkeleton } from '../../components/subscriptions/SubscriptionDetailSkeleton';
 import { spacing } from '../../../constants/theme';
 import { SUBSCRIPTIONS_DEMO_MODE } from '../../../lib/subscription/subscriptionsScreenDemo';
@@ -806,26 +806,17 @@ export default function SubscriptionDetailScreen() {
                 : statusMeta(m.cycleStatus);
               return (
                 <View key={m.memberId} style={styles.splitRow}>
-                  {m.avatarUrl ? (
-                    <View style={[styles.splitPip, styles.splitPipPhoto, ended && styles.splitPipEnded]}>
-                      <Image
-                        source={{ uri: m.avatarUrl }}
-                        style={styles.splitPipImg}
-                        accessibilityLabel={m.displayName}
-                      />
-                    </View>
-                  ) : (
-                    <View
-                      style={[
-                        styles.splitPip,
-                        { backgroundColor: ended ? '#F0EEE9' : m.avatarBg },
-                      ]}
-                    >
-                      <Text style={[styles.splitPipTxt, { color: ended ? C.muted : m.avatarColor }]}>
-                        {m.initials}
-                      </Text>
-                    </View>
-                  )}
+                  <View style={[styles.splitPip, styles.splitPipPhoto, ended && styles.splitPipEnded]}>
+                    <UserAvatarCircle
+                      size={36}
+                      uid={m.memberId}
+                      initials={m.initials}
+                      imageUrl={m.avatarUrl}
+                      initialsBackgroundColor={ended ? '#F0EEE9' : m.avatarBg}
+                      initialsTextColor={ended ? C.muted : m.avatarColor}
+                      accessibilityLabel={m.displayName}
+                    />
+                  </View>
                   <View style={styles.splitRowMid}>
                     <Text style={[styles.splitName, ended && styles.splitTextEnded]} numberOfLines={1}>
                       {m.displayName}
