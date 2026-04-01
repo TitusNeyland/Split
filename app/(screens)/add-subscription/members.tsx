@@ -414,12 +414,19 @@ export default function AddSubscriptionMembersScreen() {
     [mode, totalCents],
   );
 
+  const removeNonOwnerMember = useCallback(
+    (memberId: string) => {
+      removeMemberCore(memberId);
+      setSheetSessionAddedIds((prev) => prev.filter((id) => id !== memberId));
+    },
+    [removeMemberCore],
+  );
+
   const onToggleFriendInSplit = useCallback(
     (friend: SheetFriend) => {
       const isOnSplit = members.some((m) => m.memberId === friend.memberId);
       if (isOnSplit) {
-        removeMemberCore(friend.memberId);
-        setSheetSessionAddedIds((prev) => prev.filter((id) => id !== friend.memberId));
+        removeNonOwnerMember(friend.memberId);
         return;
       }
       const ok = appendMemberCore({
@@ -439,15 +446,7 @@ export default function AddSubscriptionMembersScreen() {
         setTimeout(() => sheetSearchInputRef.current?.focus(), 0);
       }
     },
-    [members, appendMemberCore, removeMemberCore],
-  );
-
-  const removeFromInvitedSheet = useCallback(
-    (memberId: string) => {
-      removeMemberCore(memberId);
-      setSheetSessionAddedIds((prev) => prev.filter((id) => id !== memberId));
-    },
-    [removeMemberCore],
+    [members, appendMemberCore, removeNonOwnerMember],
   );
 
   const closeMemberPicker = useCallback(() => {
@@ -724,6 +723,19 @@ export default function AddSubscriptionMembersScreen() {
                 <Text style={styles.amtLabel} numberOfLines={1}>
                   {fmtCents(rowCents[i] ?? 0)}
                 </Text>
+                <View style={styles.memberTrashSlot}>
+                  {!m.isOwner ? (
+                    <Pressable
+                      onPress={() => removeNonOwnerMember(m.memberId)}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      style={styles.memberTrashBtn}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Remove ${m.displayName} from split`}
+                    >
+                      <Ionicons name="trash-outline" size={16} color="#E24B4A" />
+                    </Pressable>
+                  ) : null}
+                </View>
               </View>
             );
           })}
@@ -855,7 +867,7 @@ export default function AddSubscriptionMembersScreen() {
                       {m.displayName}
                     </Text>
                     <Pressable
-                      onPress={() => removeFromInvitedSheet(m.memberId)}
+                      onPress={() => removeNonOwnerMember(m.memberId)}
                       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                       style={styles.sheetInvitedRemove}
                       accessibilityRole="button"
@@ -1203,6 +1215,14 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: C.text,
     textAlign: 'right',
+  },
+  memberTrashSlot: {
+    width: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  memberTrashBtn: {
+    padding: 2,
   },
   validationBar: {
     flexDirection: 'row',
