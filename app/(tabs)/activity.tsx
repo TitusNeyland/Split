@@ -656,7 +656,7 @@ export default function ActivityScreen() {
   const scrollRef = useRef<ScrollView>(null);
   useScrollToTop(scrollRef);
   const uid = useFirebaseUid();
-  const { subscriptions, loading: subscriptionsLoading } = useSubscriptions();
+  const { subscriptions, loading: subscriptionsLoading, owedToYouCents } = useSubscriptions();
   const router = useRouter();
   const params = useLocalSearchParams<{
     filter?: string | string[];
@@ -777,10 +777,7 @@ export default function ActivityScreen() {
     return `+${formatted}`;
   }, [ownerSummary.collectedThisMonthCents]);
 
-  const pendingDisplay = useMemo(
-    () => formatUsdFromCents(ownerSummary.pendingCents),
-    [ownerSummary.pendingCents],
-  );
+  const pendingDisplay = useMemo(() => formatUsdFromCents(owedToYouCents), [owedToYouCents]);
 
   const pendingBreakdown = useMemo(() => {
     const { pendingOverdueCount: o, pendingOnlyCount: p } = ownerSummary;

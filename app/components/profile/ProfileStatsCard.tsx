@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Animated, type ViewStyle } from 'react-native';
 import { subscribeProfileStats, type ProfileStats } from '../../../lib/profile';
-import { formatUsdDollarsFlexible } from '../../../lib/format/currency';
+import { formatUsdFromCents } from '../../../lib/format/currency';
+import { useSubscriptions } from '../../contexts/SubscriptionsContext';
 
 const C = {
   text: '#1a1a18',
@@ -12,10 +13,9 @@ const C = {
 };
 
 const DEMO_STATS: ProfileStats = {
-  activeSplits: 4,
-  collectedTotal: 318,
+  collectedTotalCents: 31800,
   friends: 7,
-  loading: { activeSplits: false, collectedTotal: false, friends: false },
+  loading: { collectedTotal: false, friends: false },
 };
 
 function PulsingBar({ style }: { style: ViewStyle }) {
@@ -67,6 +67,7 @@ type Props = {
 };
 
 export default function ProfileStatsCard({ uid, demoMode }: Props) {
+  const { activeCount: liveActiveSplits, loading: subscriptionsLoading } = useSubscriptions();
   const [stats, setStats] = useState<ProfileStats>(() =>
     demoMode ? DEMO_STATS : emptyIdle()
   );
@@ -88,14 +89,14 @@ export default function ProfileStatsCard({ uid, demoMode }: Props) {
     <View style={styles.card}>
       <View style={styles.row}>
         <StatColumn
-          loading={stats.loading.activeSplits}
-          value={stats.activeSplits}
+          loading={demoMode ? false : Boolean(uid) && subscriptionsLoading}
+          value={demoMode ? 4 : liveActiveSplits}
           label="Active splits"
         />
         <View style={styles.divider} />
         <StatColumn
           loading={stats.loading.collectedTotal}
-          value={formatUsdDollarsFlexible(stats.collectedTotal)}
+          value={formatUsdFromCents(stats.collectedTotalCents)}
           label="Collected total"
           valueStyle={styles.valueGreen}
         />
@@ -108,19 +109,17 @@ export default function ProfileStatsCard({ uid, demoMode }: Props) {
 
 function emptyIdle(): ProfileStats {
   return {
-    activeSplits: 0,
-    collectedTotal: 0,
+    collectedTotalCents: 0,
     friends: 0,
-    loading: { activeSplits: false, collectedTotal: false, friends: false },
+    loading: { collectedTotal: false, friends: false },
   };
 }
 
 function allLoading(): ProfileStats {
   return {
-    activeSplits: 0,
-    collectedTotal: 0,
+    collectedTotalCents: 0,
     friends: 0,
-    loading: { activeSplits: true, collectedTotal: true, friends: true },
+    loading: { collectedTotal: true, friends: true },
   };
 }
 

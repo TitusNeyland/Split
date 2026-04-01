@@ -197,6 +197,28 @@ function applyPlannedAmountsFromMemberRoster(shares, roster) {
   });
 }
 
+/** After last invitee declines, owner roster may still have old per-person fixedAmount — bump to full total. */
+function normalizeSoloOwnerMemberRoster(roster, totalCents, ownerUid) {
+  if (!ownerUid || totalCents <= 0 || !Array.isArray(roster)) return roster;
+  const active = roster.filter((m) => m && String(m.memberStatus ?? '').toLowerCase() === 'active');
+  if (active.length !== 1) return roster;
+  const sole = active[0];
+  if (String(sole.uid ?? '') !== ownerUid) return roster;
+  const sm = String(sole.splitMethod ?? 'equal').toLowerCase();
+  if (sm === 'owner_less') return roster;
+  return roster.map((m) => {
+    if (!m || String(m.uid ?? '') !== ownerUid) return m;
+    if (String(m.memberStatus ?? '').toLowerCase() !== 'active') return m;
+    return { ...m, fixedAmount: Math.round(totalCents), percentage: 100 };
+  });
+}
+
+function deriveOwnerUidFromShares(shares) {
+  const row = shares.find((s) => s && s.role === 'owner');
+  const mid = row && typeof row === 'object' ? row.memberId : undefined;
+  return typeof mid === 'string' && mid ? mid : '';
+}
+
 function syncOwnerShareForPendingInvites(shares, totalCents, roster) {
   const list = shares.map((x) => ({ ...x }));
   if (hasInvitePendingInShares(list)) {
@@ -207,9 +229,22 @@ function syncOwnerShareForPendingInvites(shares, totalCents, roster) {
     return list;
   }
   if (roster && roster.length > 0) {
-    return applyPlannedAmountsFromMemberRoster(list, roster);
+    const ownerUid = deriveOwnerUidFromShares(list);
+    const rosterForApply =
+      ownerUid && totalCents > 0
+        ? normalizeSoloOwnerMemberRoster(roster.map((r) => ({ ...r })), totalCents, ownerUid)
+        : roster;
+    return applyPlannedAmountsFromMemberRoster(list, rosterForApply);
   }
   return list;
+}
+
+function getTotalCentsFromSubData(data) {
+  const tc = data.totalCost;
+  if (typeof tc === 'number' && Number.isFinite(tc)) return Math.round(tc);
+  const t = data.totalCents;
+  if (typeof t === 'number' && Number.isFinite(t)) return Math.round(t);
+  return 0;
 }
 
 /** Mirrors client `parseBillingDayParam` monthly patterns (see `billingDayFormat.ts`). */
@@ -469,8 +504,11 @@ async function removeDeclinedSplitInviteSlot(db, subscriptionId, inviteId, decli
     delete mps[oldMemberId];
     delete mps[declinedByUid];
 
-    const totalCents =
-      typeof data.totalCents === 'number' && Number.isFinite(data.totalCents) ? data.totalCents : 0;
+    const totalCents = getTotalCentsFromSubData(data);
+    const ownerUid = typeof data.ownerUid === 'string' ? data.ownerUid : '';
+    if (isObjectRoster && Array.isArray(membersRoster) && membersRoster.length > 0 && ownerUid) {
+      membersRoster = normalizeSoloOwnerMemberRoster(membersRoster, totalCents, ownerUid);
+    }
     const syncedShares = isObjectRoster
       ? syncOwnerShareForPendingInvites(shares, totalCents, membersRoster)
       : shares;

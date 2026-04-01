@@ -32,6 +32,45 @@ export function hasInvitePendingInShares(shares: {
   );
 }
 
+/**
+ * After the last invitee is removed (declined / owner removed slot), only the owner may remain
+ * active. Their roster row still carries the old per-person `fixedAmount` (e.g. $7 of $14); bump
+ * to full `totalCents` and 100% so shares and UI match a solo subscription.
+ * Skips `owner_less` (owner’s planned share is $0 by design).
+ */
+export function normalizeSoloOwnerMemberRoster(
+  roster: SubscriptionMemberRosterRow[],
+  totalCents: number,
+  ownerUid: string
+): SubscriptionMemberRosterRow[] {
+  if (!ownerUid || totalCents <= 0) return roster;
+  const active = roster.filter(
+    (m) => m && String(m.memberStatus ?? '').toLowerCase() === 'active'
+  );
+  if (active.length !== 1) return roster;
+  const sole = active[0]!;
+  if (String(sole.uid ?? '') !== ownerUid) return roster;
+  const sm = String(sole.splitMethod ?? 'equal').toLowerCase();
+  if (sm === 'owner_less') return roster;
+
+  return roster.map((m) => {
+    if (!m || String(m.uid ?? '') !== ownerUid) return m;
+    if (String(m.memberStatus ?? '').toLowerCase() !== 'active') return m;
+    return {
+      ...m,
+      fixedAmount: Math.round(totalCents),
+      percentage: 100,
+    };
+  });
+}
+
+function deriveOwnerUidFromShares(shares: Record<string, unknown>[]): string {
+  const row = shares.find((s) => s && (s as { role?: string }).role === 'owner');
+  const mid =
+    row && typeof row === 'object' ? (row as { memberId?: string }).memberId : undefined;
+  return typeof mid === 'string' && mid ? mid : '';
+}
+
 export function applyPlannedAmountsFromMemberRoster(
   shares: Record<string, unknown>[],
   roster: SubscriptionMemberRosterRow[]
@@ -73,7 +112,16 @@ export function syncOwnerShareForPendingInvites(
     return list;
   }
   if (roster && roster.length > 0) {
-    return applyPlannedAmountsFromMemberRoster(list, roster);
+    const ownerUid = deriveOwnerUidFromShares(list);
+    const rosterForApply =
+      ownerUid && totalCents > 0
+        ? normalizeSoloOwnerMemberRoster(
+            roster.map((r) => ({ ...r })),
+            totalCents,
+            ownerUid
+          )
+        : roster;
+    return applyPlannedAmountsFromMemberRoster(list, rosterForApply);
   }
   return list;
 }
