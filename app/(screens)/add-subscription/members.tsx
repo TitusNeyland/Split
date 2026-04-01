@@ -38,6 +38,7 @@ import { getFriendAvatarColors } from '../../../lib/friends/friendAvatar';
 import { normalizeInviteEmail } from '../../../lib/friends/friendSystemFirestore';
 import { initialsFromName } from '../../../lib/profile';
 import { useProfileAvatarUrl } from '../../hooks/useProfileAvatarUrl';
+import { useKeyboardHeight } from '../../hooks/useKeyboardHeight';
 
 const C = {
   purple: '#534AB7',
@@ -200,6 +201,10 @@ export default function AddSubscriptionMembersScreen() {
   const [searchResults, setSearchResults] = useState<FriendSearchUserRow[]>([]);
   const [searchingFriends, setSearchingFriends] = useState(false);
   const searchReq = useRef(0);
+  const scrollRef = useRef<ScrollView>(null);
+  const scrollContentRef = useRef<View>(null);
+  const memberInputRefs = useRef<(TextInput | null)[]>([]);
+  const keyboardHeight = useKeyboardHeight();
 
   useEffect(() => {
     if (!isFirebaseConfigured()) return;
@@ -558,45 +563,75 @@ export default function AddSubscriptionMembersScreen() {
 
   const inputLocked = mode === 'equal' || mode === 'ownerLess';
 
+  const handleMemberInputFocus = useCallback(
+    (index: number) => {
+      if (inputLocked || (mode !== 'customPercent' && mode !== 'fixedDollar')) return;
+      setTimeout(() => {
+        const input = memberInputRefs.current[index];
+        const content = scrollContentRef.current;
+        if (!input || !content) return;
+        input.measureLayout(
+          content,
+          (_x, y) => {
+            const vis = 120;
+            scrollRef.current?.scrollTo({ y: Math.max(0, y - vis), animated: true });
+          },
+          () => {},
+        );
+      }, 100);
+    },
+    [inputLocked, mode],
+  );
+
   return (
     <View style={styles.root}>
       <StatusBar style="light" />
-      <LinearGradient
-        colors={['#6B3FA0', '#4A1570', '#2D0D45']}
-        locations={[0, 0.6, 1]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 0.5, y: 1 }}
-        style={[styles.hero, { paddingTop: Math.max(insets.top, 12) + 4 }]}
+      <KeyboardAvoidingView
+        style={styles.kav}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}
       >
-        <Pressable
-          onPress={() => router.back()}
-          style={styles.backRow}
-          accessibilityRole="button"
-          accessibilityLabel="Back to plan details"
+        <LinearGradient
+          colors={['#6B3FA0', '#4A1570', '#2D0D45']}
+          locations={[0, 0.6, 1]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={[styles.hero, { paddingTop: Math.max(insets.top, 12) + 4 }]}
         >
-          <Ionicons name="chevron-back" size={26} color="rgba(255,255,255,0.7)" />
-          <Text style={styles.backLbl}>Back</Text>
-        </Pressable>
-        <Text style={styles.title}>Who's splitting?</Text>
-        <Text style={styles.sub}>Add members and set their share</Text>
-        <View style={styles.progWrap}>
-          <View style={styles.progTrack}>
-            <View style={[styles.progFill, { width: '75%' }]} />
+          <Pressable
+            onPress={() => router.back()}
+            style={styles.backRow}
+            accessibilityRole="button"
+            accessibilityLabel="Back to plan details"
+          >
+            <Ionicons name="chevron-back" size={26} color="rgba(255,255,255,0.7)" />
+            <Text style={styles.backLbl}>Back</Text>
+          </Pressable>
+          <Text style={styles.title}>Who's splitting?</Text>
+          <Text style={styles.sub}>Add members and set their share</Text>
+          <View style={styles.progWrap}>
+            <View style={styles.progTrack}>
+              <View style={[styles.progFill, { width: '75%' }]} />
+            </View>
+            <Text style={styles.progLabel}>Step 3 of 4</Text>
           </View>
-          <Text style={styles.progLabel}>Step 3 of 4</Text>
-        </View>
-      </LinearGradient>
+        </LinearGradient>
 
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={[
-          styles.body,
-          { paddingBottom: Math.max(insets.bottom, 16) + 96 },
-        ]}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
-        <Text style={styles.sectionLbl}>Split method</Text>
+        <ScrollView
+          ref={scrollRef}
+          style={styles.scroll}
+          contentContainerStyle={[
+            styles.body,
+            {
+              paddingBottom:
+                Math.max(insets.bottom, 16) + 96 + keyboardHeight + (keyboardHeight > 0 ? 40 : 0),
+            },
+          ]}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <View ref={scrollContentRef} collapsable={false}>
+            <Text style={styles.sectionLbl}>Split method</Text>
         <View style={styles.methodGrid}>
           {METHODS.map((m) => {
             const on = mode === m.id;
@@ -635,8 +670,12 @@ export default function AddSubscriptionMembersScreen() {
             } else if (mode === 'customPercent') {
               inputInner = (
                 <TextInput
+                  ref={(el) => {
+                    memberInputRefs.current[i] = el;
+                  }}
                   value={customPercentStr[i] ?? ''}
                   onChangeText={(t) => setPercentAt(i, t)}
+                  onFocus={() => handleMemberInputFocus(i)}
                   keyboardType="decimal-pad"
                   style={styles.inputEditable}
                   placeholder="0"
@@ -649,8 +688,12 @@ export default function AddSubscriptionMembersScreen() {
                 <View style={styles.dollarInputRow}>
                   <Text style={styles.dollarTiny}>$</Text>
                   <TextInput
+                    ref={(el) => {
+                      memberInputRefs.current[i] = el;
+                    }}
                     value={fixedDollarStr[i] ?? ''}
                     onChangeText={(t) => setDollarAt(i, t)}
+                    onFocus={() => handleMemberInputFocus(i)}
                     keyboardType="decimal-pad"
                     style={styles.inputEditableDollar}
                     placeholder="0.00"
@@ -724,23 +767,25 @@ export default function AddSubscriptionMembersScreen() {
         >
           <Text style={styles.addMemberBtnTxt}>+ Add member</Text>
         </Pressable>
-      </ScrollView>
+          </View>
+        </ScrollView>
 
-      <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 14) }]}>
-        <Pressable
-          onPress={onReview}
-          disabled={!canContinue}
-          style={({ pressed }) => [
-            styles.primaryBtn,
-            !canContinue && styles.primaryBtnDisabled,
-            pressed && canContinue && styles.primaryBtnPressed,
-          ]}
-          accessibilityRole="button"
-          accessibilityState={{ disabled: !canContinue }}
-        >
-          <Text style={styles.primaryBtnTxt}>Review split</Text>
-        </Pressable>
-      </View>
+        <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 14) }]}>
+          <Pressable
+            onPress={onReview}
+            disabled={!canContinue}
+            style={({ pressed }) => [
+              styles.primaryBtn,
+              !canContinue && styles.primaryBtnDisabled,
+              pressed && canContinue && styles.primaryBtnPressed,
+            ]}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: !canContinue }}
+          >
+            <Text style={styles.primaryBtnTxt}>Review split</Text>
+          </Pressable>
+        </View>
+      </KeyboardAvoidingView>
 
       <Modal
         visible={pickerOpen}
@@ -891,6 +936,9 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: C.bg,
+  },
+  kav: {
+    flex: 1,
   },
   hero: {
     paddingHorizontal: 18,
