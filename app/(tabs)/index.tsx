@@ -13,7 +13,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useScrollToTop } from '@react-navigation/native';
+import { useFocusEffect, useScrollToTop } from '@react-navigation/native';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { spacing } from '../../constants/theme';
 import { formatUsdDollarsFixed2 } from '../../lib/format/currency';
@@ -80,6 +80,14 @@ const C = {
 /** Rounded square corners for 38×38 tiles; matches `ServiceIcon` (`size * 0.28`). */
 const SERVICE_TILE_RADIUS = Math.round(38 * 0.28);
 
+function getGreeting(): string {
+  const hour = new Date().getHours();
+  if (hour >= 5 && hour < 12) return 'Good morning';
+  if (hour >= 12 && hour < 17) return 'Good afternoon';
+  if (hour >= 17 && hour < 21) return 'Good evening';
+  return 'Good evening';
+}
+
 type FriendRow = {
   id: string;
   initials: string;
@@ -133,6 +141,7 @@ export default function HomeScreen() {
   const [notificationsLoading, setNotificationsLoading] = useState(true);
   const [notifPanelOpen, setNotifPanelOpen] = useState(false);
   const [selectedCalendarDay, setSelectedCalendarDay] = useState<HomeCalendarDayCell | null>(null);
+  const [greeting, setGreeting] = useState(() => getGreeting());
 
   const uid = user?.uid ?? '';
   const hasSubscriptions = subscriptions.length > 0;
@@ -298,6 +307,12 @@ export default function HomeScreen() {
     return 'there';
   }, [homeDisplayName]);
 
+  useFocusEffect(
+    useCallback(() => {
+      setGreeting(getGreeting());
+    }, []),
+  );
+
   const homeHeaderInitials = useMemo(() => {
     const n = homeDisplayName ?? user?.displayName ?? 'Me';
     return initialsFromName(n);
@@ -396,9 +411,14 @@ export default function HomeScreen() {
                 <Ionicons name="person-outline" size={22} color="rgba(255,255,255,0.65)" />
               )}
             </Pressable>
-            <Text style={styles.greeting} numberOfLines={1}>
-              {`Good morning, ${greetingName}`}
-            </Text>
+            <View style={styles.greetingWrap} accessibilityRole="text">
+              <Text style={styles.greetingLabel} numberOfLines={1}>
+                {greeting},
+              </Text>
+              <Text style={styles.greetingName} numberOfLines={1}>
+                {greetingName}
+              </Text>
+            </View>
             <Pressable
               hitSlop={8}
               accessibilityRole="button"
@@ -821,12 +841,26 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     gap: 8,
   },
-  greeting: {
+  greetingWrap: {
     flex: 1,
-    textAlign: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 0,
+    gap: 4,
+  },
+  greetingLabel: {
     fontSize: 17,
     fontWeight: '500',
     color: '#fff',
+    flexShrink: 0,
+  },
+  greetingName: {
+    fontSize: 17,
+    fontWeight: '500',
+    color: '#fff',
+    flexShrink: 1,
+    minWidth: 0,
   },
   notifBadge: {
     position: 'absolute',
