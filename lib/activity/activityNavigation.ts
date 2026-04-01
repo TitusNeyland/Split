@@ -6,7 +6,12 @@ export function resolveActivityRoute(input: {
   subscriptionId?: string;
   joinSubscriptionId?: string;
   friendLinkIds?: string[];
+  /** When false, do not route to subscription (feed row sets this for terminal / no-access cases). */
+  navigateToSubscription?: boolean;
 }): string | null {
+  if (input.navigateToSubscription === false) {
+    return null;
+  }
   const t = input.activityType;
   if (t === 'friend_connected' || t === 'friend_invite_accepted') {
     const uid = input.friendLinkIds?.[0];
