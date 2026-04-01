@@ -204,6 +204,7 @@ export default function AddSubscriptionMembersScreen() {
   const scrollRef = useRef<ScrollView>(null);
   const scrollContentRef = useRef<View>(null);
   const memberInputRefs = useRef<(TextInput | null)[]>([]);
+  const sheetSearchInputRef = useRef<TextInput>(null);
   const keyboardHeight = useKeyboardHeight();
 
   useEffect(() => {
@@ -803,14 +804,40 @@ export default function AddSubscriptionMembersScreen() {
             <Text style={styles.sheetTitle} accessibilityRole="header">
               Add members ({nonOwnerMemberCount} selected)
             </Text>
-            <TextInput
-              value={friendQuery}
-              onChangeText={setFriendQuery}
-              placeholder="Search friends…"
-              placeholderTextColor={C.muted}
-              style={styles.sheetSearch}
-              accessibilityLabel="Search friends"
-            />
+            <View style={styles.sheetSearchContainer}>
+              <Ionicons
+                name="search-outline"
+                size={20}
+                color={C.muted}
+                style={styles.sheetSearchLeadingIcon}
+              />
+              <TextInput
+                ref={sheetSearchInputRef}
+                value={friendQuery}
+                onChangeText={setFriendQuery}
+                placeholder="Search friends or enter email…"
+                placeholderTextColor={C.muted}
+                style={styles.sheetSearchInput}
+                returnKeyType="search"
+                accessibilityLabel="Search friends"
+              />
+              {friendQuery.length > 0 ? (
+                <Pressable
+                  onPress={() => {
+                    setFriendQuery('');
+                    sheetSearchInputRef.current?.focus();
+                  }}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  style={styles.sheetSearchClearBtn}
+                  accessibilityRole="button"
+                  accessibilityLabel="Clear search"
+                >
+                  <View style={styles.sheetSearchClearCircle}>
+                    <Ionicons name="close" size={10} color="#fff" />
+                  </View>
+                </Pressable>
+              ) : null}
+            </View>
             <Text style={styles.sheetSectionLbl}>Your friends</Text>
             <FlatList
               data={friendsForSheet}
@@ -1262,14 +1289,38 @@ const styles = StyleSheet.create({
     marginBottom: 14,
     textAlign: 'center',
   },
-  sheetSearch: {
+  sheetSearchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: C.segBg,
     borderRadius: 12,
+    marginBottom: 12,
+    paddingLeft: 12,
+    paddingRight: 6,
+    minHeight: 44,
+  },
+  sheetSearchLeadingIcon: {
+    marginRight: 6,
+  },
+  sheetSearchInput: {
+    flex: 1,
     paddingVertical: 12,
-    paddingHorizontal: 14,
+    paddingRight: 6,
     fontSize: 16,
     color: C.text,
-    marginBottom: 12,
+  },
+  sheetSearchClearBtn: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingLeft: 4,
+  },
+  sheetSearchClearCircle: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: C.muted,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   sheetSectionLbl: {
     fontSize: 13,
