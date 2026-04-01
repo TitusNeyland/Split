@@ -6,6 +6,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { ServiceIcon } from '../components/shared/ServiceIcon';
+import { UserAvatarCircle } from '../components/shared/UserAvatarCircle';
 import { fmtCents } from '../../lib/subscription/addSubscriptionSplitMath';
 import { useSubscriptionDetailFromFirestore } from '../../lib/subscription/subscriptionDetailFromFirestore';
 import { useFirebaseUid } from '../../lib/auth/useFirebaseUid';
@@ -138,8 +139,15 @@ export default function SplitAddedScreen() {
         <Text style={styles.sectionLbl}>Members</Text>
         <View style={styles.pipRow}>
           {others.map((m) => (
-            <View key={m.memberId} style={[styles.pip, { backgroundColor: m.avatarBg }]}>
-              <Text style={[styles.pipTxt, { color: m.avatarColor }]}>{m.initials}</Text>
+            <View key={m.memberId} style={styles.pip}>
+              <UserAvatarCircle
+                size={40}
+                uid={m.memberId}
+                initials={m.initials}
+                imageUrl={m.avatarUrl}
+                initialsBackgroundColor={m.avatarBg}
+                initialsTextColor={m.avatarColor}
+              />
             </View>
           ))}
         </View>

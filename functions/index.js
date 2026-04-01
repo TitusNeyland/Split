@@ -45,6 +45,20 @@ async function getUserDisplayName(db, uid) {
   return typeof dn === 'string' && dn.trim() ? dn.trim() : 'Someone';
 }
 
+/** Prefer Firestore `photoURL`, then legacy `avatarUrl` (matches client `userDocPhotoUrl`). */
+function userPhotoUrlFromUserData(d) {
+  if (!d || typeof d !== 'object') return null;
+  if (typeof d.photoURL === 'string' && d.photoURL.trim()) return d.photoURL.trim();
+  if (typeof d.avatarUrl === 'string' && d.avatarUrl.trim()) return d.avatarUrl.trim();
+  return null;
+}
+
+async function getUserPhotoUrl(db, uid) {
+  if (typeof uid !== 'string' || !uid) return null;
+  const snap = await db.collection('users').doc(uid).get();
+  return userPhotoUrlFromUserData(snap.data() || {});
+}
+
 function slugifyServiceIdFromName(name) {
   if (!name || typeof name !== 'string') return 'unknown';
   const s = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
@@ -242,6 +256,7 @@ async function writeSplitInviteAcceptedActivities(db, subscriptionId, acceptedBy
   const slugId = slugifyServiceIdFromName(subName);
   const ownerName = await getUserDisplayName(db, createdBy);
   const accepterName = await getUserDisplayName(db, acceptedBy);
+  const accepterAvatarUrl = await getUserPhotoUrl(db, acceptedBy);
   try {
     await appendActivityEvent(db, acceptedBy, {
       type: 'split_invite_accepted',
@@ -262,6 +277,7 @@ async function writeSplitInviteAcceptedActivities(db, subscriptionId, acceptedBy
       serviceId: slugId,
       actorUid: acceptedBy,
       actorName: accepterName,
+      actorAvatarUrl: accepterAvatarUrl,
       metadata: { newMemberUid: acceptedBy, newMemberShare: shareCents, inviteId },
     });
   } catch (e) {
@@ -654,7 +670,7 @@ async function notifySplitInvitePendingMember(db, subId, after, memberUid, invit
   const od = ownerDoc.data() || {};
   const ownerName =
     typeof od.displayName === 'string' && od.displayName.trim() ? od.displayName.trim() : 'Someone';
-  const ownerAvatarUrl = typeof od.avatarUrl === 'string' ? od.avatarUrl : null;
+  const ownerAvatarUrl = userPhotoUrlFromUserData(od);
 
   const pushTitle = `${ownerName} invited you to ${subscriptionName}`;
   const pushBody = `Your share would be $${(memberShare / 100).toFixed(2)}/month · Tap to accept or decline`;
@@ -1459,6 +1475,7 @@ exports.onSubscriptionSplitLifecycleActivity = onDocumentUpdated('subscriptions/
 
     if (voluntaryLeaveUid && rid === voluntaryLeaveUid) {
       voluntaryHandled.add(rid);
+      const leftMemberAvatarUrl = await getUserPhotoUrl(db, rid);
       try {
         await appendActivityEvent(db, rid, {
           type: 'split_left',
@@ -1478,6 +1495,7 @@ exports.onSubscriptionSplitLifecycleActivity = onDocumentUpdated('subscriptions/
           serviceId: slugId,
           actorUid: rid,
           actorName: removedName,
+          actorAvatarUrl: leftMemberAvatarUrl,
           metadata: { leftMemberUid: rid },
         });
       } catch (e) {

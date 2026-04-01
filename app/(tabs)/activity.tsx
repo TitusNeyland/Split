@@ -258,7 +258,7 @@ type ActivityFeedItem = {
   joinSubscriptionId?: string;
   joinInviteId?: string;
   serviceIconMuted?: boolean;
-  friendAvatar?: { initials: string; imageUrl?: string | null };
+  friendAvatar?: { initials: string; imageUrl?: string | null; uid?: string };
   /** Raw Firestore event type — drives filter tabs. */
   activityType: ActivityEventType;
   /** Server + optimistic client read state */
@@ -477,6 +477,7 @@ function ActivityItemRow({
               <View style={styles.actIcoPlain}>
                 <UserAvatarCircle
                   size={40}
+                  uid={item.friendAvatar.uid}
                   initials={item.friendAvatar.initials}
                   imageUrl={item.friendAvatar.imageUrl}
                 />

@@ -9,7 +9,7 @@ import {
 } from 'firebase/firestore';
 import { getFirebaseFirestore } from '../firebase';
 import { normalizeInviteEmail } from './friendSystemFirestore';
-import { mergePrivacySettings, type UserProfileDoc } from '../profile';
+import { mergePrivacySettings, userDocPhotoUrl, type UserProfileDoc } from '../profile';
 
 export type FriendSearchUserRow = {
   uid: string;
@@ -76,7 +76,7 @@ function mapUserDoc(snapshot: DocumentSnapshot<DocumentData>): FriendSearchUserR
     displayName,
     usernameHandle: usernameHandleFromEmailNormalized(normalized),
     maskedEmail: maskEmailForDisplay(email || null) || '—',
-    avatarUrl: typeof d.avatarUrl === 'string' ? d.avatarUrl : null,
+    avatarUrl: userDocPhotoUrl(d as Record<string, unknown>),
     emailNormalized: normalized,
   };
 }

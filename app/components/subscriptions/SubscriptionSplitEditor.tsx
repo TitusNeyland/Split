@@ -8,9 +8,9 @@ import {
   TextInput,
   ActivityIndicator,
   Alert,
-  Image,
 } from 'react-native';
 import { getFirebaseAuth } from '../../../lib/firebase';
+import { UserAvatarCircle } from '../shared/UserAvatarCircle';
 import {
   saveSubscriptionSplitToFirestore,
   type FirestoreMemberShare,
@@ -333,15 +333,15 @@ export function SubscriptionSplitEditor({
         return (
           <View key={m.memberId} style={[styles.splitRow, isLast && styles.splitRowLast]}>
             <View style={[styles.splitAv, m.avatarUrl ? styles.splitAvPhoto : { backgroundColor: m.avatarBg }]}>
-              {m.avatarUrl ? (
-                <Image
-                  source={{ uri: m.avatarUrl }}
-                  style={styles.splitAvImg}
-                  accessibilityLabel={m.displayName}
-                />
-              ) : (
-                <Text style={[styles.splitAvTxt, { color: m.avatarColor }]}>{m.initials}</Text>
-              )}
+              <UserAvatarCircle
+                size={28}
+                uid={m.memberId}
+                initials={m.initials}
+                imageUrl={m.avatarUrl}
+                initialsBackgroundColor={m.avatarBg}
+                initialsTextColor={m.avatarColor}
+                accessibilityLabel={m.displayName}
+              />
             </View>
             <Text style={styles.splitName} numberOfLines={1}>
               {m.displayName}

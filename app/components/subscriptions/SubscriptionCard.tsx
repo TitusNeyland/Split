@@ -1,7 +1,8 @@
 import React from 'react';
-import { View, Text, StyleSheet, Pressable, Image } from 'react-native';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { ServiceIcon } from '../shared/ServiceIcon';
+import { UserAvatarCircle } from '../shared/UserAvatarCircle';
 
 const C = {
   purple: '#534AB7',
@@ -91,6 +92,7 @@ export type SubscriptionCardProps = {
 };
 
 function MemberPip({
+  memberUid,
   initials,
   backgroundColor,
   color,
@@ -98,6 +100,7 @@ function MemberPip({
   pending,
   inviteExpired,
 }: {
+  memberUid?: string;
   initials: string;
   backgroundColor: string;
   color: string;
@@ -105,10 +108,17 @@ function MemberPip({
   pending?: boolean;
   inviteExpired?: boolean;
 }) {
-  if (avatarUrl) {
+  if (!inviteExpired && !pending && (avatarUrl || memberUid)) {
     return (
       <View style={[styles.pip, styles.pipPhoto]}>
-        <Image source={{ uri: avatarUrl }} style={styles.pipImg} accessibilityLabel="Member photo" />
+        <UserAvatarCircle
+          size={24}
+          uid={memberUid}
+          initials={initials}
+          imageUrl={avatarUrl}
+          initialsBackgroundColor={backgroundColor}
+          initialsTextColor={color}
+        />
       </View>
     );
   }
@@ -237,6 +247,7 @@ export function SubscriptionCard({
             {members.map((m) => (
               <MemberPip
                 key={m.id}
+                memberUid={m.pending || m.inviteExpired ? undefined : m.id}
                 initials={m.initials}
                 backgroundColor={m.backgroundColor}
                 color={m.color}

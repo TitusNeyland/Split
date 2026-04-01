@@ -30,6 +30,8 @@ import {
   getNextFirstChargeDate,
 } from '../../../lib/subscription/billingDayFormat';
 import { getServiceIconBackgroundColor, ServiceIcon } from '../../components/shared/ServiceIcon';
+import { UserAvatarCircle } from '../../components/shared/UserAvatarCircle';
+import { useProfileAvatarUrl } from '../../hooks/useProfileAvatarUrl';
 
 function formatCreateSplitError(e: unknown): string {
   if (e instanceof Error) return e.message;
@@ -74,6 +76,12 @@ function parseMembersJson(raw: string | undefined): ReviewMember[] {
       initials: String(m.initials ?? ''),
       avatarBg: String(m.avatarBg ?? '#EEEDFE'),
       avatarColor: String(m.avatarColor ?? C.purple),
+      avatarUrl:
+        typeof m.avatarUrl === 'string' && m.avatarUrl.trim()
+          ? m.avatarUrl.trim()
+          : m.avatarUrl === null
+            ? null
+            : undefined,
       role: m.role === 'owner' ? 'owner' : 'member',
       percent: typeof m.percent === 'number' && Number.isFinite(m.percent) ? m.percent : 0,
       amountCents:
@@ -150,6 +158,8 @@ function inviteFirstNames(members: ReviewMember[]): string {
 export default function AddSubscriptionReviewScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { avatarUrl: profileAvatarUrl } = useProfileAvatarUrl();
+  const ownerUid = getFirebaseAuth()?.currentUser?.uid ?? null;
   const params = useLocalSearchParams<{
     serviceName?: string;
     serviceId?: string;
@@ -457,8 +467,21 @@ export default function AddSubscriptionReviewScreen() {
             const isLast = i === members.length - 1;
             return (
               <View key={m.memberId || String(i)} style={[styles.memRow, isLast && styles.memRowLast]}>
-                <View style={[styles.memAv, { backgroundColor: m.avatarBg }]}>
-                  <Text style={[styles.memAvTxt, { color: m.avatarColor }]}>{m.initials}</Text>
+                <View style={styles.memAv}>
+                  <UserAvatarCircle
+                    size={36}
+                    uid={
+                      m.memberId.startsWith('invite-email-')
+                        ? null
+                        : m.role === 'owner'
+                          ? ownerUid
+                          : m.memberId
+                    }
+                    initials={m.initials}
+                    imageUrl={m.role === 'owner' ? profileAvatarUrl : m.avatarUrl}
+                    initialsBackgroundColor={m.avatarBg}
+                    initialsTextColor={m.avatarColor}
+                  />
                 </View>
                 <View style={styles.memMeta}>
                   <View style={styles.nameRow}>
@@ -568,14 +591,22 @@ export default function AddSubscriptionReviewScreen() {
                     {members.slice(0, 6).map((m, i) => (
                       <View
                         key={m.memberId || String(i)}
-                        style={[
-                          styles.modalStackAv,
-                          { marginLeft: i > 0 ? -9 : 0, backgroundColor: m.avatarBg, zIndex: 20 - i },
-                        ]}
+                        style={[styles.modalStackAv, { marginLeft: i > 0 ? -9 : 0, zIndex: 20 - i }]}
                       >
-                        <Text style={[styles.modalStackAvTxt, { color: m.avatarColor }]}>
-                          {m.initials}
-                        </Text>
+                        <UserAvatarCircle
+                          size={28}
+                          uid={
+                            m.memberId.startsWith('invite-email-')
+                              ? null
+                              : m.role === 'owner'
+                                ? ownerUid
+                                : m.memberId
+                          }
+                          initials={m.initials}
+                          imageUrl={m.role === 'owner' ? profileAvatarUrl : m.avatarUrl}
+                          initialsBackgroundColor={m.avatarBg}
+                          initialsTextColor={m.avatarColor}
+                        />
                       </View>
                     ))}
                   </View>

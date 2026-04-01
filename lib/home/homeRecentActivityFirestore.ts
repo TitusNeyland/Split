@@ -27,7 +27,7 @@ export type HomeRecentActivityFirestoreItem = {
   iconBg: string;
   iconColor: string;
   serviceIconMuted?: boolean;
-  friendAvatar?: { initials: string; imageUrl?: string | null };
+  friendAvatar?: { initials: string; imageUrl?: string | null; uid?: string };
 };
 
 /**

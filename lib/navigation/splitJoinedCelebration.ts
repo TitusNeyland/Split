@@ -1,6 +1,7 @@
 import type { Router } from 'expo-router';
 import { doc, getDoc } from 'firebase/firestore';
 import { getFirebaseFirestore } from '../firebase';
+import { userDocPhotoUrl } from '../profile/profile';
 import { mapFirestoreSubscriptionToDetailModel } from '../subscription/subscriptionDetailFromFirestore';
 import { getOwnerId } from '../subscription/subscriptionToCardModel';
 
@@ -47,7 +48,7 @@ export async function buildSplitJoinedCelebrationParams(
     const ud = userSnap.exists() ? userSnap.data() : {};
     const viewerDisplayName = typeof ud?.displayName === 'string' ? ud.displayName.trim() : '';
     const viewerFirstName = viewerDisplayName.split(/\s+/)[0] || 'You';
-    const userAvatarUrl = typeof ud?.avatarUrl === 'string' ? ud.avatarUrl : null;
+    const userAvatarUrl = userDocPhotoUrl(ud as Record<string, unknown>);
 
     const model = mapFirestoreSubscriptionToDetailModel(
       { ...d, id } as Record<string, unknown> & { id: string },
@@ -77,6 +78,8 @@ export async function buildSplitJoinedCelebrationParams(
       bg: m.avatarBg,
       color: m.avatarColor,
       highlight: m.memberId === viewerUid,
+      uid: m.memberId,
+      imageUrl: typeof m.avatarUrl === 'string' && m.avatarUrl.trim() ? m.avatarUrl.trim() : null,
     }));
 
     const viewerRow = model.members.find((m) => m.memberId === viewerUid);

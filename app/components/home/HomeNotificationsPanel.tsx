@@ -371,20 +371,14 @@ function NotificationRow({
       <View style={[styles.row, unread && styles.rowUnread]}>
         <View style={styles.rowMain}>
           <View style={styles.iconLeft}>
-            {meta?.friendAvatarUrl ? (
-              <UserAvatarCircle size={36} initials={initials} imageUrl={meta.friendAvatarUrl} />
-            ) : (
-              <View
-                style={[
-                  styles.fallbackAv,
-                  { backgroundColor: avColors?.backgroundColor ?? '#EEEDFE' },
-                ]}
-              >
-                <Text style={[styles.fallbackAvTxt, { color: avColors?.color ?? C.purple }]}>
-                  {initials}
-                </Text>
-              </View>
-            )}
+            <UserAvatarCircle
+              size={36}
+              uid={meta?.friendUid}
+              initials={initials}
+              imageUrl={meta?.friendAvatarUrl}
+              initialsBackgroundColor={avColors?.backgroundColor ?? '#EEEDFE'}
+              initialsTextColor={avColors?.color ?? C.purple}
+            />
           </View>
           <View style={styles.rowText}>
             <Text style={styles.rowTitle} numberOfLines={2}>

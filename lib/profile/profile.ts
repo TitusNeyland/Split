@@ -14,6 +14,7 @@ import {
   type User,
 } from 'firebase/auth';
 import { getFirebaseAuth, getFirebaseFirestore, getFirebaseStorage } from '../firebase';
+import { invalidateUserCache, primeUserInCache } from '../users/usersCache';
 import { normalizeInviteEmail } from '../friends/friendSystemFirestore';
 import type { NotificationPreferences } from '../notifications/notificationPreferences';
 import type { SplitPreferences } from '../split-preferences/splitPreferences';
@@ -38,6 +39,9 @@ export type UserProfileDoc = {
   phoneHash?: string | null;
   /** Denormalized from `privacySettings.discoverableByName` for optional indexing. */
   discoverableByName?: boolean | null;
+  /** Download URL for profile photo (Firebase Storage). Prefer over `avatarUrl` when both exist. */
+  photoURL?: string | null;
+  /** @deprecated Use `photoURL`; kept for older clients — same image URL. */
   avatarUrl?: string | null;
   /** Stripe Customer id — card PaymentMethods live only in Stripe. */
   stripeCustomerId?: string | null;
@@ -69,6 +73,18 @@ export type UserProfileDoc = {
   /** Denormalized unread in-app notification count; incremented by Cloud Functions, reset when the panel opens. */
   unreadNotificationCount?: number | null;
 };
+
+/** Resolved profile image URL from a user doc (`photoURL` is canonical; `avatarUrl` is legacy). */
+export function userDocPhotoUrl(d: Record<string, unknown> | null | undefined): string | null {
+  if (!d) return null;
+  const p =
+    typeof d.photoURL === 'string' && d.photoURL.trim()
+      ? d.photoURL.trim()
+      : typeof d.avatarUrl === 'string' && d.avatarUrl.trim()
+        ? d.avatarUrl.trim()
+        : null;
+  return p;
+}
 
 export function initialsFromName(name: string | null | undefined): string {
   const t = name?.trim();
@@ -166,16 +182,19 @@ export async function uploadProfileAvatar(localUri: string): Promise<string> {
 
   const response = await fetch(localUri);
   const blob = await response.blob();
-  const path = `users/${uid}/avatar.jpg`;
+  const path = `profile_photos/${uid}.jpg`;
   const storageRef = ref(storage, path);
   const contentType = blob.type && blob.type.startsWith('image/') ? blob.type : 'image/jpeg';
   await uploadBytes(storageRef, blob, { contentType });
   const url = await getDownloadURL(storageRef);
 
+  await updateProfile(user, { photoURL: url });
+
   const email = user.email ?? user.providerData[0]?.email ?? null;
   await setDoc(
     doc(db, 'users', uid),
     {
+      photoURL: url,
       avatarUrl: url,
       email,
       emailNormalized: email ? normalizeInviteEmail(email) : null,
@@ -187,6 +206,8 @@ export async function uploadProfileAvatar(localUri: string): Promise<string> {
     },
     { merge: true }
   );
+
+  primeUserInCache(uid, { photoURL: url, avatarUrl: url });
 
   return url;
 }
@@ -200,22 +221,30 @@ export async function removeProfileAvatar(): Promise<void> {
   if (!user) throw new Error('Sign in to update your profile photo.');
 
   const uid = user.uid;
-  const storageRef = ref(storage, `users/${uid}/avatar.jpg`);
-  try {
-    await deleteObject(storageRef);
-  } catch (e: unknown) {
-    const code = typeof e === 'object' && e && 'code' in e ? String((e as { code: string }).code) : '';
-    if (code !== 'storage/object-not-found') throw e;
+  const paths = [`profile_photos/${uid}.jpg`, `users/${uid}/avatar.jpg`];
+  for (const path of paths) {
+    const storageRef = ref(storage, path);
+    try {
+      await deleteObject(storageRef);
+    } catch (e: unknown) {
+      const code = typeof e === 'object' && e && 'code' in e ? String((e as { code: string }).code) : '';
+      if (code !== 'storage/object-not-found') throw e;
+    }
   }
+
+  await updateProfile(user, { photoURL: null });
 
   await setDoc(
     doc(db, 'users', uid),
     {
+      photoURL: deleteField(),
       avatarUrl: deleteField(),
       updatedAt: serverTimestamp(),
     },
     { merge: true }
   );
+
+  invalidateUserCache(uid);
 }
 
 export async function saveUserDisplayName(displayName: string): Promise<void> {

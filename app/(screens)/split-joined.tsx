@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { ServiceIcon } from '../components/shared/ServiceIcon';
+import { UserAvatarCircle } from '../components/shared/UserAvatarCircle';
 import { fmtCents } from '../../lib/subscription/addSubscriptionSplitMath';
 
 const C = {
@@ -123,7 +124,14 @@ function FallConfettiLayer({ width, height }: { width: number; height: number })
   );
 }
 
-type Pip = { initials: string; bg: string; color: string; highlight?: boolean };
+type Pip = {
+  initials: string;
+  bg: string;
+  color: string;
+  highlight?: boolean;
+  uid?: string;
+  imageUrl?: string | null;
+};
 
 function parseMemberPips(raw: string | undefined): Pip[] {
   if (typeof raw !== 'string' || !raw.trim()) return [];
@@ -136,6 +144,13 @@ function parseMemberPips(raw: string | undefined): Pip[] {
       bg: String(p.bg ?? '#EEEDFE'),
       color: String(p.color ?? '#534AB7'),
       highlight: Boolean(p.highlight),
+      uid: typeof p.uid === 'string' && p.uid.trim() ? p.uid.trim() : undefined,
+      imageUrl:
+        typeof p.imageUrl === 'string' && p.imageUrl.trim()
+          ? p.imageUrl.trim()
+          : p.imageUrl === null
+            ? null
+            : undefined,
     }));
   } catch {
     return [];
@@ -285,13 +300,18 @@ export default function SplitJoinedScreen() {
             <View style={styles.pipRow}>
             {pips.map((p, i) => (
               <View
-                key={`${p.initials}-${i}`}
+                key={`${p.uid ?? p.initials}-${i}`}
                 style={[styles.pipRing, p.highlight && styles.pipRingHighlight]}
               >
-                <View style={[styles.pip, { backgroundColor: p.bg }]}>
-                  <Text style={[styles.pipTxt, { color: p.color }]} numberOfLines={1}>
-                    {p.initials}
-                  </Text>
+                <View style={styles.pip}>
+                  <UserAvatarCircle
+                    size={40}
+                    uid={p.uid}
+                    initials={p.initials}
+                    imageUrl={p.imageUrl}
+                    initialsBackgroundColor={p.bg}
+                    initialsTextColor={p.color}
+                  />
                 </View>
               </View>
             ))}

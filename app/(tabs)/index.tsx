@@ -120,7 +120,7 @@ type HomeRecentActivityItem = {
   iconBg: string;
   iconColor: string;
   serviceIconMuted?: boolean;
-  friendAvatar?: { initials: string; imageUrl?: string | null };
+  friendAvatar?: { initials: string; imageUrl?: string | null; uid?: string };
   viewerAvatarUrl?: string | null;
 };
 
@@ -401,6 +401,7 @@ export default function HomeScreen() {
               {isFirebaseConfigured() && user ? (
                 <UserAvatarCircle
                   size={28}
+                  uid={user?.uid}
                   initials={homeHeaderInitials}
                   imageUrl={homeAvatarUrl}
                   loading={homeProfileLoading}
@@ -778,6 +779,7 @@ export default function HomeScreen() {
                     <View style={styles.actIcoWrap}>
                       <UserAvatarCircle
                         size={38}
+                        uid={item.friendAvatar.uid}
                         initials={item.friendAvatar.initials}
                         imageUrl={item.friendAvatar.imageUrl}
                       />

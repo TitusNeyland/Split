@@ -1,6 +1,6 @@
 import { useContext, useEffect, useState } from 'react';
 import { isFirebaseConfigured } from '../../lib/firebase';
-import { subscribeAuthAndProfile } from '../../lib/profile';
+import { subscribeAuthAndProfile, userDocPhotoUrl } from '../../lib/profile';
 import { LocalProfileAvatarContext } from '../contexts/LocalProfileAvatarContext';
 
 // LOCAL_PROFILE_AVATAR_OFFLINE — when Firebase is always on, drop context + fallback below; return only Firestore `avatarUrl`.
@@ -32,7 +32,7 @@ export function useProfileAvatarUrl(): {
       setHasSignedInUser(Boolean(s.user));
       const dn = s.profile?.displayName ?? s.user?.displayName ?? null;
       setDisplayName(typeof dn === 'string' && dn.trim() ? dn.trim() : null);
-      setFirebaseAvatarUrl(s.profile?.avatarUrl ?? null);
+      setFirebaseAvatarUrl(userDocPhotoUrl(s.profile as Record<string, unknown> | null | undefined));
       setProfileLoading(Boolean(s.user) && s.profileLoading);
     });
   }, []);
