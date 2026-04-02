@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
-import { Ionicons } from '@expo/vector-icons';
+import { FontAwesome5, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import {
   resolveServiceIcon,
   type ResolvedServiceIcon,
@@ -38,14 +38,7 @@ function ServiceBrandGlyph({
         </Svg>
       );
     case 'music':
-      return (
-        <Svg width={size} height={size} viewBox={`0 0 ${vb} ${vb}`} accessibilityElementsHidden>
-          <Path
-            d="M15.5 5.5v9.2c0 1-0.8 1.8-1.8 1.8s-1.8-0.8-1.8-1.8 0.8-1.8 1.8-1.8c0.3 0 0.6 0.1 0.9 0.2V8.2l-5 1.5v7.5c0 1-0.8 1.8-1.8 1.8s-1.8-0.8-1.8-1.8 0.8-1.8 1.8-1.8c0.3 0 0.6 0.1 0.9 0.2V5.5l6-2z"
-            fill={color}
-          />
-        </Svg>
-      );
+      return <Ionicons name="headset-outline" size={size} color={color} />;
     case 'tv-screen':
       return (
         <Svg width={size} height={size} viewBox={`0 0 ${vb} ${vb}`} accessibilityElementsHidden>
@@ -112,6 +105,16 @@ function ServiceBrandGlyph({
           <Rect x="13.3" y="13.3" width="6.2" height="6.2" rx="0.9" fill={color} />
         </Svg>
       );
+    case 'brain':
+      return <FontAwesome5 name="brain" size={size} color={color} solid />;
+    case 'cart':
+      return <Ionicons name="cart-outline" size={size} color={color} />;
+    case 'dumbbell':
+      return <Ionicons name="barbell-outline" size={size} color={color} />;
+    case 'tree':
+      return <MaterialCommunityIcons name="tree-outline" size={size} color={color} />;
+    case 'phone':
+      return <Ionicons name="phone-portrait-outline" size={size} color={color} />;
     default:
       return <Ionicons name="apps-outline" size={size} color={color} />;
   }

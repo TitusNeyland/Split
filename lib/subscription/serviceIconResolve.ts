@@ -13,7 +13,12 @@ export type ServiceGlyphKind =
   | 'cloud'
   | 'box-open'
   | 'brush'
-  | 'grid';
+  | 'grid'
+  | 'brain'
+  | 'cart'
+  | 'dumbbell'
+  | 'tree'
+  | 'phone';
 
 type BrandRule = {
   match: (n: string) => boolean;
@@ -61,7 +66,7 @@ const BRAND_RULES: BrandRule[] = [
     match: (n) => n.includes('walmart'),
     backgroundColor: '#0071CE',
     iconColor: '#ffffff',
-    glyph: 'box-open',
+    glyph: 'cart',
   },
   {
     match: (n) => n.includes('playstation') || n.includes('ps plus') || n.includes('ps+'),
@@ -77,13 +82,13 @@ const BRAND_RULES: BrandRule[] = [
   },
   { match: (n) => n.includes('icloud'), backgroundColor: '#3478F6', iconColor: '#ffffff', glyph: 'cloud' },
   { match: (n) => n.includes('google one'), backgroundColor: '#4285F4', iconColor: '#ffffff', glyph: 'cloud' },
-  { match: (n) => n.includes('dropbox'), backgroundColor: '#0061FF', iconColor: '#ffffff', glyph: 'box-open' },
-  { match: (n) => n.includes('adobe'), backgroundColor: '#FF0000', iconColor: '#ffffff', glyph: 'brush' },
+  { match: (n) => n.includes('dropbox'), backgroundColor: '#0061FF', iconColor: '#ffffff', glyph: 'cloud' },
+  { match: (n) => n.includes('adobe'), backgroundColor: '#FF0000', iconColor: '#ffffff', glyph: 'phone' },
   {
     match: (n) => n.includes('microsoft 365') || n.includes('office 365'),
     backgroundColor: '#D83B01',
     iconColor: '#ffffff',
-    glyph: 'grid',
+    glyph: 'phone',
   },
 ];
 
@@ -202,6 +207,18 @@ export function mapIconTypeStringToGlyph(iconType: string | undefined | null): S
     'box-open': 'box-open',
     brush: 'brush',
     grid: 'grid',
+    brain: 'brain',
+    cart: 'cart',
+    'shopping-cart': 'cart',
+    dumbbell: 'dumbbell',
+    barbell: 'dumbbell',
+    fitness: 'dumbbell',
+    tree: 'tree',
+    lifestyle: 'tree',
+    phone: 'phone',
+    smartphone: 'phone',
+    mobile: 'phone',
+    apps: 'phone',
     'play-triangle': 'play-triangle',
   };
   return map[t] ?? null;
