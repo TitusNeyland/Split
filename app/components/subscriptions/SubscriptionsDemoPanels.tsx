@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,6 +12,9 @@ import {
   perPersonAmountLabelEqualSplit,
   type SubscriptionPriceBannerFields,
 } from '../../../lib/subscription/subscriptionPriceChangeBanner';
+import { subscriptionSortButtonLabel } from '../../../lib/subscription/subscriptionSort';
+import { SubscriptionSortSheet } from './SubscriptionSortSheet';
+import { useSubscriptionSortPreference } from '../../hooks/useSubscriptionSortPreference';
 
 const C = {
   purple: '#534AB7',
@@ -329,18 +332,37 @@ export function SubscriptionsDemoPanel({
 }) {
   const router = useRouter();
   const { avatarUrl: userAvatarUrl } = useProfileAvatarUrl();
+  const [sortSheetOpen, setSortSheetOpen] = useState(false);
+  const { sortId: activeSortId, setSortId: setActiveSortId } = useSubscriptionSortPreference();
 
   if (filter === 'active') {
     return (
-      <View style={styles.panel}>
-        <View style={styles.sh}>
-          <Text style={styles.shTitle}>Active splits</Text>
-          <Text style={styles.shAction}>Sort</Text>
+      <>
+        <View style={styles.panel}>
+          <View style={styles.sh}>
+            <Text style={styles.shTitle}>Active splits</Text>
+            <Pressable
+              onPress={() => setSortSheetOpen(true)}
+              accessibilityRole="button"
+              accessibilityLabel={`Sort, ${subscriptionSortButtonLabel(activeSortId)}`}
+              style={styles.shSortBtn}
+            >
+              <Text style={styles.shAction} numberOfLines={1}>
+                {subscriptionSortButtonLabel(activeSortId)}
+              </Text>
+            </Pressable>
+          </View>
+          <NetflixCard userAvatarUrl={userAvatarUrl} />
+          <SpotifyCard userAvatarUrl={userAvatarUrl} />
+          <ICloudCard userAvatarUrl={userAvatarUrl} />
         </View>
-        <NetflixCard userAvatarUrl={userAvatarUrl} />
-        <SpotifyCard userAvatarUrl={userAvatarUrl} />
-        <ICloudCard userAvatarUrl={userAvatarUrl} />
-      </View>
+        <SubscriptionSortSheet
+          visible={sortSheetOpen}
+          onClose={() => setSortSheetOpen(false)}
+          selectedId={activeSortId}
+          onSelect={setActiveSortId}
+        />
+      </>
     );
   }
   if (filter === 'overdue') {
@@ -450,10 +472,15 @@ const styles = StyleSheet.create({
     letterSpacing: 0.7,
     textTransform: 'uppercase',
   },
+  shSortBtn: {
+    maxWidth: '58%',
+    minWidth: 0,
+  },
   shAction: {
     fontSize: 16,
     color: C.purple,
     fontWeight: '500',
+    textAlign: 'right',
   },
   subCard: {
     backgroundColor: '#fff',
