@@ -29,7 +29,14 @@ import {
 } from '../../../lib/subscription/subscriptionDetailDemo';
 import { resendSplitInvite } from '../../../lib/subscription/resendSplitInvite';
 import { buildSplitInviteShareMessage } from '../../../lib/friends/inviteLinks';
-import { useSubscriptionDetailFromFirestore } from '../../../lib/subscription/subscriptionDetailFromFirestore';
+import {
+  mapFirestoreSubscriptionToDetailModel,
+  useSubscriptionDetailFromFirestore,
+} from '../../../lib/subscription/subscriptionDetailFromFirestore';
+import {
+  buildSubscriptionDetailPrefillPlaceholder,
+  parseSubscriptionDetailPrefillParam,
+} from '../../../lib/subscription/subscriptionDetailPrefill';
 import { fmtCents } from '../../../lib/subscription/addSubscriptionSplitMath';
 import { useFirebaseUid } from '../../../lib/auth/useFirebaseUid';
 import { useProfileAvatarUrl } from '../../hooks/useProfileAvatarUrl';
@@ -46,6 +53,7 @@ import { leaveSubscriptionSplit } from '../../../lib/subscription/leaveSplitFire
 import { clearOwnerMemberLeftBanner } from '../../../lib/subscription/clearOwnerMemberLeftBannerFirestore';
 import { clearSplitInviteDeclineNotices } from '../../../lib/subscription/splitInviteDeclineNoticesFirestore';
 import { removePendingSplitInvite } from '../../../lib/subscription/removePendingSplitInviteFirestore';
+import { useSubscriptions } from '../../contexts/SubscriptionsContext';
 
 const C = {
   bg: '#F2F0EB',
@@ -94,9 +102,10 @@ function coverageFirstName(m: SubscriptionDetailMember): string {
 export default function SubscriptionDetailScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { id, backToSubs: backToSubsRaw } = useLocalSearchParams<{
+  const { id, backToSubs: backToSubsRaw, prefillData } = useLocalSearchParams<{
     id: string | string[];
     backToSubs?: string | string[];
+    prefillData?: string | string[];
   }>();
   const subscriptionId = typeof id === 'string' ? id : id?.[0] ?? '';
   const backToSubsTab =
@@ -125,6 +134,7 @@ export default function SubscriptionDetailScreen() {
   const { avatarUrl: userAvatarUrl, displayName: profileDisplayName } = useProfileAvatarUrl();
   const { firstName: viewerFirstName } = useViewerFirstName();
   const firebaseUid = useFirebaseUid();
+  const { subscriptions } = useSubscriptions();
   const [historyModalCycle, setHistoryModalCycle] = useState<SubscriptionHistoryCycle | null>(null);
   const [detailRetryKey, setDetailRetryKey] = useState(0);
   const [resendBusyId, setResendBusyId] = useState<string | null>(null);
@@ -145,7 +155,46 @@ export default function SubscriptionDetailScreen() {
       retryKey: detailRetryKey,
     });
 
-  const detail = SUBSCRIPTIONS_DEMO_MODE ? demoDetail : liveDetail;
+  const contextPrefillDetail = useMemo(() => {
+    if (SUBSCRIPTIONS_DEMO_MODE || !subscriptionId.trim() || !firebaseUid) return null;
+    const doc = subscriptions.find((s) => s.id === subscriptionId);
+    if (!doc) return null;
+    return mapFirestoreSubscriptionToDetailModel(
+      doc as Record<string, unknown> & { id: string },
+      firebaseUid,
+      userAvatarUrl,
+      viewerFirstName
+    );
+  }, [SUBSCRIPTIONS_DEMO_MODE, subscriptionId, subscriptions, firebaseUid, userAvatarUrl, viewerFirstName]);
+
+  const paramPrefillPayload = useMemo(() => parseSubscriptionDetailPrefillParam(prefillData), [prefillData]);
+
+  const paramPrefillDetail = useMemo(() => {
+    if (!paramPrefillPayload || !subscriptionId.trim() || !firebaseUid) return null;
+    return buildSubscriptionDetailPrefillPlaceholder(
+      subscriptionId.trim(),
+      firebaseUid,
+      userAvatarUrl,
+      viewerFirstName,
+      {
+        displayName: paramPrefillPayload.displayName,
+        serviceId: paramPrefillPayload.serviceId,
+        totalCents: paramPrefillPayload.totalCents,
+        isOwner: paramPrefillPayload.isOwner,
+      }
+    );
+  }, [paramPrefillPayload, subscriptionId, firebaseUid, userAvatarUrl, viewerFirstName]);
+
+  const mergedPrefillDetail = useMemo(
+    () => contextPrefillDetail ?? paramPrefillDetail,
+    [contextPrefillDetail, paramPrefillDetail]
+  );
+
+  const detail = SUBSCRIPTIONS_DEMO_MODE
+    ? demoDetail
+    : liveError === 'not-found' || liveError === 'permission'
+      ? null
+      : (liveDetail ?? mergedPrefillDetail);
 
   const declineInviteBannerLine = useMemo(() => {
     const first = detail?.splitInviteDeclineNotices?.[0];
@@ -379,7 +428,7 @@ export default function SubscriptionDetailScreen() {
     [detail?.isOwner, firebaseUid, subscriptionId, navigateToEditSplit],
   );
 
-  if (!SUBSCRIPTIONS_DEMO_MODE && subscriptionId.trim() && firebaseUid && liveLoading) {
+  if (!SUBSCRIPTIONS_DEMO_MODE && subscriptionId.trim() && firebaseUid && liveLoading && !liveDetail && !mergedPrefillDetail) {
     return (
       <View style={styles.loadingRoot}>
         <StatusBar style="dark" />
