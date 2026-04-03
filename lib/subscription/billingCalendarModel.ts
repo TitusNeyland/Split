@@ -1,6 +1,7 @@
 import { clampDayToMonth, parseBillingDayParam } from './billingDayFormat';
 import { getServiceIconDotColor } from './serviceIconResolve';
 import { fmtCents } from './addSubscriptionSplitMath';
+import { getMemberPlannedShareCents, getTotalCents } from './subscriptionToCardModel';
 
 export type BillingMemberStatus = 'paid' | 'pending' | 'overdue' | 'owner' | 'invited_pending' | string;
 
@@ -135,31 +136,9 @@ export function mapFirestoreDocToCalendarSubscription(
   if (!parsed) return null;
 
   const billingCycle = parseFirestoreBillingCycle(data.billingCycle);
-  const totalCents = typeof data.totalCents === 'number' && Number.isFinite(data.totalCents) ? data.totalCents : 0;
-
-  const shares = Array.isArray(data.splitMemberShares) ? data.splitMemberShares : [];
-  const row = shares.find(
-    (x) => x && typeof x === 'object' && String((x as { memberId?: string }).memberId) === viewerUid
-  ) as { amountCents?: number; role?: string } | undefined;
-  let yourShareCents =
-    row && typeof row.amountCents === 'number' && Number.isFinite(row.amountCents) ? row.amountCents : 0;
-
-  const ownerUid =
-    typeof data.ownerUid === 'string'
-      ? data.ownerUid
-      : typeof data.ownerId === 'string'
-        ? data.ownerId
-        : '';
-  const hasInvitePending = shares.some(
-    (x) =>
-      x &&
-      typeof x === 'object' &&
-      (x as { role?: string }).role !== 'owner' &&
-      Boolean((x as { invitePending?: boolean }).invitePending)
-  );
-  if (viewerUid && ownerUid === viewerUid && hasInvitePending) {
-    yourShareCents = totalCents;
-  }
+  const totalCents = getTotalCents(data);
+  /** Planned share for the viewer (same basis as Subscriptions “Your share”). */
+  const yourShareCents = viewerUid ? getMemberPlannedShareCents(data, viewerUid) : 0;
 
   const memberPaymentStatus = data.memberPaymentStatus as Record<string, BillingMemberStatus> | undefined;
   const iconColor = typeof data.iconColor === 'string' ? data.iconColor : undefined;
