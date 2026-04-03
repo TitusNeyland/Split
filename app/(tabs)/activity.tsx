@@ -40,6 +40,7 @@ import { replaceWithSplitJoinedCelebration } from '../../lib/navigation/splitJoi
 import { formatUsdFromCents, formatUsdDollarsFixed2 } from '../../lib/format/currency';
 import { computeActivityOwnerSummaryStats } from '../../lib/activity/activityOwnerSummaryStats';
 import { useSubscriptions } from '../contexts/SubscriptionsContext';
+import type { MemberSubscriptionDoc } from '../../lib/subscription/memberSubscriptionsFirestore';
 
 type IonIconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -243,6 +244,8 @@ type ActivityFeedItem = {
   time: string;
   /** For partial: show amount paid (e.g. +$1.25), not full balance. */
   amount?: string;
+  /** Raw cents from Firestore `amount` when present (subscription detail prefill). */
+  amountCents?: number;
   amountColor: string;
   badge: string;
   badgeVariant: ActivityBadgeVariant;
@@ -269,6 +272,22 @@ type ActivityFeedItem = {
 };
 
 type ActivityFeedGroup = { sectionTitle: string; items: ActivityFeedItem[] };
+
+/** When the subscription is not in the local subscriptions list, pass row hints so detail can render before Firestore. */
+function buildSubscriptionPrefillParam(
+  item: ActivityFeedItem,
+  subId: string,
+  subscriptions: MemberSubscriptionDoc[]
+): Record<string, string | number | boolean> | null {
+  const doc = subscriptions.find((s) => s.id === subId);
+  if (doc) return null;
+  const name = item.serviceMark?.trim() || 'Subscription';
+  const totalCents =
+    typeof item.amountCents === 'number' && Number.isFinite(item.amountCents) ? Math.round(item.amountCents) : 0;
+  const out: Record<string, string | number | boolean> = { name, totalCents, isOwner: false };
+  if (item.serviceId) out.serviceId = item.serviceId;
+  return out;
+}
 
 function itemMatchesFriend(item: ActivityFeedItem, friendId: string | null): boolean {
   if (!friendId) return true;
@@ -756,6 +775,7 @@ export default function ActivityScreen() {
           activityType: e.type,
           read: e.read === true,
           subscriptionId: e.subscriptionId,
+          amountCents: typeof e.amount === 'number' && Number.isFinite(e.amount) ? e.amount : undefined,
         } as ActivityFeedItem);
       }
       setLiveFeedItems(rows);
@@ -862,6 +882,18 @@ export default function ActivityScreen() {
         navigateToSubscription: item.navigateToSubscription,
       });
       if (path) {
+        if (path.startsWith('/subscription/')) {
+          const subId = path.slice('/subscription/'.length);
+          const prefill = buildSubscriptionPrefillParam(item, subId, subscriptions);
+          router.push({
+            pathname: '/subscription/[id]',
+            params: {
+              id: subId,
+              ...(prefill ? { prefillData: JSON.stringify(prefill) } : {}),
+            },
+          } as never);
+          return;
+        }
         router.push(path as never);
         return;
       }
@@ -874,7 +906,7 @@ export default function ActivityScreen() {
         setExpandedId((prev) => (prev === item.id ? null : item.id));
       }
     },
-    [uid, router],
+    [uid, router, subscriptions],
   );
 
   return (
