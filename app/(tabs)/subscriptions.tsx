@@ -40,6 +40,12 @@ import {
 } from '../../lib/subscription/endSplitNavigationToast';
 import { deleteSubscriptionDocument } from '../../lib/subscription/deleteSubscriptionFirestore';
 import { Toast } from '../components/shared/Toast';
+import { SubscriptionSortSheet } from '../components/subscriptions/SubscriptionSortSheet';
+import { useSubscriptionSortPreference } from '../hooks/useSubscriptionSortPreference';
+import {
+  sortMemberSubscriptions,
+  subscriptionSortButtonLabel,
+} from '../../lib/subscription/subscriptionSort';
 
 const C = {
   bg: '#F2F0EB',
@@ -74,6 +80,8 @@ export default function SubscriptionsScreen() {
   const { width } = useWindowDimensions();
   const [user, setUser] = useState<User | null>(null);
   const [filter, setFilter] = useState<FilterId>('active');
+  const [sortSheetOpen, setSortSheetOpen] = useState(false);
+  const { sortId: activeSortId, setSortId: setActiveSortId } = useSubscriptionSortPreference();
   const {
     subscriptions: ctxSubscriptions,
     loading: ctxSubscriptionsLoading,
@@ -158,6 +166,11 @@ export default function SubscriptionsScreen() {
     }
     return { activeSubs: active, overdueSubs: overdue };
   }, [memberSubscriptions, uid]);
+
+  const sortedActiveSubs = useMemo(
+    () => sortMemberSubscriptions(activeSubs, activeSortId),
+    [activeSubs, activeSortId]
+  );
 
   /** Fallback when ended-specific listeners fail (index / rules): same subs as context, filtered to ended. */
   const endedSubsFromContext = useMemo(
@@ -371,7 +384,16 @@ export default function SubscriptionsScreen() {
                 <View style={styles.panel}>
                   <View style={styles.sh}>
                     <Text style={styles.shTitle}>Active splits</Text>
-                    <Text style={styles.shAction}>Sort</Text>
+                    <Pressable
+                      onPress={() => setSortSheetOpen(true)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Sort, ${subscriptionSortButtonLabel(activeSortId)}`}
+                      style={styles.shSortBtn}
+                    >
+                      <Text style={styles.shAction} numberOfLines={1}>
+                        {subscriptionSortButtonLabel(activeSortId)}
+                      </Text>
+                    </Pressable>
                   </View>
                   {subscriptionsLoading && uid ? (
                     <SubscriptionCardSkeletonList count={3} />
@@ -396,7 +418,7 @@ export default function SubscriptionsScreen() {
                       </Pressable>
                     </View>
                   ) : (
-                    activeSubs.map((doc) => (
+                    sortedActiveSubs.map((doc) => (
                       <LiveSubscriptionCard
                         key={doc.id}
                         doc={doc}
@@ -496,6 +518,15 @@ export default function SubscriptionsScreen() {
         bottomInsetExtra={8}
         showIcon={false}
       />
+
+      {!SUBSCRIPTIONS_DEMO_MODE ? (
+        <SubscriptionSortSheet
+          visible={sortSheetOpen}
+          onClose={() => setSortSheetOpen(false)}
+          selectedId={activeSortId}
+          onSelect={setActiveSortId}
+        />
+      ) : null}
 
     </View>
   );
@@ -660,10 +691,15 @@ const styles = StyleSheet.create({
     letterSpacing: 0.7,
     textTransform: 'uppercase',
   },
+  shSortBtn: {
+    maxWidth: '58%',
+    minWidth: 0,
+  },
   shAction: {
     fontSize: 16,
     color: C.purple,
     fontWeight: '500',
+    textAlign: 'right',
   },
   panelHint: {
     fontSize: 17,
