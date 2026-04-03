@@ -8,6 +8,7 @@ import {
   TextInput,
   Switch,
   Platform,
+  Dimensions,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -67,6 +68,10 @@ function parseMoneyToCents(s: string): number | null {
   const n = parseFloat(cleaned);
   if (!Number.isFinite(n) || n <= 0) return null;
   return Math.round(n * 100);
+}
+
+function isVisibleOnScreen(y: number, height: number, screenHeight: number): boolean {
+  return y >= 0 && y + height <= screenHeight - 40;
 }
 
 export default function AddSubscriptionDetailsScreen() {
@@ -162,6 +167,10 @@ export default function AddSubscriptionDetailsScreen() {
   const [costError, setCostError] = useState('');
   const costInputRef = useRef<TextInput>(null);
   const tierInitForServiceRef = useRef<string | null>(null);
+  const scrollRef = useRef<ScrollView>(null);
+  const continueButtonRef = useRef<View>(null);
+  /** Total cost + custom price row (below tier list) — main “summary” users need to see after picking a tier. */
+  const postTierSummaryRef = useRef<View>(null);
 
   const showTierPicker = tiers.length > 0;
 
@@ -203,6 +212,41 @@ export default function AddSubscriptionDetailsScreen() {
       setCostError('');
     },
     [],
+  );
+
+  const scrollAfterTierSelect = useCallback(() => {
+    setTimeout(() => {
+      const screenHeight = Dimensions.get('window').height;
+      const runContinueCheck = (summaryNeedsScroll: boolean) => {
+        if (!continueButtonRef.current) {
+          if (summaryNeedsScroll) {
+            scrollRef.current?.scrollToEnd({ animated: true });
+          }
+          return;
+        }
+        continueButtonRef.current.measureInWindow((cx, cy, _cw, ch) => {
+          const continueNeedsScroll = !isVisibleOnScreen(cy, ch, screenHeight);
+          if (summaryNeedsScroll || continueNeedsScroll) {
+            scrollRef.current?.scrollToEnd({ animated: true });
+          }
+        });
+      };
+      if (postTierSummaryRef.current) {
+        postTierSummaryRef.current.measureInWindow((sx, sy, _sw, sh) => {
+          runContinueCheck(!isVisibleOnScreen(sy, sh, screenHeight));
+        });
+      } else {
+        runContinueCheck(false);
+      }
+    }, 100);
+  }, []);
+
+  const onUserSelectTier = useCallback(
+    (index: number) => {
+      applyTier(index, tiers);
+      scrollAfterTierSelect();
+    },
+    [applyTier, tiers, scrollAfterTierSelect],
   );
 
   useEffect(() => {
@@ -353,6 +397,7 @@ export default function AddSubscriptionDetailsScreen() {
       </LinearGradient>
 
       <ScrollView
+        ref={scrollRef}
         style={styles.scroll}
         contentContainerStyle={[
           styles.body,
@@ -384,7 +429,7 @@ export default function AddSubscriptionDetailsScreen() {
                 return (
                   <Pressable
                     key={tier.tierId ?? `${tier.name}-${index}`}
-                    onPress={() => applyTier(index, tiers)}
+                    onPress={() => onUserSelectTier(index)}
                     style={[styles.tierRow, selected && styles.tierRowSelected]}
                     accessibilityRole="radio"
                     accessibilityState={{ checked: selected }}
@@ -405,35 +450,36 @@ export default function AddSubscriptionDetailsScreen() {
               })}
             </View>
 
-            <View style={styles.fieldWrap}>
-              <Text style={styles.fieldLabel}>Total cost</Text>
-              {useCustomPrice ? (
-                <View style={[styles.costRow, costFocused && styles.costRowFocused]}>
-                  <Text style={styles.dollarPrefix}>$</Text>
-                  <TextInput
-                    ref={costInputRef}
-                    value={amountText}
-                    onChangeText={onAmountChange}
-                    placeholder="0.00"
-                    placeholderTextColor={C.muted}
-                    keyboardType={Platform.OS === 'android' ? 'numeric' : 'decimal-pad'}
-                    onFocus={() => {
-                      setCostFocused(true);
-                      setCostError('');
-                    }}
-                    onBlur={onAmountBlur}
-                    style={styles.costInput}
-                    accessibilityLabel="Total cost"
-                  />
-                </View>
-              ) : (
-                <View style={styles.costRow}>
-                  <Text style={styles.dollarPrefix}>$</Text>
-                  <Text style={styles.costReadonlyTxt}>{amountText || '0.00'}</Text>
-                </View>
-              )}
-              {costError ? <Text style={styles.fieldError}>{costError}</Text> : null}
-            </View>
+            <View ref={postTierSummaryRef} collapsable={false} style={styles.postTierSummary}>
+              <View style={styles.fieldWrap}>
+                <Text style={styles.fieldLabel}>Total cost</Text>
+                {useCustomPrice ? (
+                  <View style={[styles.costRow, costFocused && styles.costRowFocused]}>
+                    <Text style={styles.dollarPrefix}>$</Text>
+                    <TextInput
+                      ref={costInputRef}
+                      value={amountText}
+                      onChangeText={onAmountChange}
+                      placeholder="0.00"
+                      placeholderTextColor={C.muted}
+                      keyboardType={Platform.OS === 'android' ? 'numeric' : 'decimal-pad'}
+                      onFocus={() => {
+                        setCostFocused(true);
+                        setCostError('');
+                      }}
+                      onBlur={onAmountBlur}
+                      style={styles.costInput}
+                      accessibilityLabel="Total cost"
+                    />
+                  </View>
+                ) : (
+                  <View style={styles.costRow}>
+                    <Text style={styles.dollarPrefix}>$</Text>
+                    <Text style={styles.costReadonlyTxt}>{amountText || '0.00'}</Text>
+                  </View>
+                )}
+                {costError ? <Text style={styles.fieldError}>{costError}</Text> : null}
+              </View>
 
             {useCustomPrice ? (
               <Pressable
@@ -463,6 +509,7 @@ export default function AddSubscriptionDetailsScreen() {
                 <Text style={styles.customPriceLink}>Enter custom price</Text>
               </Pressable>
             )}
+            </View>
           </>
         ) : (
           <View style={styles.fieldWrap}>
@@ -589,19 +636,21 @@ export default function AddSubscriptionDetailsScreen() {
       />
 
       <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 14) }]}>
-        <Pressable
-          onPress={onContinue}
-          disabled={!billingDayOk}
-          style={({ pressed }) => [
-            styles.primaryBtn,
-            !billingDayOk && styles.primaryBtnDisabled,
-            pressed && billingDayOk && styles.primaryBtnPressed,
-          ]}
-          accessibilityRole="button"
-          accessibilityState={{ disabled: !billingDayOk }}
-        >
-          <Text style={styles.primaryBtnTxt}>Continue</Text>
-        </Pressable>
+        <View ref={continueButtonRef} collapsable={false}>
+          <Pressable
+            onPress={onContinue}
+            disabled={!billingDayOk}
+            style={({ pressed }) => [
+              styles.primaryBtn,
+              !billingDayOk && styles.primaryBtnDisabled,
+              pressed && billingDayOk && styles.primaryBtnPressed,
+            ]}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: !billingDayOk }}
+          >
+            <Text style={styles.primaryBtnTxt}>Continue</Text>
+          </Pressable>
+        </View>
       </View>
     </View>
   );
@@ -677,6 +726,9 @@ const styles = StyleSheet.create({
   },
   tierList: {
     marginBottom: 6,
+  },
+  postTierSummary: {
+    marginBottom: 0,
   },
   tierRow: {
     flexDirection: 'row',
