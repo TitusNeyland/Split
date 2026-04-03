@@ -12,6 +12,7 @@ import {
   Keyboard,
   Platform,
   ActivityIndicator,
+  TouchableOpacity,
 } from 'react-native';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -320,6 +321,7 @@ export default function AddSubscriptionMembersScreen() {
   }, [mode, totalCents, n, customPercentStr, fixedDollarStr]);
 
   const onSelectMethod = (id: SplitMethod) => {
+    if (keyboardHeight > 0) Keyboard.dismiss();
     if (id === 'equal') applyEqual();
     else if (id === 'ownerLess') applyOwnerLess();
     else if (id === 'customPercent') applyCustom();
@@ -580,67 +582,82 @@ export default function AddSubscriptionMembersScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}
       >
-        <LinearGradient
-          colors={['#6B3FA0', '#4A1570', '#2D0D45']}
-          locations={[0, 0.6, 1]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 0.5, y: 1 }}
-          style={[styles.hero, { paddingTop: Math.max(insets.top, 12) + 4 }]}
-        >
-          <Pressable
-            onPress={() => router.back()}
-            style={styles.backRow}
-            accessibilityRole="button"
-            accessibilityLabel="Back to plan details"
-          >
-            <Ionicons name="chevron-back" size={26} color="rgba(255,255,255,0.7)" />
-            <Text style={styles.backLbl}>Back</Text>
-          </Pressable>
-          <Text style={styles.title}>Who's splitting?</Text>
-          <Text style={styles.sub}>Add members and set their share</Text>
-          <View style={styles.progWrap}>
-            <View style={styles.progTrack}>
-              <View style={[styles.progFill, { width: '75%' }]} />
-            </View>
-            <Text style={styles.progLabel}>Step 3 of 4</Text>
-          </View>
-        </LinearGradient>
-
-        <ScrollView
-          ref={scrollRef}
-          style={styles.scroll}
-          contentContainerStyle={[
-            styles.body,
-            {
-              paddingBottom:
-                Math.max(insets.bottom, 16) + 96 + keyboardHeight + (keyboardHeight > 0 ? 40 : 0),
-            },
-          ]}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
-          <View ref={scrollContentRef} collapsable={false}>
-            <Text style={styles.sectionLbl}>Split method</Text>
-        <View style={styles.methodGrid}>
-          {METHODS.map((m) => {
-            const on = mode === m.id;
-            return (
+            <LinearGradient
+              colors={['#6B3FA0', '#4A1570', '#2D0D45']}
+              locations={[0, 0.6, 1]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 0.5, y: 1 }}
+              style={[styles.hero, { paddingTop: Math.max(insets.top, 12) + 4 }]}
+            >
               <Pressable
-                key={m.id}
-                onPress={() => onSelectMethod(m.id)}
-                style={[styles.methodCard, on && styles.methodCardOn]}
+                onPress={() => router.back()}
+                style={styles.backRow}
                 accessibilityRole="button"
-                accessibilityState={{ selected: on }}
+                accessibilityLabel="Back to plan details"
               >
-                <View style={[styles.methodIco, on ? styles.methodIcoOn : styles.methodIcoOff]}>
-                  <Ionicons name={m.icon} size={18} color={on ? C.purple : '#5F5E5A'} />
-                </View>
-                <Text style={[styles.methodName, on && styles.methodNameOn]}>{m.name}</Text>
-                <Text style={styles.methodDesc}>{m.desc}</Text>
+                <Ionicons name="chevron-back" size={26} color="rgba(255,255,255,0.7)" />
+                <Text style={styles.backLbl}>Back</Text>
               </Pressable>
-            );
-          })}
-        </View>
+              <TouchableOpacity
+                onPress={Keyboard.dismiss}
+                activeOpacity={1}
+                style={styles.heroHeaderTap}
+              >
+                <Text style={styles.title}>Who's splitting?</Text>
+                <Text style={styles.sub}>Add members and set their share</Text>
+                <View style={styles.progWrap}>
+                  <View style={styles.progTrack}>
+                    <View style={[styles.progFill, { width: '75%' }]} />
+                  </View>
+                  <Text style={styles.progLabel}>Step 3 of 4</Text>
+                </View>
+              </TouchableOpacity>
+            </LinearGradient>
+
+            <ScrollView
+              ref={scrollRef}
+              style={styles.scroll}
+              contentContainerStyle={[
+                styles.body,
+                {
+                  paddingBottom:
+                    Math.max(insets.bottom, 16) + 96 + keyboardHeight + (keyboardHeight > 0 ? 40 : 0),
+                },
+              ]}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="on-drag"
+              onScrollBeginDrag={Keyboard.dismiss}
+              showsVerticalScrollIndicator={false}
+            >
+              <View ref={scrollContentRef} collapsable={false}>
+                <Pressable
+                  onPress={Keyboard.dismiss}
+                  accessibilityRole="button"
+                  accessibilityLabel="Split method"
+                  accessibilityHint="Dismisses the keyboard"
+                >
+                  <Text style={styles.sectionLbl}>Split method</Text>
+                </Pressable>
+                <View style={styles.methodGrid}>
+                  {METHODS.map((m) => {
+                    const on = mode === m.id;
+                    return (
+                      <Pressable
+                        key={m.id}
+                        onPress={() => onSelectMethod(m.id)}
+                        style={[styles.methodCard, on && styles.methodCardOn]}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: on }}
+                      >
+                        <View style={[styles.methodIco, on ? styles.methodIcoOn : styles.methodIcoOff]}>
+                          <Ionicons name={m.icon} size={18} color={on ? C.purple : '#5F5E5A'} />
+                        </View>
+                        <Text style={[styles.methodName, on && styles.methodNameOn]}>{m.name}</Text>
+                        <Text style={styles.methodDesc}>{m.desc}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
 
         <Text style={[styles.sectionLbl, styles.sectionSpaced]}>Members</Text>
         <View style={styles.memberCard}>
@@ -1004,6 +1021,9 @@ const styles = StyleSheet.create({
   },
   kav: {
     flex: 1,
+  },
+  heroHeaderTap: {
+    width: '100%',
   },
   hero: {
     paddingHorizontal: 18,
