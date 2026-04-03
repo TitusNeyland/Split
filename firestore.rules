@@ -80,7 +80,14 @@ service cloud.firestore {
         && (
           (
             request.auth.uid == resource.data.createdBy
-            && request.resource.data.status in ['pending', 'expired']
+            && request.resource.data.status == 'expired'
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+          )
+          || (
+            request.auth.uid == resource.data.createdBy
+            && request.resource.data.status == 'cancelled'
+            && request.resource.data.cancelledAt is timestamp
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'cancelledAt'])
           )
           || (
             request.resource.data.status == 'accepted'

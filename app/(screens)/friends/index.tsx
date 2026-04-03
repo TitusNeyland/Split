@@ -23,6 +23,7 @@ import {
   countActiveSubscriptionsForUser,
   countFriendshipsForUser,
   createDirectFriendshipFromSearch,
+  cancelOutgoingInvite,
   createPendingInvite,
   deleteFriendshipBetween,
   expirePendingInvite,
@@ -314,10 +315,11 @@ export default function FriendsScreen() {
   const onCancelPending = useCallback(
     async (row: OutgoingPendingInviteSummary) => {
       if (!isFirebaseConfigured() || !uid) return;
+      setFetchedPending((prev) => prev.filter((p) => p.inviteId !== row.inviteId));
       try {
-        await expirePendingInvite(row.inviteId);
-        setPendingRefresh((n) => n + 1);
+        await cancelOutgoingInvite(row.inviteId);
       } catch {
+        setPendingRefresh((n) => n + 1);
         Alert.alert('Could not cancel', 'Check your connection and try again.');
       }
     },

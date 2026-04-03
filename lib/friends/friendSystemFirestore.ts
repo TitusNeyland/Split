@@ -16,6 +16,7 @@ import {
   type DocumentData,
   type FirestoreDataConverter,
   type QueryDocumentSnapshot,
+  type QuerySnapshot,
   type Unsubscribe,
 } from 'firebase/firestore';
 import { getFirebaseFirestore } from '../firebase';
@@ -46,7 +47,7 @@ export type FirestoreFriendship = {
   initiatedBy: string;
 };
 
-export type InviteStatus = 'pending' | 'accepted' | 'expired' | 'declined';
+export type InviteStatus = 'pending' | 'accepted' | 'expired' | 'declined' | 'cancelled';
 
 /** `invites/{inviteId}` — `inviteId` matches document id (deep link). */
 export type FirestoreInvite = {
@@ -64,6 +65,7 @@ export type FirestoreInvite = {
   acceptedAt?: Timestamp;
   declinedBy?: string;
   declinedAt?: Timestamp;
+  cancelledAt?: Timestamp;
   /** Snapshot at invite creation for the accept screen (invitee cannot query sender's data). */
   senderActiveSplits?: number;
   senderFriendCount?: number;
@@ -259,25 +261,54 @@ export async function createDirectFriendshipFromSearch(input: {
   return 'created';
 }
 
-/** Normalized emails the current user has already invited (pending). */
+function inviteIsStillPending(data: FirestoreInvite, nowMs: number): boolean {
+  if (String(data.status ?? '') !== 'pending') return false;
+  const exp = data.expiresAt;
+  if (!(exp instanceof Timestamp)) return false;
+  return exp.toMillis() > nowMs;
+}
+
+/** Normalized emails the current user has already invited (pending and not expired). */
 export async function fetchOutgoingPendingInviteEmails(creatorUid: string): Promise<Set<string>> {
   const db = getFirebaseFirestore();
   if (!db) return new Set();
+  const now = Timestamp.now();
+  const nowMs = Date.now();
   try {
     const q = query(
       collection(db, INVITES_COLLECTION),
       where('createdBy', '==', creatorUid),
-      where('status', '==', 'pending' satisfies InviteStatus)
+      where('status', '==', 'pending' satisfies InviteStatus),
+      where('expiresAt', '>', now)
     );
     const snap = await getDocs(q);
     const out = new Set<string>();
     for (const d of snap.docs) {
-      const em = (d.data() as FirestoreInvite).recipientEmail;
+      const data = d.data() as FirestoreInvite;
+      if (!inviteIsStillPending(data, nowMs)) continue;
+      const em = data.recipientEmail;
       if (typeof em === 'string' && em.length > 0) out.add(normalizeInviteEmail(em));
     }
     return out;
   } catch {
-    return new Set();
+    try {
+      const qFallback = query(
+        collection(db, INVITES_COLLECTION),
+        where('createdBy', '==', creatorUid),
+        where('status', '==', 'pending' satisfies InviteStatus)
+      );
+      const snap = await getDocs(qFallback);
+      const out = new Set<string>();
+      for (const d of snap.docs) {
+        const data = d.data() as FirestoreInvite;
+        if (!inviteIsStillPending(data, nowMs)) continue;
+        const em = data.recipientEmail;
+        if (typeof em === 'string' && em.length > 0) out.add(normalizeInviteEmail(em));
+      }
+      return out;
+    } catch {
+      return new Set();
+    }
   }
 }
 
@@ -293,16 +324,14 @@ export async function fetchOutgoingPendingInvites(
 ): Promise<OutgoingPendingInviteSummary[]> {
   const db = getFirebaseFirestore();
   if (!db) return [];
-  try {
-    const q = query(
-      collection(db, INVITES_COLLECTION),
-      where('createdBy', '==', creatorUid),
-      where('status', '==', 'pending' satisfies InviteStatus)
-    );
-    const snap = await getDocs(q);
+  const now = Timestamp.now();
+  const nowMs = Date.now();
+
+  const mapDocsToRows = (snap: QuerySnapshot<DocumentData>) => {
     const rows: OutgoingPendingInviteSummary[] = [];
     for (const d of snap.docs) {
       const data = d.data() as FirestoreInvite;
+      if (!inviteIsStillPending(data, nowMs)) continue;
       const label =
         typeof data.recipientEmail === 'string' && data.recipientEmail.length > 0
           ? data.recipientEmail
@@ -320,8 +349,29 @@ export async function fetchOutgoingPendingInvites(
       return bm - am;
     });
     return rows;
+  };
+
+  try {
+    const q = query(
+      collection(db, INVITES_COLLECTION),
+      where('createdBy', '==', creatorUid),
+      where('status', '==', 'pending' satisfies InviteStatus),
+      where('expiresAt', '>', now)
+    );
+    const snap = await getDocs(q);
+    return mapDocsToRows(snap);
   } catch {
-    return [];
+    try {
+      const qFallback = query(
+        collection(db, INVITES_COLLECTION),
+        where('createdBy', '==', creatorUid),
+        where('status', '==', 'pending' satisfies InviteStatus)
+      );
+      const snap = await getDocs(qFallback);
+      return mapDocsToRows(snap);
+    } catch {
+      return [];
+    }
   }
 }
 
@@ -330,6 +380,16 @@ export async function expirePendingInvite(inviteId: string): Promise<void> {
   if (!db) throw new Error('Firestore is not configured.');
   await updateDoc(doc(db, INVITES_COLLECTION, inviteId), {
     status: 'expired' satisfies InviteStatus,
+  });
+}
+
+/** Creator cancels an invite (distinct from system expiry). */
+export async function cancelOutgoingInvite(inviteId: string): Promise<void> {
+  const db = getFirebaseFirestore();
+  if (!db) throw new Error('Firestore is not configured.');
+  await updateDoc(doc(db, INVITES_COLLECTION, inviteId), {
+    status: 'cancelled' satisfies InviteStatus,
+    cancelledAt: serverTimestamp(),
   });
 }
 
