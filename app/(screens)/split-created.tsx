@@ -1,5 +1,4 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-;
 import {
   View,
   Text,
@@ -30,22 +29,16 @@ const C = {
   cardBg: '#F5F3EE',
 };
 
-const CONFETTI_COLORS = [
-  '#534AB7',
-  '#E24B4A',
-  '#7F77DD',
-  '#EF9F27',
-  '#1D9E75',
-  '#E24B4A',
-  '#9B6BFF',
-  '#2DD4BF',
-];
+/** Matches split-joined celebration confetti palette. */
+const CONFETTI_COLORS = ['#7F77DD', '#534AB7', '#1D9E75', '#AFA9EC', '#86efac'] as const;
+
+const PIECE_WIDTH = 12;
+const PIECE_HEIGHT = 21;
+const PIECE_COUNT = 28;
 
 type ParticleSpec = {
   id: number;
   color: string;
-  w: number;
-  h: number;
   delay: number;
   angle: number;
   burstDist: number;
@@ -58,8 +51,6 @@ function ConfettiParticle({
   originLeft,
   originTop,
   color,
-  w,
-  h,
   delay,
   angle,
   burstDist,
@@ -67,6 +58,8 @@ function ConfettiParticle({
   fallY,
   rotations,
 }: ParticleSpec & { originLeft: number; originTop: number }) {
+  const w = PIECE_WIDTH;
+  const h = PIECE_HEIGHT;
   const tx = useRef(new Animated.Value(0)).current;
   const ty = useRef(new Animated.Value(0)).current;
   const rot = useRef(new Animated.Value(0)).current;
@@ -134,8 +127,9 @@ function ConfettiParticle({
         {
           left: originLeft - w / 2,
           top: originTop - h / 2,
-          width: w,
-          height: h,
+          width: PIECE_WIDTH,
+          height: PIECE_HEIGHT,
+          borderRadius: 3,
           backgroundColor: color,
           transform: [{ translateX: tx }, { translateY: ty }, { rotate: spin }],
         },
@@ -144,15 +138,13 @@ function ConfettiParticle({
   );
 }
 
-function buildParticleSpecs(count: number, screenHeight: number, originTop: number): ParticleSpec[] {
-  return Array.from({ length: count }, (_, i) => {
+function buildParticleSpecs(screenHeight: number, originTop: number): ParticleSpec[] {
+  return Array.from({ length: PIECE_COUNT }, (_, i) => {
     const golden = (i * 2.399963229728653) % (Math.PI * 2);
     const jitter = ((i * 17) % 100) / 100 - 0.5;
     return {
       id: i,
       color: CONFETTI_COLORS[i % CONFETTI_COLORS.length]!,
-      w: 10 + (i % 4) * 4,
-      h: 18 + (i % 5) * 5,
       delay: (i * 28) % 300,
       angle: golden + jitter * 0.5,
       burstDist: 90 + (i % 9) * 22,
@@ -229,7 +221,7 @@ export default function SplitCreatedScreen() {
   }, []);
 
   const particleSpecs = useMemo(
-    () => buildParticleSpecs(60, screenHeight, burstCenter.y),
+    () => buildParticleSpecs(screenHeight, burstCenter.y),
     [screenHeight, burstCenter.y],
   );
 
@@ -389,12 +381,11 @@ const styles = StyleSheet.create({
   confettiStage: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 100,
-    overflow: 'visible',
+    overflow: 'hidden',
   },
   confettiParticle: {
     position: 'absolute',
-    borderRadius: 2,
-    opacity: 0.92,
+    opacity: 0.95,
   },
   scrollContent: {
     paddingHorizontal: 22,

@@ -95,7 +95,7 @@ function FallConfettiParticle({
     outputRange: [`${spec.initialRot}deg`, `${spec.initialRot + 720}deg`],
   });
 
-  const leftPx = (screenWidth * spec.leftPct) / 100 - 4;
+  const leftPx = (screenWidth * spec.leftPct) / 100 - 6;
 
   return (
     <Animated.View
@@ -312,9 +312,9 @@ const styles = StyleSheet.create({
   },
   confettiParticle: {
     position: 'absolute',
-    width: 8,
-    height: 14,
-    borderRadius: 2,
+    width: 12,
+    height: 21,
+    borderRadius: 3,
     opacity: 0.95,
   },
   scroll: {
