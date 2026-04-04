@@ -16,7 +16,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { Swipeable } from 'react-native-gesture-handler';
-import { Toast } from '../../components/shared/Toast';
+import { Toast } from '../../../components/shared/Toast';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { getFirebaseAuth, isFirebaseConfigured } from '../../../lib/firebase';
 import {
@@ -34,10 +34,10 @@ import {
 import { searchUsersForFriendConnect, type FriendSearchUserRow } from '../../../lib/friends/userSearchFirestore';
 import { initialsFromName, buildFriendsHubFriendRowsFromSubscriptions, type FriendsHubFriendRow } from '../../../lib/profile';
 import { useHomeFriendDirectory } from '../../../lib/home/useFriendUidsFromFirestore';
-import { useSubscriptions } from '../../contexts/SubscriptionsContext';
+import { useSubscriptions } from '../../../contexts/SubscriptionsContext';
 import { getFriendAvatarColors } from '../../../lib/friends/friendAvatar';
 import { formatInviteExpiresIn, formatInviteSentAgo } from '../../../lib/friends/friendsTimeFormat';
-import FriendsInviteModal from '../../components/invite/FriendsInviteModal';
+import FriendsInviteModal from '../../../components/invite/FriendsInviteModal';
 
 const C = {
   text: '#1a1a18',

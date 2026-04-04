@@ -20,7 +20,7 @@ import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { searchUsersForFriendConnect, type FriendSearchUserRow } from '../../../lib/friends/userSearchFirestore';
 import { getFriendAvatarColors } from '../../../lib/friends/friendAvatar';
-import { UserAvatarCircle } from '../../components/shared/UserAvatarCircle';
+import { UserAvatarCircle } from '../../../components/shared/UserAvatarCircle';
 import { initialsFromName } from '../../../lib/profile';
 import {
   allocateCents,
@@ -37,8 +37,8 @@ import { useSubscriptionDetailFromFirestore } from '../../../lib/subscription/su
 import type { SubscriptionDetailMember } from '../../../lib/subscription/subscriptionDetailTypes';
 import type { WizardMemberRow, WizardSplitMethod } from '../../../lib/subscription/createSubscriptionWizardFirestore';
 import { useFirebaseUid } from '../../../lib/auth/useFirebaseUid';
-import { useProfileAvatarUrl } from '../../hooks/useProfileAvatarUrl';
-import { useViewerFirstName } from '../../hooks/useViewerFirstName';
+import { useProfileAvatarUrl } from '../../../hooks/useProfileAvatarUrl';
+import { useViewerFirstName } from '../../../hooks/useViewerFirstName';
 
 const HERO = ['#6B3FA0', '#4A1570', '#2D0D45'] as const;
 

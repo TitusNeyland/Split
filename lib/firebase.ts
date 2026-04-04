@@ -20,7 +20,7 @@ export function isFirebaseConfigured(): boolean {
   );
 }
 
-/** Web + native Recaptcha (expo-firebase-recaptcha) config shape. */
+/** Web + native reCAPTCHA (Firebase JS config; used by `FirebaseRecaptchaVerifierModal`). */
 export function getFirebaseWebOptions(): FirebaseOptions | null {
   if (!isFirebaseConfigured()) return null;
   return {

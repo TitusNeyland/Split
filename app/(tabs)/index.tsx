@@ -20,8 +20,8 @@ import { formatUsdDollarsFixed2 } from '../../lib/format/currency';
 import { getFriendAvatarColors } from '../../lib/friends/friendAvatar';
 import { getFirebaseAuth, isFirebaseConfigured } from '../../lib/firebase';
 import { initialsFromName } from '../../lib/profile';
-import { useProfileAvatarUrl } from '../hooks/useProfileAvatarUrl';
-import { UserAvatarCircle } from '../components/shared/UserAvatarCircle';
+import { useProfileAvatarUrl } from '../../hooks/useProfileAvatarUrl';
+import { UserAvatarCircle } from '../../components/shared/UserAvatarCircle';
 import type { HomeFinancialPosition } from '../../lib/home/homeFinancialPositionFirestore';
 import {
   formatMemberTenureMonths,
@@ -49,19 +49,19 @@ import {
   subscribeHomeNotifications,
   type AppNotification,
 } from '../../lib/home/homeNotificationsFirestore';
-import HomeNotificationsPanel from '../components/home/HomeNotificationsPanel';
+import HomeNotificationsPanel from '../../components/home/HomeNotificationsPanel';
 import { useHomeFriendDirectory } from '../../lib/home/useFriendUidsFromFirestore';
-import { useSubscriptions } from '../contexts/SubscriptionsContext';
-import { HomeDonutChart, HOME_DONUT_SIZE } from '../components/home/HomeDonutChart';
-import { HomeFloatCard } from '../components/home/HomeFloatCard';
-import { HomeHeroDonutLegend } from '../components/home/HomeHeroDonutLegend';
-import { HomeSavingsPill } from '../components/home/HomeSavingsPill';
-import { HomeQuickActionsRow } from '../components/home/HomeQuickActionsRow';
+import { useSubscriptions } from '../../contexts/SubscriptionsContext';
+import { HomeDonutChart, HOME_DONUT_SIZE } from '../../components/home/HomeDonutChart';
+import { HomeFloatCard } from '../../components/home/HomeFloatCard';
+import { HomeHeroDonutLegend } from '../../components/home/HomeHeroDonutLegend';
+import { HomeSavingsPill } from '../../components/home/HomeSavingsPill';
+import { HomeQuickActionsRow } from '../../components/home/HomeQuickActionsRow';
 import {
   HomeReminderPickerModal,
   type ReminderPickCandidate,
-} from '../components/home/HomeReminderPickerModal';
-import { ServiceIcon } from '../components/shared/ServiceIcon';
+} from '../../components/home/HomeReminderPickerModal';
+import { ServiceIcon } from '../../components/shared/ServiceIcon';
 
 const C = {
   bg: '#F2F0EB',

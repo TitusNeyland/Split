@@ -29,9 +29,9 @@ import {
   formatFirstChargeDateShort,
   getNextFirstChargeDate,
 } from '../../../lib/subscription/billingDayFormat';
-import { getServiceIconBackgroundColor, ServiceIcon } from '../../components/shared/ServiceIcon';
-import { UserAvatarCircle } from '../../components/shared/UserAvatarCircle';
-import { useProfileAvatarUrl } from '../../hooks/useProfileAvatarUrl';
+import { getServiceIconBackgroundColor, ServiceIcon } from '../../../components/shared/ServiceIcon';
+import { UserAvatarCircle } from '../../../components/shared/UserAvatarCircle';
+import { useProfileAvatarUrl } from '../../../hooks/useProfileAvatarUrl';
 
 function formatCreateSplitError(e: unknown): string {
   if (e instanceof Error) return e.message;

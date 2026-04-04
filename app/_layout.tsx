@@ -3,17 +3,17 @@ import { View, StyleSheet, Animated, Platform } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Stack } from 'expo-router';
 import { StripeProvider } from '@stripe/stripe-react-native';
-import { FirebaseRecaptchaVerifierModal } from 'expo-firebase-recaptcha';
-import SplashScreen from './components/shared/SplashScreen';
-import AuthSessionSync from './components/auth/AuthSessionSync';
-import InviteDeepLinkBootstrap from './components/invite/InviteDeepLinkBootstrap';
-import PendingInviteAfterAuth from './components/invite/PendingInviteAfterAuth';
-import BiometricAppLock from './components/auth/BiometricAppLock';
-import { SecurityPrefsProvider } from './contexts/SecurityPrefsContext';
-import { FirebaseRecaptchaProvider } from './contexts/FirebaseRecaptchaContext';
-import { LocalProfileAvatarProvider } from './contexts/LocalProfileAvatarContext';
-import { SubscriptionsProvider } from './contexts/SubscriptionsContext';
-import { ServicesProvider } from './contexts/ServicesContext';
+import FirebaseRecaptchaVerifierModal from '../components/auth/recaptcha/FirebaseRecaptchaVerifierModal';
+import SplashScreen from '../components/shared/SplashScreen';
+import AuthSessionSync from '../components/auth/AuthSessionSync';
+import InviteDeepLinkBootstrap from '../components/invite/InviteDeepLinkBootstrap';
+import PendingInviteAfterAuth from '../components/invite/PendingInviteAfterAuth';
+import BiometricAppLock from '../components/auth/BiometricAppLock';
+import { SecurityPrefsProvider } from '../contexts/SecurityPrefsContext';
+import { FirebaseRecaptchaProvider } from '../contexts/FirebaseRecaptchaContext';
+import { LocalProfileAvatarProvider } from '../contexts/LocalProfileAvatarContext';
+import { SubscriptionsProvider } from '../contexts/SubscriptionsContext';
+import { ServicesProvider } from '../contexts/ServicesContext';
 import { getFirebaseWebOptions, isFirebaseConfigured } from '../lib/firebase';
 import { ENABLE_PROFILE_SECURITY } from '../constants/features';
 
@@ -118,7 +118,7 @@ export default function RootLayout() {
             }}
           />
           <Stack.Screen name="(screens)/invite/[inviteId]" options={{ headerShown: false }} />
-          <Stack.Screen name="(screens)/friends" options={{ headerShown: false }} />
+          <Stack.Screen name="(screens)/friends/index" options={{ headerShown: false }} />
           <Stack.Screen name="(screens)/friends/[friendUid]" options={{ headerShown: false }} />
           <Stack.Screen name="(screens)/friends-contacts" options={{ headerShown: false }} />
           <Stack.Screen name="(screens)/sign-in" options={{ headerShown: false, animation: 'fade' }} />

@@ -4,7 +4,7 @@ import {
   parseFirestoreBillingCycle,
   subscriptionDisplayName,
   type BillingMemberStatus,
-} from './billingCalendarModel';
+} from './subscriptionBillingShared';
 import {
   formatFirstChargeDateShort,
   getNextFirstChargeDate,

@@ -14,7 +14,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { sendPasswordResetEmail } from 'firebase/auth';
 import { getFirebaseAuth } from '../../../lib/firebase';
-import { Toast, type ToastType } from '../../components/shared/Toast';
+import { Toast, type ToastType } from '../../../components/shared/Toast';
 
 const C = {
   bg: '#FFFFFF',

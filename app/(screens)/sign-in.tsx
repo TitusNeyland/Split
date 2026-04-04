@@ -22,7 +22,7 @@ import * as LocalAuthentication from 'expo-local-authentication';
 import { getFirebaseAuth } from '../../lib/firebase';
 import { signInWithEmail, signInWithApple } from '../../lib/auth/authProviders';
 import { setOnboardingCompleteInStorage } from '../../lib/onboarding/onboardingStorage';
-import { Toast, type ToastType } from '../components/shared/Toast';
+import { Toast, type ToastType } from '../../components/shared/Toast';
 
 WebBrowser.maybeCompleteAuthSession();
 

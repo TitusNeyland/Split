@@ -16,9 +16,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
-import { ServiceIcon } from '../../components/shared/ServiceIcon';
-import { UserAvatarCircle } from '../../components/shared/UserAvatarCircle';
-import { SubscriptionDetailSkeleton } from '../../components/subscriptions/SubscriptionDetailSkeleton';
+import { ServiceIcon } from '../../../components/shared/ServiceIcon';
+import { UserAvatarCircle } from '../../../components/shared/UserAvatarCircle';
+import { SubscriptionDetailSkeleton } from '../../../components/subscriptions/SubscriptionDetailSkeleton';
 import { spacing } from '../../../constants/theme';
 import { SUBSCRIPTIONS_DEMO_MODE } from '../../../lib/subscription/subscriptionsScreenDemo';
 import {
@@ -39,21 +39,21 @@ import {
 } from '../../../lib/subscription/subscriptionDetailPrefill';
 import { fmtCents } from '../../../lib/subscription/addSubscriptionSplitMath';
 import { useFirebaseUid } from '../../../lib/auth/useFirebaseUid';
-import { useProfileAvatarUrl } from '../../hooks/useProfileAvatarUrl';
-import { useViewerFirstName } from '../../hooks/useViewerFirstName';
-import { EndSplitConfirmSheet } from '../../components/subscriptions/EndSplitConfirmSheet';
+import { useProfileAvatarUrl } from '../../../hooks/useProfileAvatarUrl';
+import { useViewerFirstName } from '../../../hooks/useViewerFirstName';
+import { EndSplitConfirmSheet } from '../../../components/subscriptions/EndSplitConfirmSheet';
 import { endSubscriptionSplit } from '../../../lib/subscription/endSplitFirestore';
 import { formatSettingsPercentsLine, membersOwingBeforeEndSplit } from '../../../lib/subscription/endSplitHelpers';
 import {
   setPendingEndSplitToast,
   setPendingSubscriptionsTabToast,
 } from '../../../lib/subscription/endSplitNavigationToast';
-import { LeaveSplitConfirmSheet } from '../../components/subscriptions/LeaveSplitConfirmSheet';
+import { LeaveSplitConfirmSheet } from '../../../components/subscriptions/LeaveSplitConfirmSheet';
 import { leaveSubscriptionSplit } from '../../../lib/subscription/leaveSplitFirestore';
 import { clearOwnerMemberLeftBanner } from '../../../lib/subscription/clearOwnerMemberLeftBannerFirestore';
 import { clearSplitInviteDeclineNotices } from '../../../lib/subscription/splitInviteDeclineNoticesFirestore';
 import { removePendingSplitInvite } from '../../../lib/subscription/removePendingSplitInviteFirestore';
-import { useSubscriptions } from '../../contexts/SubscriptionsContext';
+import { useSubscriptions } from '../../../contexts/SubscriptionsContext';
 
 const C = {
   bg: '#F2F0EB',

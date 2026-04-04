@@ -6,7 +6,6 @@ import {
   ScrollView,
   Pressable,
   useWindowDimensions,
-  InteractionManager,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -27,7 +26,7 @@ import {
   type BillingCalendarSubscription,
   weekdayLabelsShort,
 } from '../../lib/subscription/billingCalendarModel';
-import { ServiceIcon } from '../components/shared/ServiceIcon';
+import { ServiceIcon } from '../../components/shared/ServiceIcon';
 import { spacing } from '../../constants/theme';
 
 const C = {
@@ -49,6 +48,24 @@ function formatDayDetailHeader(d: Date): string {
   const wk = d.toLocaleDateString(undefined, { weekday: 'long' });
   const rest = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
   return `Billing on ${wk}, ${rest}`;
+}
+
+/** Defer work until the runtime is idle (replaces deprecated `InteractionManager.runAfterInteractions`). */
+function runAfterIdle(cb: () => void): { cancel: () => void } {
+  const g = globalThis as typeof globalThis & {
+    requestIdleCallback?: (fn: () => void, opts?: { timeout?: number }) => number;
+    cancelIdleCallback?: (id: number) => void;
+  };
+  if (typeof g.requestIdleCallback === 'function') {
+    const id = g.requestIdleCallback(cb, { timeout: 500 });
+    return {
+      cancel: () => {
+        if (typeof g.cancelIdleCallback === 'function') g.cancelIdleCallback(id);
+      },
+    };
+  }
+  const t = setTimeout(cb, 0);
+  return { cancel: () => clearTimeout(t) };
 }
 
 export default function BillingCalendarScreen() {
@@ -88,7 +105,7 @@ export default function BillingCalendarScreen() {
 
   useEffect(() => {
     if (selectedKey == null) return;
-    const handle = InteractionManager.runAfterInteractions(() => {
+    const handle = runAfterIdle(() => {
       requestAnimationFrame(() => {
         scrollRef.current?.scrollToEnd({ animated: true });
       });

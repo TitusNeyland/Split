@@ -9,7 +9,7 @@ import { getFirebaseFirestore, isFirebaseConfigured } from '../../../lib/firebas
 import { countActiveSubscriptionsForUser, countFriendshipsForUser } from '../../../lib/friends/friendSystemFirestore';
 import { getFriendAvatarColors } from '../../../lib/friends/friendAvatar';
 import { initialsFromName, userDocPhotoUrl } from '../../../lib/profile';
-import { UserAvatarCircle } from '../../components/shared/UserAvatarCircle';
+import { UserAvatarCircle } from '../../../components/shared/UserAvatarCircle';
 
 const C = {
   bg: '#F2F0EB',

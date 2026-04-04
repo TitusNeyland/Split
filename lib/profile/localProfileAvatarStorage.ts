@@ -3,10 +3,10 @@
  *
  * After Firebase is configured for all builds you care about, you can remove:
  * - This file (`lib/profile/localProfileAvatarStorage.ts`)
- * - `app/contexts/LocalProfileAvatarContext.tsx`
+ * - `contexts/LocalProfileAvatarContext.tsx`
  * - `LocalProfileAvatarProvider` in `app/_layout.tsx`
  * - Local branches / `persistLocalAvatar` / `clearLocalAvatar` / `localAvatarHydrated` in
- *   `app/hooks/useProfileAvatarUrl.ts` and `app/(tabs)/profile.tsx`
+ *   `hooks/useProfileAvatarUrl.ts` and `app/(tabs)/profile.tsx`
  *
  * Search: LOCAL_PROFILE_AVATAR_OFFLINE
  */

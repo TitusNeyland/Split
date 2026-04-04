@@ -19,7 +19,7 @@ import {
   type Unsubscribe,
 } from 'firebase/firestore';
 import { getFirebaseFirestore } from '../firebase';
-import { userDocPhotoUrl } from '../profile/profile';
+import { userDocPhotoUrl } from '../profile/userDocPhotoUrl';
 
 export const FRIENDSHIPS_COLLECTION = 'friendships';
 export const INVITES_COLLECTION = 'invites';
