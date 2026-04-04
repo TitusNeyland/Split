@@ -522,7 +522,7 @@ export function activityEventToFeedRow(
         badge: 'Removed',
         badgeVariant: 'gray',
         _activityCreatedAtMs: createdMs,
-        navigateToSubscription: !youRemoved,
+        navigateToSubscription: false,
         detail: youRemoved
           ? {
               rows: [
@@ -618,6 +618,7 @@ export function activityEventToFeedRow(
         badge: 'Ended',
         badgeVariant: 'gray',
         _activityCreatedAtMs: createdMs,
+        navigateToSubscription: false,
       };
     }
     case 'split_price_updated': {

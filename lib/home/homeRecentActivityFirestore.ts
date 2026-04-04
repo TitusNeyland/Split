@@ -12,6 +12,7 @@ import {
 } from '../activity/activityFeedFirestore';
 import { activityEventToFeedRow } from '../activity/activityEventToFeedItem';
 import type { ActivityEvent } from '../activity/activityFeedSchema';
+import { filterActivityEventsForFeed } from '../activity/activityStaleSubscription';
 
 const HOME_RECENT_LIMIT = 3;
 
@@ -55,9 +56,10 @@ export function subscribeHomeRecentActivity(
     q,
     (snap) => {
       const items: HomeRecentActivityFirestoreItem[] = [];
-      for (const d of snap.docs) {
-        const ev = parseActivityEventDoc(d);
-        if (!ev) continue;
+      const visible = filterActivityEventsForFeed(
+        snap.docs.map((d) => parseActivityEventDoc(d)).filter((e): e is ActivityEvent => e != null)
+      );
+      for (const ev of visible) {
         const row = activityEventToFeedRow(ev as ActivityEvent, uid);
         if (!row) continue;
         const amountRight = row.amount?.trim() ? row.amount : row.badge;

@@ -20,14 +20,21 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useScrollToTop } from '@react-navigation/native';
+import { useFocusEffect, useScrollToTop } from '@react-navigation/native';
 import { getFriendFilterDisplayName } from '../../lib/profile';
 import { ServiceIcon } from '../../components/shared/ServiceIcon';
 import { UserAvatarCircle } from '../../components/shared/UserAvatarCircle';
 import { recordManualSettlement } from '../../lib/payment/paymentsFirestore';
 import { useFirebaseUid } from '../../lib/auth/useFirebaseUid';
+import { doc, getDoc } from 'firebase/firestore';
 import { markActivityDocumentRead, subscribeActivityFeed } from '../../lib/activity/activityFeedFirestore';
 import type { ActivityEvent, ActivityEventType } from '../../lib/activity/activityFeedSchema';
+import { filterActivityEventsForFeed } from '../../lib/activity/activityStaleSubscription';
+import {
+  collectInvalidSubscriptionIds,
+  markActivityDocsSubscriptionDeleted,
+} from '../../lib/activity/validateActivitySubscriptions';
+import { getFirebaseFirestore } from '../../lib/firebase';
 import { activityEventToFeedRow } from '../../lib/activity/activityEventToFeedItem';
 import {
   activityEventMatchesFilter,
@@ -690,7 +697,14 @@ export default function ActivityScreen() {
   >({});
   const [markPaidNotes, setMarkPaidNotes] = useState<Record<string, string>>({});
   const [markPaidDrawerOpenForId, setMarkPaidDrawerOpenForId] = useState<string | null>(null);
-  const [liveFeedItems, setLiveFeedItems] = useState<ActivityFeedItem[]>([]);
+  const [rawActivityEvents, setRawActivityEvents] = useState<ActivityEvent[]>([]);
+  /** Local overlay until Firestore listener includes `subscriptionDeleted` from CF or batch writes. */
+  const [activityEventPatches, setActivityEventPatches] = useState<
+    Record<string, { subscriptionDeleted?: boolean }>
+  >({});
+  /** Optimistic read state before the activity snapshot reflects `read: true`. */
+  const [readOptimisticById, setReadOptimisticById] = useState<Record<string, boolean>>({});
+  const lastSubscriptionValidateAtRef = useRef(0);
   const [searchActive, setSearchActive] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const searchInputRef = useRef<TextInput>(null);
@@ -762,26 +776,81 @@ export default function ActivityScreen() {
 
   useEffect(() => {
     if (!uid) {
-      setLiveFeedItems([]);
+      setRawActivityEvents([]);
       return;
     }
     const unsub = subscribeActivityFeed(uid, (events) => {
-      const rows: ActivityFeedItem[] = [];
-      for (const e of events) {
-        const row = activityEventToFeedRow(e as ActivityEvent, uid);
-        if (!row) continue;
-        rows.push({
-          ...row,
-          activityType: e.type,
-          read: e.read === true,
-          subscriptionId: e.subscriptionId,
-          amountCents: typeof e.amount === 'number' && Number.isFinite(e.amount) ? e.amount : undefined,
-        } as ActivityFeedItem);
-      }
-      setLiveFeedItems(rows);
+      setRawActivityEvents(events);
     });
     return unsub;
   }, [uid]);
+
+  const mergedActivityEvents = useMemo(() => {
+    return rawActivityEvents.map((e) => ({
+      ...e,
+      ...activityEventPatches[e.id],
+    }));
+  }, [rawActivityEvents, activityEventPatches]);
+
+  const visibleActivityEvents = useMemo(
+    () => filterActivityEventsForFeed(mergedActivityEvents),
+    [mergedActivityEvents]
+  );
+
+  const liveFeedItems = useMemo(() => {
+    const rows: ActivityFeedItem[] = [];
+    for (const e of visibleActivityEvents) {
+      const row = activityEventToFeedRow(e as ActivityEvent, uid);
+      if (!row) continue;
+      rows.push({
+        ...row,
+        activityType: e.type,
+        read: e.read === true || readOptimisticById[e.id] === true,
+        subscriptionId: e.subscriptionId,
+        amountCents: typeof e.amount === 'number' && Number.isFinite(e.amount) ? e.amount : undefined,
+      } as ActivityFeedItem);
+    }
+    return rows;
+  }, [visibleActivityEvents, uid, readOptimisticById]);
+
+  const rawActivityEventsRef = useRef(rawActivityEvents);
+  rawActivityEventsRef.current = rawActivityEvents;
+  const activityEventPatchesRef = useRef(activityEventPatches);
+  activityEventPatchesRef.current = activityEventPatches;
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!uid) return;
+      const now = Date.now();
+      if (now - lastSubscriptionValidateAtRef.current < 60_000) return;
+      lastSubscriptionValidateAtRef.current = now;
+
+      void (async () => {
+        const merged = rawActivityEventsRef.current.map((e) => ({
+          ...e,
+          ...activityEventPatchesRef.current[e.id],
+        }));
+        const { invalidSubscriptionIds } = await collectInvalidSubscriptionIds(merged);
+        if (invalidSubscriptionIds.size === 0) return;
+
+        setActivityEventPatches((prev) => {
+          const next = { ...prev };
+          for (const e of merged) {
+            if (e.subscriptionId && invalidSubscriptionIds.has(e.subscriptionId)) {
+              next[e.id] = { ...next[e.id], subscriptionDeleted: true };
+            }
+          }
+          return next;
+        });
+
+        try {
+          await markActivityDocsSubscriptionDeleted(uid, [...invalidSubscriptionIds]);
+        } catch {
+          /* Local patches still apply. */
+        }
+      })();
+    }, [uid])
+  );
 
   const ownerSummary = useMemo(
     () => computeActivityOwnerSummaryStats(subscriptions, uid ?? '', new Date()),
@@ -867,12 +936,10 @@ export default function ActivityScreen() {
   }, []);
 
   const handleActivityRowPress = useCallback(
-    (item: ActivityFeedItem) => {
+    async (item: ActivityFeedItem) => {
       if (uid) {
         void markActivityDocumentRead(uid, item.id).catch(() => {});
-        setLiveFeedItems((prev) =>
-          prev.map((i) => (i.id === item.id ? { ...i, read: true } : i)),
-        );
+        setReadOptimisticById((prev) => ({ ...prev, [item.id]: true }));
       }
       const path = resolveActivityRoute({
         activityType: item.activityType,
@@ -884,6 +951,28 @@ export default function ActivityScreen() {
       if (path) {
         if (path.startsWith('/subscription/')) {
           const subId = path.slice('/subscription/'.length);
+          const db = getFirebaseFirestore();
+          if (db) {
+            const snap = await getDoc(doc(db, 'subscriptions', subId));
+            const st = snap.exists()
+              ? String((snap.data() as { status?: string }).status ?? 'active').toLowerCase()
+              : '';
+            if (!snap.exists() || st !== 'active') {
+              setActivityEventPatches((prev) => ({
+                ...prev,
+                [item.id]: { ...prev[item.id], subscriptionDeleted: true },
+              }));
+              Alert.alert('This split no longer exists.');
+              if (uid) {
+                try {
+                  await markActivityDocsSubscriptionDeleted(uid, [subId]);
+                } catch {
+                  /* ignore */
+                }
+              }
+              return;
+            }
+          }
           const prefill = buildSubscriptionPrefillParam(item, subId, subscriptions);
           router.push({
             pathname: '/subscription/[id]',
@@ -1152,9 +1241,7 @@ export default function ActivityScreen() {
                       try {
                         await acceptPendingInvite(trimmed, uid);
                         void markActivityDocumentRead(uid, item.id).catch(() => {});
-                        setLiveFeedItems((prev) =>
-                          prev.map((i) => (i.id === item.id ? { ...i, read: true } : i)),
-                        );
+                        setReadOptimisticById((prev) => ({ ...prev, [item.id]: true }));
                         const ok = await replaceWithSplitJoinedCelebration(router, subscriptionId, uid);
                         if (!ok) {
                           router.replace({ pathname: '/subscription/[id]', params: { id: subscriptionId } });
