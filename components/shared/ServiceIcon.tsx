@@ -127,28 +127,17 @@ export type ServiceIconProps = {
   /** Outer box is `size` × `size`; default 40. */
   size?: number;
   style?: StyleProp<ViewStyle>;
-  /** Subscription detail “ended” hero: neutral tile + muted glyph. */
-  endedDimmed?: boolean;
-  /** Subscriptions list ended card: gray tile (#F0EEE9) + gray glyph (#888780). */
-  listEndedMuted?: boolean;
 };
 
 const BASE_SIZE = 40;
 const BASE_FONT = 18;
 const GLYPH_RATIO = 0.58;
 
-const ENDED_BG = 'rgba(255,255,255,0.08)';
-const ENDED_GLYPH = 'rgba(255,255,255,0.3)';
-const LIST_ENDED_BG = '#F0EEE9';
-const LIST_ENDED_GLYPH = '#888780';
-
 export function ServiceIcon({
   serviceName,
   serviceId,
   size = BASE_SIZE,
   style,
-  endedDimmed,
-  listEndedMuted,
 }: ServiceIconProps) {
   const catalogCtx = useServicesOptional();
   const { glyph, fallbackLetter, backgroundColor, iconColor } = useMemo(() => {
@@ -192,8 +181,6 @@ export function ServiceIcon({
   const fontSize = (BASE_FONT * size) / BASE_SIZE * (fallbackLetter.length >= 2 ? 0.82 : 1);
   const borderRadius = size * 0.28;
   const glyphSize = Math.round(size * GLYPH_RATIO);
-  const tileBg = listEndedMuted ? LIST_ENDED_BG : endedDimmed ? ENDED_BG : backgroundColor;
-  const glyphColor = listEndedMuted ? LIST_ENDED_GLYPH : endedDimmed ? ENDED_GLYPH : iconColor;
 
   return (
     <View
@@ -203,7 +190,7 @@ export function ServiceIcon({
           width: size,
           height: size,
           borderRadius,
-          backgroundColor: tileBg,
+          backgroundColor: backgroundColor,
         },
         style,
       ]}
@@ -211,10 +198,10 @@ export function ServiceIcon({
       accessibilityLabel={`${serviceName.trim() || serviceId?.trim() || 'Subscription'} icon`}
     >
       {glyph ? (
-        <ServiceBrandGlyph kind={glyph} color={glyphColor} size={glyphSize} />
+        <ServiceBrandGlyph kind={glyph} color={iconColor} size={glyphSize} />
       ) : (
         <Text
-          style={[styles.glyph, { fontSize, color: glyphColor }]}
+          style={[styles.glyph, { fontSize, color: iconColor }]}
           numberOfLines={1}
           adjustsFontSizeToFit
           minimumFontScale={0.65}
