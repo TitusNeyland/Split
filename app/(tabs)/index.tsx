@@ -118,7 +118,6 @@ type HomeRecentActivityItem = {
   icon: string;
   iconBg: string;
   iconColor: string;
-  serviceIconMuted?: boolean;
   friendAvatar?: { initials: string; imageUrl?: string | null; uid?: string };
   viewerAvatarUrl?: string | null;
 };
@@ -211,7 +210,6 @@ export default function HomeScreen() {
           icon: x.icon,
           iconBg: x.iconBg,
           iconColor: x.iconColor,
-          serviceIconMuted: x.serviceIconMuted,
           friendAvatar: x.friendAvatar,
         }))
       );
@@ -795,12 +793,7 @@ export default function HomeScreen() {
                     </View>
                   ) : item.serviceMark ? (
                     <View style={styles.actIcoWrap}>
-                      <ServiceIcon
-                        serviceName={item.serviceMark}
-                        serviceId={item.serviceId}
-                        size={38}
-                        listEndedMuted={item.serviceIconMuted}
-                      />
+                      <ServiceIcon serviceName={item.serviceMark} serviceId={item.serviceId} size={38} />
                     </View>
                   ) : (
                     <View style={[styles.actIcoWrap, { backgroundColor: item.iconBg }]}>

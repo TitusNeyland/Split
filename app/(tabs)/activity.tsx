@@ -268,7 +268,6 @@ type ActivityFeedItem = {
   _reminderTap?: { subscriptionId: string; memberUid: string };
   joinSubscriptionId?: string;
   joinInviteId?: string;
-  serviceIconMuted?: boolean;
   friendAvatar?: { initials: string; imageUrl?: string | null; uid?: string };
   /** Raw Firestore event type — drives filter tabs. */
   activityType: ActivityEventType;
@@ -513,12 +512,7 @@ function ActivityItemRow({
               </View>
             ) : item.serviceMark ? (
               <View style={styles.actIcoPlain}>
-                <ServiceIcon
-                  serviceName={item.serviceMark}
-                  serviceId={item.serviceId}
-                  size={40}
-                  listEndedMuted={item.serviceIconMuted}
-                />
+                <ServiceIcon serviceName={item.serviceMark} serviceId={item.serviceId} size={40} />
               </View>
             ) : (
               <View style={[styles.actIco, { backgroundColor: item.iconBg }]}>

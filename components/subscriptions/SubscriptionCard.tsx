@@ -209,39 +209,41 @@ export function SubscriptionCard({
             serviceId={serviceId}
             size={iconSize}
             style={styles.serviceIconTile}
-            listEndedMuted={Boolean(splitEndedActions)}
           />
-          <View style={styles.info}>
-            <Text style={[styles.name, { color: nameColor }]}>{name}</Text>
-            <Text style={styles.cycle}>{cycleLine}</Text>
-            {isOwner || autoCharge === 'on' || autoCharge === 'off' ? (
-              <View style={styles.badgeRow}>
-                {isOwner ? (
-                  <View style={styles.ownerBadge}>
-                    <Ionicons name="person-outline" size={10} color={C.purple} />
-                    <Text style={styles.ownerBadgeTxt}>You pay</Text>
-                  </View>
-                ) : null}
-                {autoCharge === 'on' ? (
-                  <View style={styles.autoOnBadge}>
-                    <Ionicons name="checkmark" size={10} color={C.greenDark} />
-                    <Text style={styles.autoOnBadgeTxt}>Auto-on</Text>
-                  </View>
-                ) : null}
-                {autoCharge === 'off' ? (
-                  <View style={styles.autoOffBadge}>
-                    <Text style={styles.autoOffBadgeTxt}>Auto-off</Text>
-                  </View>
-                ) : null}
-              </View>
-            ) : null}
-          </View>
-          <View>
-            <Text style={[styles.total, { color: totalAmountColor }]}>{totalAmount}</Text>
-            <Text style={styles.perPerson}>{perPersonAmount}</Text>
+          <View style={[styles.topRowRest, faded && styles.fadedContent]}>
+            <View style={styles.info}>
+              <Text style={[styles.name, { color: nameColor }]}>{name}</Text>
+              <Text style={styles.cycle}>{cycleLine}</Text>
+              {isOwner || autoCharge === 'on' || autoCharge === 'off' ? (
+                <View style={styles.badgeRow}>
+                  {isOwner ? (
+                    <View style={styles.ownerBadge}>
+                      <Ionicons name="person-outline" size={10} color={C.purple} />
+                      <Text style={styles.ownerBadgeTxt}>You pay</Text>
+                    </View>
+                  ) : null}
+                  {autoCharge === 'on' ? (
+                    <View style={styles.autoOnBadge}>
+                      <Ionicons name="checkmark" size={10} color={C.greenDark} />
+                      <Text style={styles.autoOnBadgeTxt}>Auto-on</Text>
+                    </View>
+                  ) : null}
+                  {autoCharge === 'off' ? (
+                    <View style={styles.autoOffBadge}>
+                      <Text style={styles.autoOffBadgeTxt}>Auto-off</Text>
+                    </View>
+                  ) : null}
+                </View>
+              ) : null}
+            </View>
+            <View>
+              <Text style={[styles.total, { color: totalAmountColor }]}>{totalAmount}</Text>
+              <Text style={styles.perPerson}>{perPersonAmount}</Text>
+            </View>
           </View>
         </View>
 
+        <View style={faded ? styles.fadedContent : undefined}>
         <View style={styles.memberRow}>
           <View style={styles.pips}>
             {members.map((m) => (
@@ -284,6 +286,7 @@ export function SubscriptionCard({
             <Text style={[styles.progAmt, { color: rightColor }]}>{progress.rightLabel}</Text>
           </View>
         </View>
+        </View>
       </View>
     </>
   );
@@ -295,7 +298,6 @@ export function SubscriptionCard({
       style={[
         styles.card,
         priceChange ? styles.cardPriceChanged : null,
-        faded ? styles.cardFaded : null,
       ]}
     >
       {onCardPress ? (
@@ -357,7 +359,8 @@ const styles = StyleSheet.create({
   cardPriceChanged: {
     borderColor: '#FAC775',
   },
-  cardFaded: {
+  /** Ended cards: dim text/progress only; `ServiceIcon` stays full brand color. */
+  fadedContent: {
     opacity: 0.6,
   },
   endedActionsRow: {
@@ -405,6 +408,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
     marginBottom: 11,
+  },
+  topRowRest: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    minWidth: 0,
   },
   info: {
     flex: 1,

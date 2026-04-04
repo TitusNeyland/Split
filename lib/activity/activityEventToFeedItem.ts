@@ -141,8 +141,6 @@ export type ActivityFeedRow = {
   joinSubscriptionId?: string;
   /** Firestore `invites/{id}` — required to accept via Cloud Function merge. */
   joinInviteId?: string;
-  /** Muted / desaturated service tile */
-  serviceIconMuted?: boolean;
   /** Friend events: show actor avatar (initials or photo). */
   friendAvatar?: { initials: string; imageUrl?: string | null; uid?: string };
   /**
@@ -411,7 +409,6 @@ export function activityEventToFeedRow(
         kind: 'split_invite_declined',
         serviceMark,
         serviceId: catalogServiceId,
-        serviceIconMuted: true,
         icon: 'close-outline',
         iconBg: '#F0EEE9',
         iconColor: C.muted,
@@ -607,7 +604,6 @@ export function activityEventToFeedRow(
         friendLinkIds: endedByUid ? [endedByUid] : undefined,
         serviceMark,
         serviceId: catalogServiceId,
-        serviceIconMuted: true,
         icon: 'close-circle-outline',
         iconBg: '#F0EEE9',
         iconColor: '#5F5E5A',
