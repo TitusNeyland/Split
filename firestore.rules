@@ -160,7 +160,7 @@ service cloud.firestore {
         allow read: if request.auth != null && request.auth.uid == userId;
         allow create, delete: if false;
         allow update: if request.auth != null && request.auth.uid == userId
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read', 'subscriptionDeleted']);
       }
     }
 
@@ -172,8 +172,13 @@ service cloud.firestore {
           || (data.keys().hasAny(['members']) && request.auth.uid in data.members);
       }
 
+      // Allow reads when the doc is missing so clients can safely check existence (e.g. activity tap,
+      // stale feed validation) without permission errors. Existing docs still require membership.
       allow read: if request.auth != null
-        && subscriptionMemberData(resource.data);
+        && (
+          resource == null
+          || subscriptionMemberData(resource.data)
+        );
       allow create: if request.auth != null
         && request.auth.uid == request.resource.data.ownerUid
         && subscriptionMemberData(request.resource.data);

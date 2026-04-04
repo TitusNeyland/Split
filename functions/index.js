@@ -1,6 +1,10 @@
 const crypto = require('crypto');
 const admin = require('firebase-admin');
-const { onDocumentCreated, onDocumentUpdated } = require('firebase-functions/v2/firestore');
+const {
+  onDocumentCreated,
+  onDocumentUpdated,
+  onDocumentWritten,
+} = require('firebase-functions/v2/firestore');
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { setGlobalOptions } = require('firebase-functions/v2');
@@ -1392,6 +1396,63 @@ exports.onSubscriptionEndedActivity = onDocumentUpdated('subscriptions/{subscrip
     }
   }
 });
+
+/**
+ * When a subscription is deleted or becomes `ended`, mark related activity feed rows so clients can filter.
+ * Writes `subscriptionDeleted: true` on `users/{uid}/activity` for matching `subscriptionId`.
+ */
+exports.onSubscriptionEndedOrDeletedMarkActivity = onDocumentWritten(
+  'subscriptions/{subscriptionId}',
+  async (event) => {
+    const before = event.data.before.exists ? event.data.before.data() : null;
+    const after = event.data.after.exists ? event.data.after.data() : null;
+    const subId = event.params.subscriptionId;
+
+    const isDeleted = !after;
+    const becameEnded =
+      after &&
+      String(after.status ?? '') === 'ended' &&
+      (!before || String(before.status ?? '') !== 'ended');
+
+    if (!isDeleted && !becameEnded) return;
+
+    const dataForMembers = after || before;
+    if (!dataForMembers || typeof dataForMembers !== 'object') return;
+
+    const uids = new Set();
+    const ownerUid = dataForMembers.ownerUid;
+    if (typeof ownerUid === 'string' && ownerUid) uids.add(ownerUid);
+    const mu = dataForMembers.memberUids;
+    if (Array.isArray(mu)) {
+      for (const u of mu) {
+        if (typeof u === 'string' && u) uids.add(u);
+      }
+    }
+
+    const db = admin.firestore();
+    for (const uid of uids) {
+      try {
+        const activityQuery = await db
+          .collection('users')
+          .doc(uid)
+          .collection('activity')
+          .where('subscriptionId', '==', subId)
+          .get();
+
+        const docs = activityQuery.docs;
+        for (let i = 0; i < docs.length; i += 400) {
+          const batch = db.batch();
+          for (const d of docs.slice(i, i + 400)) {
+            batch.update(d.ref, { subscriptionDeleted: true });
+          }
+          await batch.commit();
+        }
+      } catch (e) {
+        console.warn('onSubscriptionEndedOrDeletedMarkActivity', uid, e?.message || e);
+      }
+    }
+  }
+);
 
 function subscriptionTotalCents(data) {
   if (!data || typeof data !== 'object') return null;

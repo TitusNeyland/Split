@@ -60,6 +60,8 @@ export type ActivityEventFirestoreData = {
   read: boolean;
   /** When set (e.g. by Cloud Functions), client hides this row from feeds. */
   status?: 'cancelled' | string;
+  /** When true, subscription is ended/deleted; client hides row except for split_ended / split_member_removed / split_left. */
+  subscriptionDeleted?: boolean;
   subscriptionId?: string;
   subscriptionName?: string;
   serviceId?: string;
