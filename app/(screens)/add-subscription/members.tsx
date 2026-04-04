@@ -6,12 +6,9 @@ import {
   ScrollView,
   Pressable,
   TextInput,
-  Modal,
-  FlatList,
   KeyboardAvoidingView,
   Keyboard,
   Platform,
-  ActivityIndicator,
   TouchableOpacity,
 } from 'react-native';
 import { onAuthStateChanged, type User } from 'firebase/auth';
@@ -40,6 +37,10 @@ import { getFriendAvatarColors } from '../../../lib/friends/friendAvatar';
 import { initialsFromName } from '../../../lib/profile';
 import { useProfileAvatarUrl } from '../../../hooks/useProfileAvatarUrl';
 import { useKeyboardHeight } from '../../../hooks/useKeyboardHeight';
+import { useRegisterPickMembersApi, type AddSubscriptionPickMembersApi } from './AddSubscriptionPickMembersContext';
+import type { SheetFriend, WizardMember } from './memberTypes';
+
+export type { WizardMember, SheetFriend } from './memberTypes';
 
 const C = {
   purple: '#534AB7',
@@ -56,21 +57,6 @@ const C = {
 };
 
 export type SplitMethod = 'equal' | 'customPercent' | 'fixedDollar' | 'ownerLess';
-
-export type WizardMember = {
-  memberId: string;
-  displayName: string;
-  initials: string;
-  avatarBg: string;
-  avatarColor: string;
-  /** From friend search / profile; owner row uses live profile URL in UI. */
-  avatarUrl?: string | null;
-  isOwner: boolean;
-  /** Not on the app yet — slot reserved until they join and add payment. */
-  invitePending?: boolean;
-  /** Set when the invite was created from an email-shaped search query. */
-  pendingInviteEmail?: string;
-};
 
 /** Owner row for the wizard; Firestore uses `persistMemberId` → real uid at create time. */
 function buildOwnerMember(displayNameFromProfile: string | null, user: User | null): WizardMember {
@@ -89,11 +75,6 @@ function buildOwnerMember(displayNameFromProfile: string | null, user: User | nu
     isOwner: true,
   };
 }
-
-type SheetFriend = Omit<WizardMember, 'isOwner' | 'invitePending'> & {
-  mutualSubscriptionsCount: number;
-  avatarUrl?: string | null;
-};
 
 function useDebouncedValue<T>(value: T, ms: number): T {
   const [debounced, setDebounced] = useState(value);
@@ -178,8 +159,7 @@ export default function AddSubscriptionMembersScreen() {
   const [fixedDollarStr, setFixedDollarStr] = useState<string[]>(() => [
     (totalCents / 100).toFixed(2),
   ]);
-  const [pickerOpen, setPickerOpen] = useState(false);
-  /** Non-owner members added while the Add Members sheet is open (order preserved). */
+  /** Non-owner members added while the pick-members screen is open (order preserved). */
   const [sheetSessionAddedIds, setSheetSessionAddedIds] = useState<string[]>([]);
   const [friendQuery, setFriendQuery] = useState('');
   const [searchUser, setSearchUser] = useState<User | null>(() => getFirebaseAuth()?.currentUser ?? null);
@@ -440,20 +420,19 @@ export default function AddSubscriptionMembersScreen() {
         avatarUrl: friend.avatarUrl ?? null,
         isOwner: false,
       });
+      setFriendQuery('');
       if (ok) {
         setSheetSessionAddedIds((prev) =>
           prev.includes(friend.memberId) ? prev : [...prev, friend.memberId],
         );
-        setFriendQuery('');
         setTimeout(() => sheetSearchInputRef.current?.focus(), 0);
       }
     },
     [members, appendMemberCore, removeNonOwnerMember],
   );
 
-  const closeMemberPicker = useCallback(() => {
+  const onLeavePicker = useCallback(() => {
     Keyboard.dismiss();
-    setPickerOpen(false);
     setFriendQuery('');
   }, []);
 
@@ -540,17 +519,49 @@ export default function AddSubscriptionMembersScreen() {
   const addedMemberIds = useMemo(() => new Set(members.map((m) => m.memberId)), [members]);
 
   const invitedSheetMembers = useMemo(
-    () =>
-      sheetSessionAddedIds
-        .map((id) => members.find((m) => m.memberId === id))
-        .filter((m): m is WizardMember => m != null),
-    [sheetSessionAddedIds, members],
+    () => members.filter((m) => !m.isOwner),
+    [members],
   );
 
   const nonOwnerMemberCount = useMemo(
     () => members.filter((m) => !m.isOwner).length,
     [members],
   );
+
+  const pickMembersApi = useMemo<AddSubscriptionPickMembersApi>(
+    () => ({
+      invitedSheetMembers,
+      nonOwnerMemberCount,
+      friendQuery,
+      setFriendQuery,
+      friendsForSheet,
+      searchingFriends,
+      showSearchEmptyState,
+      friendQueryTooShort: friendQuery.trim().length < 3,
+      onToggleFriendInSplit,
+      removeNonOwnerMember,
+      addedMemberIds,
+      sheetSearchInputRef,
+      sheetSessionAddedIds,
+      onLeavePicker,
+    }),
+    [
+      invitedSheetMembers,
+      nonOwnerMemberCount,
+      friendQuery,
+      setFriendQuery,
+      friendsForSheet,
+      searchingFriends,
+      showSearchEmptyState,
+      onToggleFriendInSplit,
+      removeNonOwnerMember,
+      addedMemberIds,
+      sheetSessionAddedIds,
+      onLeavePicker,
+    ],
+  );
+
+  useRegisterPickMembersApi(pickMembersApi);
 
   const inputLocked = mode === 'equal' || mode === 'ownerLess';
 
@@ -781,7 +792,7 @@ export default function AddSubscriptionMembersScreen() {
         <Pressable
           onPress={() => {
             setSheetSessionAddedIds([]);
-            setPickerOpen(true);
+            router.push('/add-subscription/pick-members');
           }}
           style={styles.addMemberBtn}
           accessibilityRole="button"
@@ -808,208 +819,6 @@ export default function AddSubscriptionMembersScreen() {
           </Pressable>
         </View>
       </KeyboardAvoidingView>
-
-      <Modal
-        visible={pickerOpen}
-        animationType="slide"
-        transparent
-        onRequestClose={closeMemberPicker}
-      >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={styles.modalRoot}
-        >
-          <Pressable
-            style={styles.modalBackdrop}
-            onPress={closeMemberPicker}
-            accessibilityRole="button"
-            accessibilityLabel="Close add members"
-          />
-          <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-            <View style={styles.sheetHandle} />
-            <Text style={styles.sheetTitle} accessibilityRole="header">
-              Add members ({nonOwnerMemberCount} selected)
-            </Text>
-            <View style={styles.sheetSearchContainer}>
-              <Ionicons
-                name="search-outline"
-                size={20}
-                color={C.muted}
-                style={styles.sheetSearchLeadingIcon}
-              />
-              <TextInput
-                ref={sheetSearchInputRef}
-                value={friendQuery}
-                onChangeText={setFriendQuery}
-                placeholder="Search friends or enter email…"
-                placeholderTextColor={C.muted}
-                style={styles.sheetSearchInput}
-                returnKeyType="search"
-                accessibilityLabel="Search friends"
-              />
-              {friendQuery.length > 0 ? (
-                <Pressable
-                  onPress={() => {
-                    setFriendQuery('');
-                    sheetSearchInputRef.current?.focus();
-                  }}
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                  style={styles.sheetSearchClearBtn}
-                  accessibilityRole="button"
-                  accessibilityLabel="Clear search"
-                >
-                  <View style={styles.sheetSearchClearCircle}>
-                    <Ionicons name="close" size={10} color="#fff" />
-                  </View>
-                </Pressable>
-              ) : null}
-            </View>
-            {invitedSheetMembers.length > 0 ? (
-              <View style={styles.sheetInvitedSection}>
-                <Text style={styles.sheetInvitedLabel} accessibilityRole="header">
-                  {`INVITED (${invitedSheetMembers.length})`}
-                </Text>
-                {invitedSheetMembers.map((m) => (
-                  <View key={m.memberId} style={styles.sheetInvitedRow}>
-                    <UserAvatarCircle
-                      size={32}
-                      uid={m.memberId.startsWith('invite-email-') ? null : m.memberId}
-                      initials={m.initials}
-                      imageUrl={m.avatarUrl}
-                      initialsBackgroundColor={m.avatarBg}
-                      initialsTextColor={m.avatarColor}
-                      accessibilityLabel=""
-                    />
-                    <Text style={styles.sheetInvitedName} numberOfLines={1}>
-                      {m.displayName}
-                    </Text>
-                    <Pressable
-                      onPress={() => removeNonOwnerMember(m.memberId)}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                      style={styles.sheetInvitedRemove}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Remove ${m.displayName} from split`}
-                    >
-                      <Ionicons name="close" size={14} color={C.muted} />
-                    </Pressable>
-                  </View>
-                ))}
-              </View>
-            ) : null}
-            <Text style={styles.sheetSectionLbl}>Your friends</Text>
-            <FlatList
-              data={friendsForSheet}
-              extraData={members}
-              keyExtractor={(item) => item.memberId}
-              style={styles.sheetList}
-              keyboardShouldPersistTaps="handled"
-              ListEmptyComponent={
-                friendQuery.trim().length < 3 ? (
-                  <Text style={styles.sheetEmpty}>Type at least 3 characters to search people on mySplit.</Text>
-                ) : searchingFriends ? (
-                  <View style={styles.sheetEmpty}>
-                    <ActivityIndicator color={C.purple} />
-                  </View>
-                ) : showSearchEmptyState ? (
-                  <View style={styles.sheetEmptyCenter}>
-                    <View style={styles.sheetEmptyIconCircle}>
-                      <Ionicons name="search" size={28} color={C.muted} />
-                    </View>
-                    <Text style={styles.sheetEmptyTitle}>No one found</Text>
-                    <Text style={styles.sheetEmptyBody}>
-                      {`${friendQuery.trim()} isn't on mySplit yet. Invite them to join this split.`}
-                    </Text>
-                  </View>
-                ) : (
-                  <Text style={styles.sheetEmpty}>No matches.</Text>
-                )
-              }
-              ListFooterComponent={
-                <Pressable
-                  style={styles.sheetInviteRow}
-                  onPress={() => {
-                    closeMemberPicker();
-                    router.push('/invite-share');
-                  }}
-                  accessibilityRole="button"
-                  accessibilityLabel="Invite to mySplit, share link"
-                >
-                  <View style={styles.sheetInviteIco}>
-                    <Ionicons name="share-outline" size={20} color={C.purple} />
-                  </View>
-                  <View style={styles.sheetInviteCopy}>
-                    <Text style={styles.sheetInviteTitle}>Invite to mySplit</Text>
-                    <Text style={styles.sheetInviteSub}>Share an invite link</Text>
-                  </View>
-                </Pressable>
-              }
-              renderItem={({ item }) => {
-                const added = addedMemberIds.has(item.memberId);
-                return (
-                  <Pressable
-                    style={[styles.friendRow, added && styles.friendRowSelected]}
-                    onPress={() => onToggleFriendInSplit(item)}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: added }}
-                    accessibilityLabel={
-                      added
-                        ? `${item.displayName}, on split — tap to remove`
-                        : `Add ${item.displayName} to split`
-                    }
-                  >
-                    <View style={styles.sheetAvatarWrap}>
-                      <View style={[styles.memberAv, item.avatarUrl ? styles.sheetFriendPhotoWrap : null]}>
-                        <UserAvatarCircle
-                          size={36}
-                          uid={item.memberId}
-                          initials={item.initials}
-                          imageUrl={item.avatarUrl}
-                          initialsBackgroundColor={item.avatarBg}
-                          initialsTextColor={item.avatarColor}
-                          accessibilityLabel=""
-                        />
-                      </View>
-                      {added ? (
-                        <View style={styles.sheetAddedBadge} accessibilityLabel="Selected for split">
-                          <Ionicons name="checkmark" size={14} color="#fff" />
-                        </View>
-                      ) : null}
-                    </View>
-                    <View style={styles.friendMeta}>
-                      <Text style={styles.friendName} numberOfLines={1}>
-                        {item.displayName}
-                      </Text>
-                      <Text style={styles.friendMutual} numberOfLines={1}>
-                        {item.mutualSubscriptionsCount === 0
-                          ? 'No mutual subscriptions'
-                          : item.mutualSubscriptionsCount === 1
-                            ? '1 mutual subscription'
-                            : `${item.mutualSubscriptionsCount} mutual subscriptions`}
-                      </Text>
-                    </View>
-                  </Pressable>
-                );
-              }}
-            />
-            <Pressable
-              onPress={closeMemberPicker}
-              style={({ pressed }) => [styles.sheetDoneBtn, pressed && styles.sheetDoneBtnPressed]}
-              accessibilityRole="button"
-              accessibilityLabel={
-                sheetSessionAddedIds.length > 0
-                  ? `Add ${sheetSessionAddedIds.length} member${sheetSessionAddedIds.length === 1 ? '' : 's'} and close`
-                  : 'Done adding members'
-              }
-            >
-              <Text style={styles.sheetDoneBtnTxt}>
-                {sheetSessionAddedIds.length > 0
-                  ? `Add ${sheetSessionAddedIds.length} member${sheetSessionAddedIds.length === 1 ? '' : 's'}`
-                  : 'Done'}
-              </Text>
-            </Pressable>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
     </View>
   );
 }
@@ -1322,242 +1131,5 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     color: '#fff',
-  },
-  modalRoot: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  modalBackdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-  },
-  sheet: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingHorizontal: 18,
-    paddingTop: 10,
-    maxHeight: '88%',
-    zIndex: 1,
-    elevation: 8,
-  },
-  sheetHandle: {
-    width: 44,
-    height: 5,
-    borderRadius: 3,
-    backgroundColor: '#D3D1C7',
-    alignSelf: 'center',
-    marginBottom: 12,
-  },
-  sheetTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: C.text,
-    letterSpacing: -0.3,
-    marginBottom: 14,
-    textAlign: 'center',
-  },
-  sheetSearchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: C.segBg,
-    borderRadius: 12,
-    marginBottom: 12,
-    paddingLeft: 12,
-    paddingRight: 6,
-    minHeight: 44,
-  },
-  sheetSearchLeadingIcon: {
-    marginRight: 6,
-  },
-  sheetSearchInput: {
-    flex: 1,
-    paddingVertical: 12,
-    paddingRight: 6,
-    fontSize: 16,
-    color: C.text,
-  },
-  sheetSearchClearBtn: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingLeft: 4,
-  },
-  sheetSearchClearCircle: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: C.muted,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sheetInvitedSection: {
-    marginBottom: 14,
-  },
-  sheetInvitedLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: C.muted,
-    letterSpacing: 0.5,
-    marginBottom: 8,
-  },
-  sheetInvitedRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingVertical: 8,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: C.divider,
-  },
-  sheetInvitedName: {
-    flex: 1,
-    fontSize: 16,
-    fontWeight: '500',
-    color: C.text,
-  },
-  sheetInvitedRemove: {
-    padding: 4,
-  },
-  sheetSectionLbl: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: C.muted,
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
-    marginBottom: 6,
-  },
-  sheetList: {
-    flexGrow: 0,
-    maxHeight: 280,
-  },
-  sheetEmpty: {
-    fontSize: 15,
-    color: C.muted,
-    paddingVertical: 20,
-    textAlign: 'center',
-  },
-  sheetEmptyCenter: {
-    alignItems: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 8,
-  },
-  sheetEmptyIconCircle: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#E8E6E1',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 14,
-  },
-  sheetEmptyTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: C.text,
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  sheetEmptyBody: {
-    fontSize: 15,
-    color: C.muted,
-    textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: 18,
-  },
-  sheetFriendPhotoWrap: {
-    overflow: 'hidden',
-  },
-  sheetFriendImg: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-  },
-  friendRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: C.divider,
-  },
-  friendRowSelected: {
-    backgroundColor: 'rgba(83, 74, 183, 0.06)',
-  },
-  sheetAvatarWrap: {
-    position: 'relative',
-  },
-  sheetAddedBadge: {
-    position: 'absolute',
-    right: -2,
-    bottom: -2,
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: C.purple,
-    borderWidth: 2,
-    borderColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  friendMeta: {
-    flex: 1,
-    minWidth: 0,
-  },
-  friendName: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: C.text,
-  },
-  friendMutual: {
-    fontSize: 12,
-    color: C.muted,
-    marginTop: 3,
-  },
-  sheetInviteRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginTop: 0,
-    paddingVertical: 14,
-    paddingHorizontal: 4,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: C.divider,
-  },
-  sheetDoneBtn: {
-    marginTop: 12,
-    width: '100%',
-    paddingVertical: 16,
-    borderRadius: 14,
-    backgroundColor: C.purple,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sheetDoneBtnPressed: {
-    opacity: 0.92,
-  },
-  sheetDoneBtnTxt: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: '#fff',
-  },
-  sheetInviteIco: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: C.purpleTint,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sheetInviteCopy: {
-    flex: 1,
-  },
-  sheetInviteTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: C.text,
-  },
-  sheetInviteSub: {
-    fontSize: 13,
-    color: C.muted,
-    marginTop: 2,
   },
 });
