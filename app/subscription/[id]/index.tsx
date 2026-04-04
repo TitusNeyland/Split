@@ -20,13 +20,11 @@ import { ServiceIcon } from '../../../components/shared/ServiceIcon';
 import { UserAvatarCircle } from '../../../components/shared/UserAvatarCircle';
 import { SubscriptionDetailSkeleton } from '../../../components/subscriptions/SubscriptionDetailSkeleton';
 import { spacing } from '../../../constants/theme';
-import { SUBSCRIPTIONS_DEMO_MODE } from '../../../lib/subscription/subscriptionsScreenDemo';
-import {
-  getDemoSubscriptionDetail,
-  type CyclePaymentStatus,
-  type SubscriptionDetailMember,
-  type SubscriptionHistoryCycle,
-} from '../../../lib/subscription/subscriptionDetailDemo';
+import type {
+  CyclePaymentStatus,
+  SubscriptionDetailMember,
+  SubscriptionHistoryCycle,
+} from '../../../lib/subscription/subscriptionDetailTypes';
 import { resendSplitInvite } from '../../../lib/subscription/resendSplitInvite';
 import { buildSplitInviteShareMessage } from '../../../lib/friends/inviteLinks';
 import {
@@ -144,19 +142,14 @@ export default function SubscriptionDetailScreen() {
   const [leaveSheetOpen, setLeaveSheetOpen] = useState(false);
   const [leaveBusy, setLeaveBusy] = useState(false);
 
-  const demoDetail = useMemo(() => {
-    if (!SUBSCRIPTIONS_DEMO_MODE || !subscriptionId) return null;
-    return getDemoSubscriptionDetail(subscriptionId, userAvatarUrl);
-  }, [subscriptionId, userAvatarUrl]);
-
   const { detail: liveDetail, loading: liveLoading, error: liveError, errorMessage: liveErrorMessage } =
     useSubscriptionDetailFromFirestore(subscriptionId, firebaseUid, userAvatarUrl, viewerFirstName, {
-      enabled: !SUBSCRIPTIONS_DEMO_MODE,
+      enabled: true,
       retryKey: detailRetryKey,
     });
 
   const contextPrefillDetail = useMemo(() => {
-    if (SUBSCRIPTIONS_DEMO_MODE || !subscriptionId.trim() || !firebaseUid) return null;
+    if (!subscriptionId.trim() || !firebaseUid) return null;
     const doc = subscriptions.find((s) => s.id === subscriptionId);
     if (!doc) return null;
     return mapFirestoreSubscriptionToDetailModel(
@@ -165,7 +158,7 @@ export default function SubscriptionDetailScreen() {
       userAvatarUrl,
       viewerFirstName
     );
-  }, [SUBSCRIPTIONS_DEMO_MODE, subscriptionId, subscriptions, firebaseUid, userAvatarUrl, viewerFirstName]);
+  }, [subscriptionId, subscriptions, firebaseUid, userAvatarUrl, viewerFirstName]);
 
   const paramPrefillPayload = useMemo(() => parseSubscriptionDetailPrefillParam(prefillData), [prefillData]);
 
@@ -190,9 +183,8 @@ export default function SubscriptionDetailScreen() {
     [contextPrefillDetail, paramPrefillDetail]
   );
 
-  const detail = SUBSCRIPTIONS_DEMO_MODE
-    ? demoDetail
-    : liveError === 'not-found' || liveError === 'permission'
+  const detail =
+    liveError === 'not-found' || liveError === 'permission'
       ? null
       : (liveDetail ?? mergedPrefillDetail);
 
@@ -204,7 +196,7 @@ export default function SubscriptionDetailScreen() {
   }, [detail]);
 
   const handleDismissDeclineBanner = useCallback(async () => {
-    if (!subscriptionId.trim() || SUBSCRIPTIONS_DEMO_MODE) return;
+    if (!subscriptionId.trim()) return;
     try {
       await clearSplitInviteDeclineNotices(subscriptionId.trim());
       setDetailRetryKey((k) => k + 1);
@@ -214,7 +206,6 @@ export default function SubscriptionDetailScreen() {
   }, [subscriptionId]);
 
   useEffect(() => {
-    if (SUBSCRIPTIONS_DEMO_MODE) return;
     if (!subscriptionId.trim()) {
       console.error('SubscriptionDetail: missing subscription id param');
       router.back();
@@ -226,22 +217,11 @@ export default function SubscriptionDetailScreen() {
     router.push(`/subscription/${subscriptionId.trim()}/edit-split` as never);
   }, [router, subscriptionId]);
 
-  const onDemoAction = (title: string) => {
-    Alert.alert(title, 'This action will be available when subscription management is connected.');
-  };
-
   const handleEndSplit = () => {
     setEndSplitSheetOpen(true);
   };
 
-  const uidForEndSplit = useMemo(() => {
-    if (firebaseUid) return firebaseUid;
-    if (SUBSCRIPTIONS_DEMO_MODE && detail?.isOwner) {
-      const you = detail.members.find((m) => m.displayName.includes('(you)'));
-      return you?.memberId ?? '';
-    }
-    return '';
-  }, [firebaseUid, detail]);
+  const uidForEndSplit = useMemo(() => firebaseUid ?? '', [firebaseUid]);
 
   const endSplitSheetModel = useMemo(() => {
     if (!detail || !uidForEndSplit) return null;
@@ -258,23 +238,20 @@ export default function SubscriptionDetailScreen() {
   }, [detail, uidForEndSplit]);
 
   const handleConfirmEndSplit = useCallback(async () => {
-    if (!detail || !detail.isOwner) return;
-    if (!SUBSCRIPTIONS_DEMO_MODE && !firebaseUid) return;
+    if (!detail || !detail.isOwner || !firebaseUid) return;
     setEndSplitBusy(true);
     try {
-      if (!SUBSCRIPTIONS_DEMO_MODE) {
-        const ownerName = profileDisplayName?.trim() || 'Someone';
-        const recipientUids = detail.members
-          .filter((m) => m.memberId !== firebaseUid && !m.invitePending && !m.inviteExpired)
-          .map((m) => m.memberId);
-        await endSubscriptionSplit({
-          subscriptionId: subscriptionId.trim(),
-          endedByUid: firebaseUid!,
-          ownerDisplayName: ownerName,
-          subscriptionDisplayName: detail.displayName,
-          recipientUids,
-        });
-      }
+      const ownerName = profileDisplayName?.trim() || 'Someone';
+      const recipientUids = detail.members
+        .filter((m) => m.memberId !== firebaseUid && !m.invitePending && !m.inviteExpired)
+        .map((m) => m.memberId);
+      await endSubscriptionSplit({
+        subscriptionId: subscriptionId.trim(),
+        endedByUid: firebaseUid,
+        ownerDisplayName: ownerName,
+        subscriptionDisplayName: detail.displayName,
+        recipientUids,
+      });
       setEndSplitSheetOpen(false);
       setPendingEndSplitToast(`Split ended · ${detail.displayName} moved to Ended tab`);
       router.replace('/(tabs)/subscriptions');
@@ -328,9 +305,7 @@ export default function SubscriptionDetailScreen() {
     if (!detail || detail.isOwner || !firebaseUid) return;
     setLeaveBusy(true);
     try {
-      if (!SUBSCRIPTIONS_DEMO_MODE) {
-        await leaveSubscriptionSplit({ subscriptionId: subscriptionId.trim(), memberUid: firebaseUid });
-      }
+      await leaveSubscriptionSplit({ subscriptionId: subscriptionId.trim(), memberUid: firebaseUid });
       setLeaveSheetOpen(false);
       setPendingSubscriptionsTabToast(`You left ${detail.displayName}`, 'active', 'success');
       router.replace('/(tabs)/subscriptions');
@@ -342,7 +317,7 @@ export default function SubscriptionDetailScreen() {
   }, [detail, firebaseUid, subscriptionId, router]);
 
   const handleDismissOwnerLeftBanner = useCallback(async () => {
-    if (SUBSCRIPTIONS_DEMO_MODE || !subscriptionId.trim() || !detail?.isOwner) return;
+    if (!subscriptionId.trim() || !detail?.isOwner) return;
     try {
       await clearOwnerMemberLeftBanner(subscriptionId.trim());
       setDetailRetryKey((k) => k + 1);
@@ -353,7 +328,7 @@ export default function SubscriptionDetailScreen() {
 
   const onResendSplitInvite = useCallback(
     async (m: SubscriptionDetailMember) => {
-      if (!firebaseUid || SUBSCRIPTIONS_DEMO_MODE || !m.inviteId || !detail?.isOwner) return;
+      if (!firebaseUid || !m.inviteId || !detail?.isOwner) return;
       setResendBusyId(m.memberId);
       try {
         const newId = await resendSplitInvite({
@@ -382,10 +357,6 @@ export default function SubscriptionDetailScreen() {
   const onRemovePendingInvite = useCallback(
     (m: SubscriptionDetailMember) => {
       if (!m.inviteId || !detail?.isOwner) return;
-      if (SUBSCRIPTIONS_DEMO_MODE) {
-        onDemoAction('Remove invite');
-        return;
-      }
       if (!firebaseUid) return;
       Alert.alert(
         'Remove invite',
@@ -428,7 +399,7 @@ export default function SubscriptionDetailScreen() {
     [detail?.isOwner, firebaseUid, subscriptionId, navigateToEditSplit],
   );
 
-  if (!SUBSCRIPTIONS_DEMO_MODE && subscriptionId.trim() && firebaseUid && liveLoading && !liveDetail && !mergedPrefillDetail) {
+  if (subscriptionId.trim() && firebaseUid && liveLoading && !liveDetail && !mergedPrefillDetail) {
     return (
       <View style={styles.loadingRoot}>
         <StatusBar style="dark" />
@@ -447,7 +418,7 @@ export default function SubscriptionDetailScreen() {
     );
   }
 
-  if (!SUBSCRIPTIONS_DEMO_MODE && liveError) {
+  if (liveError) {
     const isNotFound = liveError === 'not-found';
     const title = isNotFound
       ? 'This subscription could not be found'
@@ -498,7 +469,7 @@ export default function SubscriptionDetailScreen() {
     );
   }
 
-  if (!SUBSCRIPTIONS_DEMO_MODE && !firebaseUid && !liveLoading) {
+  if (!firebaseUid && !liveLoading) {
     return (
       <View style={[styles.unknownRoot, { paddingTop: insets.top + 12 }]}>
         <StatusBar style="dark" />
@@ -534,7 +505,7 @@ export default function SubscriptionDetailScreen() {
     );
   }
 
-  if (!SUBSCRIPTIONS_DEMO_MODE && firebaseUid && !detail.isOwner && !viewerIsMember) {
+  if (firebaseUid && !detail.isOwner && !viewerIsMember) {
     return (
       <View style={[styles.unknownRoot, { paddingTop: insets.top + 12 }]}>
         <StatusBar style="dark" />

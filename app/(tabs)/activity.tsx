@@ -48,6 +48,7 @@ import { formatUsdFromCents, formatUsdDollarsFixed2 } from '../../lib/format/cur
 import { computeActivityOwnerSummaryStats } from '../../lib/activity/activityOwnerSummaryStats';
 import { useSubscriptions } from '../../contexts/SubscriptionsContext';
 import type { MemberSubscriptionDoc } from '../../lib/subscription/memberSubscriptionsFirestore';
+import { useHomeFriendDirectory } from '../../lib/home/useFriendUidsFromFirestore';
 
 type IonIconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -682,6 +683,7 @@ export default function ActivityScreen() {
   const scrollRef = useRef<ScrollView>(null);
   useScrollToTop(scrollRef);
   const uid = useFirebaseUid();
+  const { displayNameByUid } = useHomeFriendDirectory(uid);
   const { subscriptions, loading: subscriptionsLoading, owedToYouCents } = useSubscriptions();
   const router = useRouter();
   const params = useLocalSearchParams<{
@@ -1072,7 +1074,7 @@ export default function ActivityScreen() {
           {friendIdFilter ? (
             <View style={styles.friendFilterBar}>
               <Text style={styles.friendFilterLabel} numberOfLines={1}>
-                With {getFriendFilterDisplayName(friendIdFilter)}
+                With {getFriendFilterDisplayName(friendIdFilter, displayNameByUid)}
               </Text>
               <Pressable
                 onPress={() => router.replace('/activity')}
@@ -1174,7 +1176,7 @@ export default function ActivityScreen() {
             <View style={styles.feedEmpty}>
               <Text style={styles.feedEmptyText}>
                 {friendIdFilter
-                  ? `No activity with ${getFriendFilterDisplayName(friendIdFilter)} yet.`
+                  ? `No activity with ${getFriendFilterDisplayName(friendIdFilter, displayNameByUid)} yet.`
                   : filter === 'payments'
                     ? 'No payment activity yet.'
                     : filter === 'splits'

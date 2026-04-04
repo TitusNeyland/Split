@@ -48,12 +48,6 @@ const HERO_GRADIENT = {
   end: { x: 0.85, y: 1 },
 };
 
-const DEMO = {
-  displayName: 'Titus Neyland',
-  email: 'titus@email.com',
-  memberLabel: 'Member since March 2026',
-};
-
 const AVATAR_SIZE = 72;
 const AVATAR_BORDER = 2;
 
@@ -119,19 +113,19 @@ export default function ProfileScreen() {
   }, [user, authHydrated]);
 
   const displayName = useMemo(() => {
-    if (!isFirebaseConfigured()) return DEMO.displayName;
+    if (!isFirebaseConfigured()) return 'Guest';
     const n = profile?.displayName ?? user?.displayName;
     if (n?.trim()) return n.trim();
     return 'Guest';
   }, [profile?.displayName, user?.displayName]);
 
   const email = useMemo(() => {
-    if (!isFirebaseConfigured()) return DEMO.email;
+    if (!isFirebaseConfigured()) return '';
     return profile?.email ?? user?.email ?? '';
   }, [profile?.email, user?.email]);
 
   const memberLabel = useMemo(() => {
-    if (!isFirebaseConfigured()) return DEMO.memberLabel;
+    if (!isFirebaseConfigured()) return formatMemberSince(null);
     if (profileLoading && user) return '…';
     const d = memberDateFrom(user, profile);
     return formatMemberSince(d);
@@ -335,7 +329,7 @@ export default function ProfileScreen() {
         </LinearGradient>
 
         <View style={styles.statsOverlap}>
-          <ProfileStatsCard uid={user?.uid ?? null} demoMode={!isFirebaseConfigured()} />
+          <ProfileStatsCard uid={user?.uid ?? null} />
         </View>
         </View>
 
