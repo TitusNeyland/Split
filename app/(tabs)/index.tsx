@@ -62,6 +62,10 @@ import {
   type ReminderPickCandidate,
 } from '../../components/home/HomeReminderPickerModal';
 import { ServiceIcon } from '../../components/shared/ServiceIcon';
+import { ActivityBadge } from '../../components/ActivityBadge';
+import { getActivityBadgeVariantForFeedItem } from '../../lib/activity/activityBadgeSemantics';
+import type { ActivityFeedKind } from '../../lib/activity/activityEventToFeedItem';
+import type { ActivityEventType } from '../../lib/activity/activityFeedSchema';
 
 const C = {
   bg: '#F2F0EB',
@@ -111,8 +115,11 @@ type HomeRecentActivityItem = {
   id: string;
   title: string;
   timestamp: string;
-  amount: string;
+  amount?: string;
   amountColor: string;
+  badgeLabel: string;
+  activityType: ActivityEventType;
+  kind: ActivityFeedKind;
   serviceMark?: string;
   serviceId?: string;
   icon: string;
@@ -205,6 +212,9 @@ export default function HomeScreen() {
           timestamp: x.timestamp,
           amount: x.amount,
           amountColor: x.amountColor,
+          badgeLabel: x.badgeLabel,
+          activityType: x.activityType,
+          kind: x.kind,
           serviceMark: x.serviceMark,
           serviceId: x.serviceId,
           icon: x.icon,
@@ -810,7 +820,19 @@ export default function HomeScreen() {
                     </Text>
                     <Text style={styles.actTime}>{item.timestamp}</Text>
                   </View>
-                  <Text style={[styles.actAmt, { color: item.amountColor }]}>{item.amount}</Text>
+                  <View style={styles.actRightCol}>
+                    {item.amount ? (
+                      <Text style={[styles.actAmt, { color: item.amountColor }]}>{item.amount}</Text>
+                    ) : null}
+                    <ActivityBadge
+                      variant={getActivityBadgeVariantForFeedItem({
+                        activityType: item.activityType,
+                        kind: item.kind,
+                        badge: item.badgeLabel,
+                      })}
+                      label={item.badgeLabel}
+                    />
+                  </View>
                 </Pressable>
               ))}
             </View>
@@ -1221,12 +1243,16 @@ const styles = StyleSheet.create({
     marginTop: 1,
     lineHeight: 13,
   },
+  actRightCol: {
+    alignItems: 'flex-end',
+    gap: 4,
+    flexShrink: 0,
+    maxWidth: '42%',
+  },
   actAmt: {
     fontSize: 15,
     fontWeight: '500',
-    flexShrink: 0,
     textAlign: 'right',
-    minWidth: 56,
   },
   emptyActivity: {
     backgroundColor: '#fff',

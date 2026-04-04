@@ -46,6 +46,8 @@ import { acceptPendingInvite } from '../../lib/friends/friendSystemFirestore';
 import { replaceWithSplitJoinedCelebration } from '../../lib/navigation/splitJoinedCelebration';
 import { formatUsdFromCents, formatUsdDollarsFixed2 } from '../../lib/format/currency';
 import { computeActivityOwnerSummaryStats } from '../../lib/activity/activityOwnerSummaryStats';
+import { ActivityBadge } from '../../components/ActivityBadge';
+import { getActivityBadgeVariantForFeedItem } from '../../lib/activity/activityBadgeSemantics';
 import { useSubscriptions } from '../../contexts/SubscriptionsContext';
 import type { MemberSubscriptionDoc } from '../../lib/subscription/memberSubscriptionsFirestore';
 import { useHomeFriendDirectory } from '../../lib/home/useFriendUidsFromFirestore';
@@ -142,8 +144,6 @@ type ActivityKind =
   | 'auto_charge_enabled'
   | 'auto_charge_disabled';
 
-type ActivityBadgeVariant = 'green' | 'amber' | 'red' | 'purple' | 'gray' | 'blue';
-
 type ActivityDetailRow = {
   label: string;
   value: string;
@@ -199,7 +199,6 @@ function applyManualPaidToItem(
     iconBg: '#E1F5EE',
     iconColor: '#1D9E75',
     badge: 'Paid',
-    badgeVariant: 'green',
     amount: settledAmount ?? item.amount,
     amountColor: C.green,
     payerNote: record.noteText ? `"${record.noteText}"` : item.payerNote,
@@ -256,7 +255,6 @@ type ActivityFeedItem = {
   amountCents?: number;
   amountColor: string;
   badge: string;
-  badgeVariant: ActivityBadgeVariant;
   /** Partial settlement: paid <-> partial_amount, total <-> amount due. */
   partial?: { paid: number; total: number };
   detail?: {
@@ -315,7 +313,7 @@ function itemMatchesSearch(item: ActivityFeedItem, qRaw: string): boolean {
     item.sub,
     item.serviceMark ?? '',
     item.amount ?? '',
-    item.badge,
+    item.badge ?? '',
     String(item.activityType ?? ''),
     item.kind,
     item.payerNote ?? '',
@@ -414,23 +412,6 @@ function openStripeReference(displayValue: string) {
   });
 }
 
-function badgeStyles(v: ActivityBadgeVariant) {
-  switch (v) {
-    case 'green':
-      return { bg: '#E1F5EE', text: '#0F6E56' };
-    case 'amber':
-      return { bg: '#FAEEDA', text: '#854F0B' };
-    case 'red':
-      return { bg: '#FCEBEB', text: '#A32D2D' };
-    case 'purple':
-      return { bg: '#EEEDFE', text: '#534AB7' };
-    case 'blue':
-      return { bg: '#E6F1FB', text: '#185FA5' };
-    default:
-      return { bg: '#F0EEE9', text: '#5F5E5A' };
-  }
-}
-
 type ActivityItemRowProps = {
   item: ActivityFeedItem;
   showTimelineLine: boolean;
@@ -465,7 +446,6 @@ function ActivityItemRow({
   onJoinSplitPress,
   onActivityPress,
 }: ActivityItemRowProps) {
-  const b = badgeStyles(item.badgeVariant);
   const receiptTapOpensDetail = receiptNavigateMode && item.kind === 'receipt';
   const hasExpandableDetail = Boolean(
     !receiptTapOpensDetail &&
@@ -550,9 +530,14 @@ function ActivityItemRow({
               <Text style={styles.joinSplitPillText}>Join</Text>
             </Pressable>
           ) : (
-            <View style={[styles.badge, { backgroundColor: b.bg }]}>
-              <Text style={[styles.badgeText, { color: b.text }]}>{item.badge}</Text>
-            </View>
+            <ActivityBadge
+              variant={getActivityBadgeVariantForFeedItem({
+                activityType: item.activityType,
+                kind: item.kind,
+                badge: item.badge,
+              })}
+              label={item.badge}
+            />
           )}
         </View>
       </View>
@@ -1594,15 +1579,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     letterSpacing: -0.3,
-  },
-  badge: {
-    paddingVertical: 3,
-    paddingHorizontal: 10,
-    borderRadius: 9,
-  },
-  badgeText: {
-    fontSize: 12,
-    fontWeight: '500',
   },
   joinSplitPill: {
     paddingVertical: 6,
