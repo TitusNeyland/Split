@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-nati
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { onAuthStateChanged, type User } from 'firebase/auth';
-import { InviteShareSheetPanel } from '../components/invite/InviteShareSheetPanel';
+import { InviteShareSheetPanel } from '../../components/invite/InviteShareSheetPanel';
 import { getFirebaseAuth, isFirebaseConfigured } from '../../lib/firebase';
 import { createPendingInvite } from '../../lib/friends/friendSystemFirestore';
 import { buildInviteShareMessage, buildInviteUrl } from '../../lib/friends/inviteLinks';

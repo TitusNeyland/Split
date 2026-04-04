@@ -32,14 +32,14 @@ import {
   parsePercent,
   percentTotalIsExactly100,
 } from '../../../lib/subscription/addSubscriptionSplitMath';
-import { getServiceIconBackgroundColor } from '../../components/shared/ServiceIcon';
-import { UserAvatarCircle } from '../../components/shared/UserAvatarCircle';
+import { getServiceIconBackgroundColor } from '../../../components/shared/ServiceIcon';
+import { UserAvatarCircle } from '../../../components/shared/UserAvatarCircle';
 import { getFirebaseAuth, isFirebaseConfigured } from '../../../lib/firebase';
 import { searchUsersForFriendConnect, type FriendSearchUserRow } from '../../../lib/friends/userSearchFirestore';
 import { getFriendAvatarColors } from '../../../lib/friends/friendAvatar';
 import { initialsFromName } from '../../../lib/profile';
-import { useProfileAvatarUrl } from '../../hooks/useProfileAvatarUrl';
-import { useKeyboardHeight } from '../../hooks/useKeyboardHeight';
+import { useProfileAvatarUrl } from '../../../hooks/useProfileAvatarUrl';
+import { useKeyboardHeight } from '../../../hooks/useKeyboardHeight';
 
 const C = {
   purple: '#534AB7',

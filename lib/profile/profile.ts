@@ -20,6 +20,8 @@ import type { NotificationPreferences } from '../notifications/notificationPrefe
 import type { SplitPreferences } from '../split-preferences/splitPreferences';
 import type { PrivacySettings } from './privacySettings';
 
+export { userDocPhotoUrl } from './userDocPhotoUrl';
+
 export type UserProfileDoc = {
   /** True after the user finishes the full in-app onboarding flow (9 steps). */
   onboardingComplete?: boolean | null;
@@ -73,18 +75,6 @@ export type UserProfileDoc = {
   /** Denormalized unread in-app notification count; incremented by Cloud Functions, reset when the panel opens. */
   unreadNotificationCount?: number | null;
 };
-
-/** Resolved profile image URL from a user doc (`photoURL` is canonical; `avatarUrl` is legacy). */
-export function userDocPhotoUrl(d: Record<string, unknown> | null | undefined): string | null {
-  if (!d) return null;
-  const p =
-    typeof d.photoURL === 'string' && d.photoURL.trim()
-      ? d.photoURL.trim()
-      : typeof d.avatarUrl === 'string' && d.avatarUrl.trim()
-        ? d.avatarUrl.trim()
-        : null;
-  return p;
-}
 
 export function initialsFromName(name: string | null | undefined): string {
   const t = name?.trim();

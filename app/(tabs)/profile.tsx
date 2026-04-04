@@ -14,19 +14,19 @@ import { router } from 'expo-router';
 import { useScrollToTop } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { ProfilePhotoActionSheet } from '../components/profile/ProfilePhotoActionSheet';
-import { ProfileAvatarCropModal } from '../components/profile/ProfileAvatarCropModal';
-import { UserAvatarCircle } from '../components/shared/UserAvatarCircle';
-import ProfileStatsCard from '../components/profile/ProfileStatsCard';
-import ProfileFriendsBalancesCard from '../components/profile/ProfileFriendsBalancesCard';
-import ProfilePaymentMethodsCard from '../components/profile/ProfilePaymentMethodsCard';
-import ProfileNotificationSettingsCard from '../components/profile/ProfileNotificationSettingsCard';
-import ProfileSplitPreferencesCard from '../components/profile/ProfileSplitPreferencesCard';
-import ProfilePrivacyCard from '../components/profile/ProfilePrivacyCard';
-import ProfileSecurityCard from '../components/profile/ProfileSecurityCard';
-import ProfileActiveSessionsCard from '../components/profile/ProfileActiveSessionsCard';
-import ProfileSupportLegalSection from '../components/profile/ProfileSupportLegalSection';
-import { Toast } from '../components/shared/Toast';
+import { ProfilePhotoActionSheet } from '../../components/profile/ProfilePhotoActionSheet';
+import { ProfileAvatarCropModal } from '../../components/profile/ProfileAvatarCropModal';
+import { UserAvatarCircle } from '../../components/shared/UserAvatarCircle';
+import ProfileStatsCard from '../../components/profile/ProfileStatsCard';
+import ProfileFriendsBalancesCard from '../../components/profile/ProfileFriendsBalancesCard';
+import ProfilePaymentMethodsCard from '../../components/profile/ProfilePaymentMethodsCard';
+import ProfileNotificationSettingsCard from '../../components/profile/ProfileNotificationSettingsCard';
+import ProfileSplitPreferencesCard from '../../components/profile/ProfileSplitPreferencesCard';
+import ProfilePrivacyCard from '../../components/profile/ProfilePrivacyCard';
+import ProfileSecurityCard from '../../components/profile/ProfileSecurityCard';
+import ProfileActiveSessionsCard from '../../components/profile/ProfileActiveSessionsCard';
+import ProfileSupportLegalSection from '../../components/profile/ProfileSupportLegalSection';
+import { Toast } from '../../components/shared/Toast';
 import { ENABLE_PROFILE_SECURITY } from '../../constants/features';
 import { isFirebaseConfigured } from '../../lib/firebase';
 import {
@@ -38,7 +38,7 @@ import {
   type UserProfileDoc,
 } from '../../lib/profile';
 // LOCAL_PROFILE_AVATAR_OFFLINE — `persistLocalAvatar` / `clearLocalAvatar` / `localAvatarHydrated` go away with local-only avatar code (see lib/profile/localProfileAvatarStorage.ts).
-import { useProfileAvatarUrl } from '../hooks/useProfileAvatarUrl';
+import { useProfileAvatarUrl } from '../../hooks/useProfileAvatarUrl';
 import type { User } from 'firebase/auth';
 
 const HERO_GRADIENT = {

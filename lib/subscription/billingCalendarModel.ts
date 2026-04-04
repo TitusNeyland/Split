@@ -2,8 +2,21 @@ import { clampDayToMonth, parseBillingDayParam } from './billingDayFormat';
 import { getServiceIconDotColor } from './serviceIconResolve';
 import { fmtCents } from './addSubscriptionSplitMath';
 import { getMemberPlannedShareCents, getTotalCents } from './subscriptionToCardModel';
+import {
+  buildStatusBadge,
+  countPendingMemberAcceptances,
+  parseFirestoreBillingCycle,
+  subscriptionDisplayName,
+  type BillingMemberStatus,
+} from './subscriptionBillingShared';
 
-export type BillingMemberStatus = 'paid' | 'pending' | 'overdue' | 'owner' | 'invited_pending' | string;
+export type { BillingMemberStatus } from './subscriptionBillingShared';
+export {
+  buildStatusBadge,
+  countPendingMemberAcceptances,
+  parseFirestoreBillingCycle,
+  subscriptionDisplayName,
+} from './subscriptionBillingShared';
 
 export type BillingCalendarSubscription = {
   id: string;
@@ -47,76 +60,10 @@ export function subscriptionBillsOnDate(
   return billingDateInMonth(year, monthIndex, cycle, parsed.day, parsed.monthIndex);
 }
 
-export function parseFirestoreBillingCycle(raw: unknown): 'monthly' | 'yearly' {
-  return raw === 'yearly' ? 'yearly' : 'monthly';
-}
-
 export function resolveDotColor(storedIconColor: string | undefined, serviceName: string): string {
   const t = storedIconColor?.trim() ?? '';
   if (/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(t)) return t;
   return getServiceIconDotColor(serviceName);
-}
-
-export function subscriptionDisplayName(serviceName: string, planName?: string): string {
-  const s = serviceName.trim();
-  const p = planName?.trim() ?? '';
-  if (p && s && !s.toLowerCase().includes(p.toLowerCase())) return `${s} ${p}`.trim();
-  return s || p || 'Subscription';
-}
-
-/** Invitees whose `memberStatus` is still `pending` (not yet accepted). */
-export function countPendingMemberAcceptances(data: Record<string, unknown>): number {
-  const roster = data.members;
-  if (!Array.isArray(roster)) return 0;
-  let n = 0;
-  for (const m of roster) {
-    if (m && typeof m === 'object' && (m as { memberStatus?: string }).memberStatus === 'pending') n++;
-  }
-  return n;
-}
-
-export function buildStatusBadge(
-  statusMap: Record<string, BillingMemberStatus> | undefined,
-  viewerUid: string,
-  options?: { pendingAcceptanceCount?: number }
-): { label: string; textColor: string; backgroundColor?: string } {
-  const C = {
-    green: '#0F6E56',
-    orange: '#854F0B',
-    red: '#A32D2D',
-    muted: '#5F5E5A',
-  };
-
-  const pendingAccept = options?.pendingAcceptanceCount ?? 0;
-  if (pendingAccept > 0) {
-    return {
-      label: `${pendingAccept} pending`,
-      textColor: C.orange,
-      backgroundColor: '#FAEEDA',
-    };
-  }
-
-  if (!statusMap || Object.keys(statusMap).length === 0) {
-    return { label: '—', textColor: C.muted };
-  }
-
-  const viewerRaw = String(statusMap[viewerUid] ?? '').toLowerCase();
-  if (viewerRaw === 'overdue') {
-    return { label: 'Overdue', textColor: C.red };
-  }
-
-  let overdue = 0;
-  let pending = 0;
-  for (const [, raw] of Object.entries(statusMap)) {
-    const st = String(raw).toLowerCase();
-    if (st === 'owner' || st === 'paid') continue;
-    if (st === 'overdue') overdue++;
-    else if (st === 'pending' || st === 'invited_pending') pending++;
-  }
-
-  if (overdue > 0) return { label: `${overdue} overdue`, textColor: C.red };
-  if (pending > 0) return { label: `${pending} pending`, textColor: C.orange };
-  return { label: 'All paid', textColor: C.green };
 }
 
 export function mapFirestoreDocToCalendarSubscription(

@@ -28,20 +28,20 @@ import {
 } from '../../lib/subscription/subscriptionToCardModel';
 import { subscribeAuthAndProfile } from '../../lib/profile';
 import { SUBSCRIPTIONS_DEMO_MODE, DEMO_TAB_BADGES } from '../../lib/subscription/subscriptionsScreenDemo';
-import { SubscriptionsDemoFloatCard, SubscriptionsDemoPanel } from '../components/subscriptions/SubscriptionsDemoPanels';
-import { LiveSubscriptionCard } from '../components/subscriptions/LiveSubscriptionCard';
-import { SubscriptionCardSkeletonList } from '../components/subscriptions/SubscriptionCardSkeleton';
-import { useProfileAvatarUrl } from '../hooks/useProfileAvatarUrl';
-import { useSubscriptions } from '../contexts/SubscriptionsContext';
+import { SubscriptionsDemoFloatCard, SubscriptionsDemoPanel } from '../../components/subscriptions/SubscriptionsDemoPanels';
+import { LiveSubscriptionCard } from '../../components/subscriptions/LiveSubscriptionCard';
+import { SubscriptionCardSkeletonList } from '../../components/subscriptions/SubscriptionCardSkeleton';
+import { useProfileAvatarUrl } from '../../hooks/useProfileAvatarUrl';
+import { useSubscriptions } from '../../contexts/SubscriptionsContext';
 import { spacing } from '../../constants/theme';
 import {
   consumePendingSubscriptionsTabToast,
   type SubscriptionsTabToastVariant,
 } from '../../lib/subscription/endSplitNavigationToast';
 import { deleteSubscriptionDocument } from '../../lib/subscription/deleteSubscriptionFirestore';
-import { Toast } from '../components/shared/Toast';
-import { SubscriptionSortSheet } from '../components/subscriptions/SubscriptionSortSheet';
-import { useSubscriptionSortPreference } from '../hooks/useSubscriptionSortPreference';
+import { Toast } from '../../components/shared/Toast';
+import { SubscriptionSortSheet } from '../../components/subscriptions/SubscriptionSortSheet';
+import { useSubscriptionSortPreference } from '../../hooks/useSubscriptionSortPreference';
 import {
   sortMemberSubscriptions,
   subscriptionSortButtonLabel,

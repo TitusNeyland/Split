@@ -16,7 +16,10 @@
       "bundleIdentifier": "com.innova.split",
       "associatedDomains": [
         "applinks:mysplit.app"
-      ]
+      ],
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "com.innova.split",
@@ -43,7 +46,15 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT",
+        "android.permission.READ_CONTACTS",
+        "android.permission.WRITE_CONTACTS"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -88,7 +99,11 @@
       "expo-notifications"
     ],
     "extra": {
-      "receiptApiUrl": "http://localhost:8787"
+      "receiptApiUrl": "http://localhost:8787",
+      "router": {},
+      "eas": {
+        "projectId": "bfc4f1d8-ce80-42c6-8dee-48fb8cb83f0e"
+      }
     }
   }
 }

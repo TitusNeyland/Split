@@ -5,13 +5,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
-import { ServiceIcon } from '../components/shared/ServiceIcon';
-import { UserAvatarCircle } from '../components/shared/UserAvatarCircle';
+import { ServiceIcon } from '../../components/shared/ServiceIcon';
+import { UserAvatarCircle } from '../../components/shared/UserAvatarCircle';
 import { fmtCents } from '../../lib/subscription/addSubscriptionSplitMath';
 import { useSubscriptionDetailFromFirestore } from '../../lib/subscription/subscriptionDetailFromFirestore';
 import { useFirebaseUid } from '../../lib/auth/useFirebaseUid';
-import { useProfileAvatarUrl } from '../hooks/useProfileAvatarUrl';
-import { useViewerFirstName } from '../hooks/useViewerFirstName';
+import { useProfileAvatarUrl } from '../../hooks/useProfileAvatarUrl';
+import { useViewerFirstName } from '../../hooks/useViewerFirstName';
 
 const C = {
   muted: '#888780',

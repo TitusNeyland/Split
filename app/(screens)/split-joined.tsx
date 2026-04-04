@@ -14,8 +14,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
-import { ServiceIcon } from '../components/shared/ServiceIcon';
-import { UserAvatarCircle } from '../components/shared/UserAvatarCircle';
+import { ServiceIcon } from '../../components/shared/ServiceIcon';
+import { UserAvatarCircle } from '../../components/shared/UserAvatarCircle';
 import { fmtCents } from '../../lib/subscription/addSubscriptionSplitMath';
 
 const C = {
