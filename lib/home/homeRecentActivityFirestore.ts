@@ -10,9 +10,10 @@ import {
   getActivityFeedCollectionRef,
   parseActivityEventDoc,
 } from '../activity/activityFeedFirestore';
-import { activityEventToFeedRow } from '../activity/activityEventToFeedItem';
+import { activityEventToFeedRow, type ActivityFeedKind } from '../activity/activityEventToFeedItem';
 import type { ActivityEvent } from '../activity/activityFeedSchema';
 import { filterActivityEventsForFeed } from '../activity/activityStaleSubscription';
+import type { ActivityEventType } from '../activity/activityFeedSchema';
 
 const HOME_RECENT_LIMIT = 3;
 
@@ -20,8 +21,12 @@ export type HomeRecentActivityFirestoreItem = {
   id: string;
   title: string;
   timestamp: string;
-  amount: string;
+  /** Monetary amount line when present; status chip is always `badgeLabel`. */
+  amount?: string;
   amountColor: string;
+  badgeLabel: string;
+  activityType: ActivityEventType;
+  kind: ActivityFeedKind;
   serviceMark?: string;
   serviceId?: string;
   icon: string;
@@ -61,13 +66,15 @@ export function subscribeHomeRecentActivity(
       for (const ev of visible) {
         const row = activityEventToFeedRow(ev as ActivityEvent, uid);
         if (!row) continue;
-        const amountRight = row.amount?.trim() ? row.amount : row.badge;
         items.push({
           id: row.id,
           title: row.title,
           timestamp: row.time,
-          amount: amountRight,
+          amount: row.amount?.trim() || undefined,
           amountColor: row.amountColor,
+          badgeLabel: row.badge,
+          activityType: ev.type,
+          kind: row.kind,
           serviceMark: row.serviceMark,
           serviceId: row.serviceId,
           icon: row.icon,
