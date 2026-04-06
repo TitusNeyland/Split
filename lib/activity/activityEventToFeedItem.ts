@@ -141,6 +141,8 @@ export type ActivityFeedRow = {
   joinSubscriptionId?: string;
   /** Firestore `invites/{id}` — required to accept via Cloud Function merge. */
   joinInviteId?: string;
+  /** For split_invite_received rows: mirrors the activity doc `status` field ('accepted' | 'declined' | 'cancelled'). */
+  inviteStatus?: string;
   /** Friend events: show actor avatar (initials or photo). */
   friendAvatar?: { initials: string; imageUrl?: string | null; uid?: string };
   /**
@@ -345,6 +347,7 @@ export function activityEventToFeedRow(
         badgeVariant: 'purple',
         joinSubscriptionId: typeof subId === 'string' && subId ? subId : undefined,
         joinInviteId: inviteId,
+        inviteStatus: typeof event.status === 'string' && event.status ? event.status : undefined,
         _activityCreatedAtMs: createdMs,
       };
     }

@@ -22,6 +22,7 @@ import {
   syncOwnerShareForPendingInvites,
 } from '../subscription/subscriptionSplitRecalc';
 import { acceptPendingInvite, declinePendingInvite } from '../friends/friendSystemFirestore';
+import { updateActivityDocumentStatusBySubscription } from '../activity/activityFeedFirestore';
 
 export type NotificationDocType =
   | 'split_invite'
@@ -304,6 +305,9 @@ export async function acceptSplitInviteFromNotification(params: {
 
     await acceptPendingInvite(metadata.inviteId, uid);
 
+    // Mark the corresponding activity feed card as accepted so it no longer shows the Join button.
+    void updateActivityDocumentStatusBySubscription(uid, metadata.subscriptionId, 'split_invite_received', 'accepted').catch(() => {});
+
     // Immediately clear invitePending on the share row so the owner's detail screen
     // updates without waiting for the Cloud Function to run.
     try {
@@ -472,6 +476,8 @@ export async function declineSplitInviteFromNotification(params: {
   if (metadata.inviteId) {
     await declinePendingInvite(metadata.inviteId, uid);
   }
+  // Mark the corresponding activity feed card as declined so it no longer shows action buttons.
+  void updateActivityDocumentStatusBySubscription(uid, metadata.subscriptionId, 'split_invite_received', 'declined').catch(() => {});
   await updateDoc(doc(db, 'users', uid, 'notifications', notificationId), {
     read: true,
     actioned: 'declined',
