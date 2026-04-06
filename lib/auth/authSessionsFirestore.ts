@@ -81,7 +81,7 @@ export async function upsertCurrentAuthSession(
       deviceName: opts.deviceName,
       deviceType: opts.deviceType,
       lastActive: serverTimestamp(),
-      fcmToken: opts.fcmToken ?? null,
+      ...(opts.fcmToken != null ? { fcmToken: opts.fcmToken } : {}),
     },
     { merge: true }
   );

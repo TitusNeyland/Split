@@ -231,5 +231,5 @@ export async function saveSubscriptionEditSplitToFirestore(opts: {
     source: 'edit_split',
   });
 
-  await runSubscriptionWizardSideEffects(opts.subscriptionId, input);
+  await runSubscriptionWizardSideEffects(opts.subscriptionId, input, { isUpdate: true });
 }
