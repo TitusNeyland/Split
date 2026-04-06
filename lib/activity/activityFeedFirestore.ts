@@ -1,12 +1,16 @@
 import {
   collection,
   doc,
+  getDocs,
   limit,
   onSnapshot,
   orderBy,
   query,
+  serverTimestamp,
   startAfter,
   updateDoc,
+  where,
+  writeBatch,
   type Firestore,
   type QueryDocumentSnapshot,
   type Unsubscribe,
@@ -64,6 +68,61 @@ export async function markActivityDocumentRead(uid: string, activityId: string):
   const db = getFirebaseFirestore();
   if (!db) return;
   await updateDoc(doc(db, 'users', uid, 'activity', activityId), { read: true });
+}
+
+/**
+ * Update the status of a specific activity document by its ID.
+ * Used after the user accepts/declines an invite from the activity tab itself.
+ */
+export async function updateActivityDocumentStatus(
+  uid: string,
+  activityId: string,
+  status: 'accepted' | 'declined' | 'cancelled',
+): Promise<void> {
+  const db = getFirebaseFirestore();
+  if (!db) return;
+  const extra =
+    status === 'accepted'
+      ? { acceptedAt: serverTimestamp() }
+      : status === 'declined'
+        ? { declinedAt: serverTimestamp() }
+        : {};
+  await updateDoc(doc(db, 'users', uid, 'activity', activityId), { status, ...extra });
+}
+
+/**
+ * Find all activity docs matching a subscriptionId + event type and batch-update their status.
+ * Used after accept/decline from the notifications panel, where we only have the subscriptionId.
+ */
+export async function updateActivityDocumentStatusBySubscription(
+  uid: string,
+  subscriptionId: string,
+  eventType: string,
+  status: 'accepted' | 'declined' | 'cancelled',
+): Promise<void> {
+  const db = getFirebaseFirestore();
+  if (!db) return;
+  const snap = await getDocs(
+    query(
+      collection(db, 'users', uid, 'activity'),
+      where('subscriptionId', '==', subscriptionId),
+      where('type', '==', eventType),
+    ),
+  );
+  if (snap.empty) return;
+  const extra =
+    status === 'accepted'
+      ? { acceptedAt: serverTimestamp() }
+      : status === 'declined'
+        ? { declinedAt: serverTimestamp() }
+        : {};
+  const batch = writeBatch(db);
+  for (const d of snap.docs) {
+    if (d.data().status !== status) {
+      batch.update(d.ref, { status, ...extra });
+    }
+  }
+  await batch.commit();
 }
 
 export function subscribeActivityFeed(

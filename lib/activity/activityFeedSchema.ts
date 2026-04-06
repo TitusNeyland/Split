@@ -58,8 +58,8 @@ export type ActivityEventFirestoreData = {
   createdAt: Timestamp;
   /** Default false for new events. */
   read: boolean;
-  /** When set (e.g. by Cloud Functions), client hides this row from feeds. */
-  status?: 'cancelled' | string;
+  /** When set, drives card rendering: 'accepted'/'declined' replace action buttons; 'cancelled' hides the row. */
+  status?: 'cancelled' | 'accepted' | 'declined' | string;
   /** When true, subscription is ended/deleted; client hides row except for split_ended / split_member_removed / split_left. */
   subscriptionDeleted?: boolean;
   subscriptionId?: string;

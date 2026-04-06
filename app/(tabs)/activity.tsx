@@ -27,7 +27,11 @@ import { UserAvatarCircle } from '../../components/shared/UserAvatarCircle';
 import { recordManualSettlement } from '../../lib/payment/paymentsFirestore';
 import { useFirebaseUid } from '../../lib/auth/useFirebaseUid';
 import { doc, getDoc } from 'firebase/firestore';
-import { markActivityDocumentRead, subscribeActivityFeed } from '../../lib/activity/activityFeedFirestore';
+import {
+  markActivityDocumentRead,
+  subscribeActivityFeed,
+  updateActivityDocumentStatus,
+} from '../../lib/activity/activityFeedFirestore';
 import type { ActivityEvent, ActivityEventType } from '../../lib/activity/activityFeedSchema';
 import { filterActivityEventsForFeed } from '../../lib/activity/activityStaleSubscription';
 import {
@@ -266,6 +270,8 @@ type ActivityFeedItem = {
   _reminderTap?: { subscriptionId: string; memberUid: string };
   joinSubscriptionId?: string;
   joinInviteId?: string;
+  /** For split_invite_received: mirrors the activity doc status field so the card reflects the current state. */
+  inviteStatus?: string;
   friendAvatar?: { initials: string; imageUrl?: string | null; uid?: string };
   /** Raw Firestore event type — drives filter tabs. */
   activityType: ActivityEventType;
@@ -520,7 +526,7 @@ function ActivityItemRow({
           {item.amount ? (
             <Text style={[styles.actAmt, { color: item.amountColor }]}>{item.amount}</Text>
           ) : null}
-          {item.joinSubscriptionId && onJoinSplitPress ? (
+          {item.joinSubscriptionId && onJoinSplitPress && item.inviteStatus !== 'accepted' && item.inviteStatus !== 'declined' ? (
             <Pressable
               onPress={() => onJoinSplitPress(item.joinSubscriptionId!, item.joinInviteId)}
               style={styles.joinSplitPill}
@@ -529,6 +535,16 @@ function ActivityItemRow({
             >
               <Text style={styles.joinSplitPillText}>Join</Text>
             </Pressable>
+          ) : item.inviteStatus === 'accepted' ? (
+            <View style={styles.inviteStatusRow}>
+              <Ionicons name="checkmark-circle" size={13} color="#1D9E75" />
+              <Text style={styles.inviteStatusTextAccepted}>Joined</Text>
+            </View>
+          ) : item.inviteStatus === 'declined' ? (
+            <View style={styles.inviteStatusRow}>
+              <Ionicons name="close-circle" size={13} color="#888780" />
+              <Text style={styles.inviteStatusTextDeclined}>Declined</Text>
+            </View>
           ) : (
             <ActivityBadge
               variant={getActivityBadgeVariantForFeedItem({
@@ -789,6 +805,7 @@ export default function ActivityScreen() {
         read: e.read === true || readOptimisticById[e.id] === true,
         subscriptionId: e.subscriptionId,
         amountCents: typeof e.amount === 'number' && Number.isFinite(e.amount) ? e.amount : undefined,
+        inviteStatus: typeof e.status === 'string' && e.status ? e.status : undefined,
       } as ActivityFeedItem);
     }
     return rows;
@@ -1220,7 +1237,32 @@ export default function ActivityScreen() {
                         return;
                       }
                       try {
+                        // Secondary guard: check live membership before attempting to accept.
+                        const db = getFirebaseFirestore();
+                        if (db) {
+                          const subSnap = await getDoc(doc(db, 'subscriptions', subscriptionId));
+                          if (!subSnap.exists()) {
+                            void updateActivityDocumentStatus(uid, item.id, 'cancelled').catch(() => {});
+                            Alert.alert('Split no longer exists', 'This split has been removed.');
+                            return;
+                          }
+                          const subData = subSnap.data() as Record<string, unknown>;
+                          const members = Array.isArray(subData.members) ? subData.members as Record<string, unknown>[] : [];
+                          const member = members.find((m) => String(m.uid ?? '') === uid);
+                          if (member && String(member.memberStatus ?? '') === 'active') {
+                            // Already a member — silently correct the card without an error.
+                            void updateActivityDocumentStatus(uid, item.id, 'accepted').catch(() => {});
+                            void markActivityDocumentRead(uid, item.id).catch(() => {});
+                            return;
+                          }
+                          if (!member || String(member.memberStatus ?? '') !== 'pending') {
+                            void updateActivityDocumentStatus(uid, item.id, 'cancelled').catch(() => {});
+                            Alert.alert('Invite no longer valid', 'This invite may have expired or been cancelled.');
+                            return;
+                          }
+                        }
                         await acceptPendingInvite(trimmed, uid);
+                        void updateActivityDocumentStatus(uid, item.id, 'accepted').catch(() => {});
                         void markActivityDocumentRead(uid, item.id).catch(() => {});
                         setReadOptimisticById((prev) => ({ ...prev, [item.id]: true }));
                         const ok = await replaceWithSplitJoinedCelebration(router, subscriptionId, uid);
@@ -1590,6 +1632,21 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: C.purple,
+  },
+  inviteStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  inviteStatusTextAccepted: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#1D9E75',
+  },
+  inviteStatusTextDeclined: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#888780',
   },
   partialWrap: {
     paddingTop: 8,
