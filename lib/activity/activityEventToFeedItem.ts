@@ -36,8 +36,7 @@ function formatMoneyCents(cents: number | undefined): string {
 
 function shortBrandName(fullName: string): string {
   const t = fullName.trim();
-  if (!t) return 'Subscription';
-  return t.split(/\s+/)[0] ?? t;
+  return t || 'Subscription';
 }
 
 function initialsFromDisplayName(name: string): string {
