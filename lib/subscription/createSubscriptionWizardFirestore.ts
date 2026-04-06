@@ -65,17 +65,18 @@ export function isLikelyFirebaseUid(uid: string): boolean {
  */
 export async function runSubscriptionWizardSideEffects(
   subscriptionId: string,
-  _input: CreateSubscriptionWizardInput
+  _input: CreateSubscriptionWizardInput,
+  opts?: { isUpdate?: boolean }
 ): Promise<void> {
   const fns = getFirebaseFunctions();
   if (!fns) return;
 
   try {
-    const finalize = httpsCallable<{ subscriptionId: string }, { ok?: boolean; skipped?: boolean }>(
+    const finalize = httpsCallable<{ subscriptionId: string; isUpdate?: boolean }, { ok?: boolean; skipped?: boolean }>(
       fns,
       'finalizeSubscriptionWizard'
     );
-    await finalize({ subscriptionId });
+    await finalize({ subscriptionId, isUpdate: opts?.isUpdate ?? false });
   } catch (e) {
     const code =
       e && typeof e === 'object' && 'code' in e ? String((e as { code: string }).code) : '';

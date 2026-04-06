@@ -430,36 +430,13 @@ async function sendSplitInviteAcceptedNotification(db, ownerUid, subscriptionId,
   const accepterName =
     typeof ad.displayName === 'string' && ad.displayName.trim() ? ad.displayName.trim() : 'Someone';
 
-  const recipientDoc = await db.collection('users').doc(ownerUid).get();
-  const prefs = recipientDoc.data()?.notificationPreferences;
-  if (prefs && prefs.notificationsEnabled === false) return;
-
   const body = `${accepterName} accepted your invite to ${serviceName}`;
-
-  const sessionsSnap = await db.collection('users').doc(ownerUid).collection('sessions').get();
-  const tokens = new Set();
-  sessionsSnap.docs.forEach((d) => {
-    const t = d.data().fcmToken;
-    if (typeof t === 'string' && t.trim()) tokens.add(t.trim());
-  });
-
-  await Promise.all(
-    [...tokens].map((token) =>
-      admin
-        .messaging()
-        .send({
-          token,
-          notification: { title: 'mySplit', body },
-          data: {
-            type: 'split_invite_accepted',
-            subscriptionId,
-            acceptedByUid: acceptedBy,
-          },
-        })
-        .catch((e) => {
-          console.warn('sendSplitInviteAcceptedNotification: FCM send failed', e?.message || e);
-        })
-    )
+  await sendMySplitPushToUser(
+    db,
+    ownerUid,
+    body,
+    { type: 'split_invite_accepted', subscriptionId, acceptedByUid: acceptedBy },
+    { title: 'mySplit' }
   );
 }
 
@@ -553,36 +530,13 @@ async function sendSplitInviteDeclinedPushToOwner(
   declinerName,
   serviceName
 ) {
-  const recipientDoc = await db.collection('users').doc(ownerUid).get();
-  const prefs = recipientDoc.data()?.notificationPreferences;
-  if (prefs && prefs.notificationsEnabled === false) return;
-
   const body = `${declinerName} declined your invite to ${serviceName}`;
-
-  const sessionsSnap = await db.collection('users').doc(ownerUid).collection('sessions').get();
-  const tokens = new Set();
-  sessionsSnap.docs.forEach((d) => {
-    const t = d.data().fcmToken;
-    if (typeof t === 'string' && t.trim()) tokens.add(t.trim());
-  });
-
-  await Promise.all(
-    [...tokens].map((token) =>
-      admin
-        .messaging()
-        .send({
-          token,
-          notification: { title: 'mySplit', body },
-          data: {
-            type: 'split_invite_declined',
-            subscriptionId,
-            declinedByUid,
-          },
-        })
-        .catch((e) => {
-          console.warn('sendSplitInviteDeclinedPushToOwner: FCM send failed', e?.message || e);
-        })
-    )
+  await sendMySplitPushToUser(
+    db,
+    ownerUid,
+    body,
+    { type: 'split_invite_declined', subscriptionId, declinedByUid },
+    { title: 'mySplit' }
   );
 }
 
@@ -624,51 +578,63 @@ async function notifyOwnerSplitInviteDeclinedBell(
   }
 }
 
-/** FCM `data` fields must be strings. */
-function stringifyFcmData(data) {
-  const out = {};
-  if (!data || typeof data !== 'object') return out;
-  for (const [k, v] of Object.entries(data)) {
-    if (v === undefined || v === null) continue;
-    out[k] = typeof v === 'string' ? v : String(v);
-  }
-  return out;
-}
-
 /**
- * Sends a mySplit notification to all session tokens for `uid`. Respects `notificationPreferences`.
- * @param {{ title?: string }} [opts]
+ * Sends a mySplit notification to all session tokens for `uid` via the Expo Push API.
+ * Respects `notificationsEnabled` and an optional per-key `opts.prefKey` preference flag.
+ * @param {{ title?: string, prefKey?: string }} [opts]
  */
 async function sendMySplitPushToUser(db, uid, body, dataPayload, opts) {
   const recipientDoc = await db.collection('users').doc(uid).get();
   const prefs = recipientDoc.data()?.notificationPreferences;
   if (prefs && prefs.notificationsEnabled === false) return;
+  const prefKey = opts && opts.prefKey;
+  if (prefKey && prefs && prefs[prefKey] === false) return;
 
   const sessionsSnap = await db.collection('users').doc(uid).collection('sessions').get();
-  const tokens = new Set();
+  const tokens = [];
   sessionsSnap.docs.forEach((d) => {
     const t = d.data().fcmToken;
-    if (typeof t === 'string' && t.trim()) tokens.add(t.trim());
+    if (typeof t === 'string' && t.trim()) tokens.push(t.trim());
   });
+  if (tokens.length === 0) return;
 
-  const data = stringifyFcmData(dataPayload);
   const title =
     opts && typeof opts.title === 'string' && opts.title.trim() ? opts.title.trim() : 'mySplit';
 
-  await Promise.all(
-    [...tokens].map((token) =>
-      admin
-        .messaging()
-        .send({
-          token,
-          notification: { title, body },
-          data,
-        })
-        .catch((e) => {
-          console.warn('sendMySplitPushToUser: FCM send failed', e?.message || e);
-        })
-    )
-  );
+  const messages = tokens.map((token) => ({
+    to: token,
+    title,
+    body,
+    data: dataPayload || {},
+    sound: 'default',
+  }));
+
+  for (let i = 0; i < messages.length; i += 100) {
+    const batch = messages.slice(i, i + 100);
+    try {
+      const res = await fetch('https://exp.host/--/api/v2/push/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify(batch),
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        console.warn('sendMySplitPushToUser: Expo API error', res.status, text);
+      } else {
+        const json = await res.json();
+        const results = json.data || [];
+        results.forEach((r, idx) => {
+          if (r.status === 'error') {
+            console.warn(`sendMySplitPushToUser: token[${idx}] error — ${r.details?.error}: ${r.message} (token: ${batch[idx]?.to})`);
+          } else {
+            console.log(`sendMySplitPushToUser: token[${idx}] ok — receiptId: ${r.id} (token: ${batch[idx]?.to})`);
+          }
+        });
+      }
+    } catch (e) {
+      console.warn('sendMySplitPushToUser: Expo push failed', e?.message || e);
+    }
+  }
 }
 
 /** Real Firebase Auth uids only (skip invite-email-* placeholders). */
@@ -988,32 +954,12 @@ exports.onFriendshipCreatedNotify = onDocumentCreated('friendships/{friendshipId
     console.warn('onFriendshipCreatedNotify: in-app notification failed', e?.message || e);
   }
 
-  const recipientDoc = await db.collection('users').doc(recipientUid).get();
-  const prefs = recipientDoc.data()?.notificationPreferences;
-  if (prefs && prefs.notificationsEnabled === false) return;
-
-  const body = `${senderName} connected with you on mySplit`;
-
-  const sessionsSnap = await db.collection('users').doc(recipientUid).collection('sessions').get();
-  const tokens = new Set();
-  sessionsSnap.docs.forEach((d) => {
-    const t = d.data().fcmToken;
-    if (typeof t === 'string' && t.trim()) tokens.add(t.trim());
-  });
-
-  await Promise.all(
-    [...tokens].map((token) =>
-      admin
-        .messaging()
-        .send({
-          token,
-          notification: { title: 'mySplit', body },
-          data: { type: 'friend_connected', initiatorUid: initiatedBy },
-        })
-        .catch((e) => {
-          console.warn('onFriendshipCreatedNotify: FCM send failed', e?.message || e);
-        })
-    )
+  await sendMySplitPushToUser(
+    db,
+    recipientUid,
+    `${senderName} connected with you on mySplit`,
+    { type: 'friend_connected', initiatorUid: initiatedBy },
+    { title: 'mySplit' }
   );
 });
 
@@ -1313,6 +1259,18 @@ exports.onSubscriptionMemberPaymentActivity = onDocumentUpdated('subscriptions/{
         amount: amountCents,
         metadata: { memberUid, cycleMonth },
       });
+      try {
+        const dollars = (amountCents / 100).toFixed(2);
+        await sendMySplitPushToUser(
+          db,
+          ownerUid,
+          `${actorName} paid $${dollars} for ${subName}`,
+          { type: 'payment_received', subscriptionId: subId },
+          { title: 'Payment received 💰', prefKey: 'paymentReceived' }
+        );
+      } catch (e) {
+        console.warn('onSubscriptionMemberPaymentActivity: paymentReceived push failed', e?.message || e);
+      }
     }
 
     await appendActivityEvent(db, memberUid, {
@@ -1683,6 +1641,17 @@ exports.onSubscriptionSplitLifecycleActivity = onDocumentUpdated('subscriptions/
       } catch (e) {
         console.warn('split_price_updated', e?.message || e);
       }
+      try {
+        await sendMySplitPushToUser(
+          db,
+          uid,
+          `${actorName} updated the price for ${subName}`,
+          { type: 'split_price_updated', subscriptionId: subId },
+          { title: subName, prefKey: 'splitChanges' }
+        );
+      } catch (e) {
+        console.warn('split_price_updated push', uid, e?.message || e);
+      }
     }
   }
 
@@ -1712,6 +1681,17 @@ exports.onSubscriptionSplitLifecycleActivity = onDocumentUpdated('subscriptions/
       });
     } catch (e) {
       console.warn('split_percentage_updated', e?.message || e);
+    }
+    try {
+      await sendMySplitPushToUser(
+        db,
+        uid,
+        `${actorName} updated share amounts for ${subName}`,
+        { type: 'split_percentage_updated', subscriptionId: subId },
+        { title: subName, prefKey: 'splitChanges' }
+      );
+    } catch (e) {
+      console.warn('split_percentage_updated push', uid, e?.message || e);
     }
   }
 });
@@ -1770,6 +1750,45 @@ exports.scanOverduePaymentIntents = onSchedule('every day 04:00', async () => {
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       metadata: { daysOverdue, paymentIntentId: doc.id },
     });
+  }
+});
+
+/**
+ * Daily at 09:00 UTC: notifies subscription owners whose `nextBillingAt` falls within the next
+ * 2–3 days. Respects the `upcomingRenewals` preference flag before sending.
+ */
+exports.notifyUpcomingRenewals = onSchedule('every day 09:00', async () => {
+  const db = admin.firestore();
+  const now = new Date();
+  const windowStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 2));
+  const windowEnd   = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 3));
+
+  const snap = await db
+    .collection('subscriptions')
+    .where('status', '==', 'active')
+    .where('nextBillingAt', '>=', admin.firestore.Timestamp.fromDate(windowStart))
+    .where('nextBillingAt', '<',  admin.firestore.Timestamp.fromDate(windowEnd))
+    .limit(500)
+    .get();
+
+  for (const doc of snap.docs) {
+    const sub = doc.data();
+    const ownerUid = typeof sub.ownerUid === 'string' ? sub.ownerUid : '';
+    if (!ownerUid) continue;
+    const subName = subscriptionLabelFromData(sub);
+    const totalCents = typeof sub.totalCents === 'number' ? sub.totalCents : 0;
+    const dollars = (totalCents / 100).toFixed(2);
+    try {
+      await sendMySplitPushToUser(
+        db,
+        ownerUid,
+        `${subName} bills in 2 days · $${dollars}`,
+        { type: 'upcoming_renewal', subscriptionId: doc.id },
+        { title: `Upcoming: ${subName}`, prefKey: 'upcomingRenewals' }
+      );
+    } catch (e) {
+      console.warn('notifyUpcomingRenewals: push failed', ownerUid, e?.message || e);
+    }
   }
 });
 
@@ -1838,7 +1857,81 @@ exports.sendPaymentReminder = onCall(async (request) => {
     amount: amountCents,
   });
 
+  try {
+    const dollars = (amountCents / 100).toFixed(2);
+    await sendMySplitPushToUser(
+      db,
+      memberUid,
+      `${senderName} sent you a payment reminder · $${dollars} for ${subName}`,
+      { type: 'reminder_received', subscriptionId: subscriptionId.trim() },
+      { title: `Reminder: ${subName}` }
+    );
+  } catch (e) {
+    console.warn('sendPaymentReminder: push failed', e?.message || e);
+  }
+
   return { ok: true };
+});
+
+/**
+ * payments/{paymentId} status → 'paid': push to the recipient (subscription owner) and write
+ * a payment_received activity event. Covers manual settlements recorded by recordManualSettlement().
+ */
+exports.onManualPaymentSettled = onDocumentUpdated('payments/{paymentId}', async (event) => {
+  const before = event.data.before.exists ? event.data.before.data() : {};
+  const after = event.data.after.exists ? event.data.after.data() : null;
+  if (!after) return;
+  if (before.status === after.status) return;
+  if (after.status !== 'paid') return;
+
+  const { recipient, payer, amountCents, subscriptionId } = after;
+  if (typeof recipient !== 'string' || !recipient) return;
+  if (typeof payer !== 'string' || !payer) return;
+
+  const db = admin.firestore();
+  const payerName = await getUserDisplayName(db, payer);
+
+  let subName = 'your subscription';
+  let serviceId = 'unknown';
+  if (typeof subscriptionId === 'string' && subscriptionId) {
+    const subSnap = await db.collection('subscriptions').doc(subscriptionId).get();
+    if (subSnap.exists) {
+      const subData = subSnap.data();
+      subName = subscriptionLabelFromData(subData);
+      serviceId = slugifyServiceIdFromName(subName);
+    }
+  }
+
+  const cents = typeof amountCents === 'number' ? amountCents : 0;
+  const dollars = (cents / 100).toFixed(2);
+  const paymentId = event.params.paymentId;
+
+  try {
+    await appendActivityEvent(db, recipient, {
+      type: 'payment_received',
+      subscriptionId: subscriptionId || '',
+      subscriptionName: subName,
+      serviceId,
+      actorUid: payer,
+      actorName: payerName,
+      amount: cents,
+      metadata: { paymentId },
+    });
+  } catch (e) {
+    console.warn('onManualPaymentSettled: activity failed', e?.message || e);
+  }
+
+  try {
+    await sendMySplitPushToUser(
+      db,
+      recipient,
+      `${payerName} paid $${dollars} for ${subName}`,
+      { type: 'payment_received', subscriptionId: subscriptionId || '', paymentId },
+      { title: 'Payment received 💰', prefKey: 'paymentReceived' }
+    );
+  } catch (e) {
+    console.warn('onManualPaymentSettled: push failed', e?.message || e);
+  }
 });
 
 /**
@@ -1970,6 +2063,7 @@ exports.finalizeSubscriptionWizard = onCall(async (request) => {
   if (typeof subscriptionId !== 'string' || !subscriptionId.trim()) {
     throw new HttpsError('invalid-argument', 'Expected { subscriptionId: string }.');
   }
+  const isUpdate = request.data?.isUpdate === true;
 
   const db = admin.firestore();
   const subRef = db.collection('subscriptions').doc(subscriptionId.trim());
@@ -1999,7 +2093,9 @@ exports.finalizeSubscriptionWizard = onCall(async (request) => {
 
   const shares = Array.isArray(sub.splitMemberShares) ? sub.splitMemberShares : [];
   const notified = new Set();
-  const memberBody = `${senderName} added you to ${serviceName}`;
+  const memberBody = isUpdate
+    ? `${senderName} updated the ${serviceName} split`
+    : `${senderName} added you to ${serviceName}`;
 
   for (const share of shares) {
     if (!share || share.role === 'owner' || share.invitePending) continue;
@@ -2009,17 +2105,51 @@ exports.finalizeSubscriptionWizard = onCall(async (request) => {
     notified.add(mid);
 
     await sendMySplitPushToUser(db, mid, memberBody, {
-      type: 'split_member_added',
+      type: isUpdate ? 'split_updated' : 'split_member_added',
       subscriptionId: subRef.id,
       inviterUid: ownerUid,
     });
   }
 
-  const ownerBody = `Your ${serviceName} split is set up.`;
+  const ownerBody = isUpdate
+    ? `You updated the ${serviceName} split`
+    : `Your ${serviceName} split is set up.`;
   await sendMySplitPushToUser(db, ownerUid, ownerBody, {
-    type: 'subscription_wizard_complete',
+    type: isUpdate ? 'split_updated' : 'subscription_wizard_complete',
     subscriptionId: subRef.id,
   });
+
+  return { ok: true };
+});
+
+/**
+ * Callable: notifies all non-owner members when the split owner ends the split.
+ * Input: `{ subscriptionId: string; recipientUids: string[]; title: string; body: string }`
+ */
+exports.notifySplitEnded = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Sign in required.');
+  }
+  const { subscriptionId, recipientUids, title, body } = request.data ?? {};
+  if (typeof subscriptionId !== 'string' || !subscriptionId.trim()) {
+    throw new HttpsError('invalid-argument', 'Expected { subscriptionId: string }.');
+  }
+  if (!Array.isArray(recipientUids) || recipientUids.length === 0) {
+    return { ok: true, skipped: true };
+  }
+
+  const db = admin.firestore();
+  const dataPayload = { type: 'split_ended', subscriptionId: subscriptionId.trim() };
+  const notifTitle = typeof title === 'string' && title.trim() ? title.trim() : 'Split ended';
+  const notifBody = typeof body === 'string' && body.trim() ? body.trim() : notifTitle;
+
+  await Promise.all(
+    recipientUids
+      .filter((uid) => typeof uid === 'string' && uid.trim())
+      .map((uid) =>
+        sendMySplitPushToUser(db, uid.trim(), notifBody, dataPayload, { title: notifTitle })
+      )
+  );
 
   return { ok: true };
 });
