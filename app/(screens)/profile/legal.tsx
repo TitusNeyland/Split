@@ -1,83 +1,29 @@
 import React from 'react';
-;
-import {
-  View,
-  Text,
-  StyleSheet,
-  Pressable,
-  Platform,
-  ScrollView,
-  Linking,
-} from 'react-native';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { WebView } from 'react-native-webview';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import {
-  LEGAL_INTRO,
-  LEGAL_SECTIONS,
-  buildLegalDocumentHtml,
-} from '../../../constants/legalContent';
-import { LEGAL_WEB_URL } from '../../../constants/support';
 
 export default function ProfileLegalScreen() {
   const insets = useSafeAreaInsets();
 
-  if (LEGAL_WEB_URL && Platform.OS === 'web') {
-    return (
-      <View style={[styles.root, { paddingTop: insets.top }]}>
-        <Header />
-        <View style={styles.webHint}>
-          <Text style={styles.webHintText}>
-            View terms and policies in your browser, or use the iOS/Android app.
-          </Text>
-          <Pressable
-            style={styles.openExternal}
-            onPress={() => void Linking.openURL(LEGAL_WEB_URL)}
-            accessibilityRole="link"
-          >
-            <Text style={styles.openExternalText}>Open legal page</Text>
-          </Pressable>
-        </View>
-      </View>
-    );
-  }
-
-  if (Platform.OS === 'web') {
-    return (
-      <View style={[styles.root, { paddingTop: insets.top }]}>
-        <Header />
-        <ScrollView contentContainerStyle={styles.scrollPad} showsVerticalScrollIndicator={false}>
-          <Text style={styles.docTitle}>Legal</Text>
-          <Text style={styles.intro}>{LEGAL_INTRO}</Text>
-          <Text style={styles.toc}>
-            {LEGAL_SECTIONS.map((s) => s.title).join(' · ')}
-          </Text>
-          {LEGAL_SECTIONS.map((s) => (
-            <View key={s.id} style={styles.section}>
-              <Text style={styles.h2}>{s.title}</Text>
-              {s.paragraphs.map((p, i) => (
-                <Text key={i} style={styles.p}>
-                  {p}
-                </Text>
-              ))}
-            </View>
-          ))}
-        </ScrollView>
-      </View>
-    );
-  }
-
-  const html = buildLegalDocumentHtml();
-
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
       <Header />
-      <WebView
-        originWhitelist={['*']}
-        source={{ html, baseUrl: 'https://localhost' }}
-        style={styles.web}
-      />
+      <View style={styles.content}>
+        <LegalRow
+          label="Terms of Service"
+          onPress={() => router.push({ pathname: '/profile/legal-document', params: { doc: 'terms' } })}
+        />
+        <LegalRow
+          label="Privacy Policy"
+          onPress={() => router.push({ pathname: '/profile/legal-document', params: { doc: 'privacy' } })}
+        />
+        <LegalRow
+          label="Refund Policy"
+          onPress={() => router.push({ pathname: '/profile/legal-document', params: { doc: 'refund' } })}
+        />
+      </View>
     </View>
   );
 }
@@ -91,6 +37,15 @@ function Header() {
       <Text style={styles.headerTitle}>Legal</Text>
       <View style={{ width: 26 }} />
     </View>
+  );
+}
+
+function LegalRow({ label, onPress }: { label: string; onPress: () => void }) {
+  return (
+    <Pressable style={({ pressed }) => [styles.row, pressed && styles.rowPressed]} onPress={onPress} accessibilityRole="button">
+      <Text style={styles.rowText}>{label}</Text>
+      <Ionicons name="chevron-forward" size={18} color="#C4C2BC" />
+    </Pressable>
   );
 }
 
@@ -111,68 +66,27 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#1a1a18',
   },
-  web: {
-    flex: 1,
-    backgroundColor: '#fff',
-  },
-  scrollPad: {
+  content: {
     paddingHorizontal: 20,
-    paddingBottom: 32,
   },
-  docTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#1a1a18',
-    marginBottom: 8,
-  },
-  intro: {
-    fontSize: 13,
-    color: '#888',
-    marginBottom: 12,
-    lineHeight: 19,
-  },
-  toc: {
-    fontSize: 13,
-    color: '#534AB7',
-    fontWeight: '600',
-    marginBottom: 20,
-    lineHeight: 20,
-  },
-  section: {
-    marginBottom: 8,
-  },
-  h2: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#1a1a18',
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  p: {
-    fontSize: 15,
-    lineHeight: 22,
-    color: '#444',
+  row: {
+    backgroundColor: '#fff',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(0,0,0,0.08)',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 16,
     marginBottom: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
-  webHint: {
-    padding: 24,
+  rowPressed: {
+    backgroundColor: 'rgba(0,0,0,0.03)',
   },
-  webHintText: {
+  rowText: {
+    flex: 1,
     fontSize: 15,
-    color: '#555',
-    marginBottom: 16,
-    lineHeight: 22,
-  },
-  openExternal: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#534AB7',
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    borderRadius: 12,
-  },
-  openExternalText: {
-    color: '#fff',
     fontWeight: '600',
-    fontSize: 15,
+    color: '#1a1a18',
   },
 });

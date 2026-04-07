@@ -8,7 +8,6 @@ import { signOut } from 'firebase/auth';
 import {
   APP_MARKETING_NAME,
   HELP_WEB_URL,
-  LEGAL_WEB_URL,
   SUPPORT_EMAIL,
   SUPPORT_MAILTO_SUBJECT,
 } from '../../constants/support';
@@ -43,13 +42,6 @@ function openHelp() {
 }
 
 function openLegal() {
-  if (LEGAL_WEB_URL) {
-    router.push({
-      pathname: '/profile/web-help',
-      params: { url: encodeURIComponent(LEGAL_WEB_URL), title: 'Legal' },
-    });
-    return;
-  }
   router.push('/profile/legal');
 }
 
