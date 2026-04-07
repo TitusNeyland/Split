@@ -98,7 +98,7 @@ export default function OnboardingGoalsScreen() {
   }, []);
 
   const goToName = useCallback(() => {
-    router.push('/onboarding/name');
+    router.replace('/onboarding/name');
   }, [router]);
 
   const onContinue = useCallback(async () => {

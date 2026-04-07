@@ -99,7 +99,7 @@ export default function OnboardingWelcomeScreen() {
       <View style={[styles.footer, { paddingBottom: 32 + insets.bottom }]}>
         <Pressable
           style={({ pressed }) => [styles.primaryBtn, pressed && styles.primaryBtnPressed]}
-          onPress={() => router.push('/onboarding/goals')}
+          onPress={() => router.replace('/onboarding/goals')}
         >
           <Text style={styles.primaryBtnText}>Get started</Text>
         </Pressable>

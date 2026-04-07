@@ -18,7 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { saveOnboardingLegalName } from '../../../lib/profile';
 import { ensureOnboardingAuthUid } from '../../../lib/onboarding/onboardingGoals';
 import { isFirebaseConfigured } from '../../../lib/firebase';
-import { setOnboardingNameSaved } from '../../../lib/onboarding/onboardingStorage';
+import { setOnboardingFirstName, setOnboardingNameSaved } from '../../../lib/onboarding/onboardingStorage';
 
 const C = {
   bg: '#fff',
@@ -61,7 +61,8 @@ export default function OnboardingNameScreen() {
       }
       await saveOnboardingLegalName(firstName, lastName);
       await setOnboardingNameSaved();
-      router.push('/onboarding/email');
+      await setOnboardingFirstName(firstName);
+      router.replace('/onboarding/email');
     } catch {
       Alert.alert('Could not save', 'Check your connection and try again.');
     } finally {

@@ -136,7 +136,7 @@ export default function OnboardingFindUsScreen() {
 
   const goToComplete = useCallback(async () => {
     await setOnboardingFindUsStepDone();
-    router.replace('/onboarding/complete');
+    router.replace('/onboarding/photo');
   }, [router]);
 
   const onSkip = useCallback(async () => {
