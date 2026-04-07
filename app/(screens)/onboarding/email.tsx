@@ -114,7 +114,7 @@ export default function OnboardingEmailScreen() {
       await setOnboardingBiometricPending(faceIdEnabled);
       await setOnboardingSignupEmail(trimmed);
       await setOnboardingEmailSaved();
-      router.push('/onboarding/password');
+      router.replace('/onboarding/password');
     } catch {
       Alert.alert('Something went wrong', 'Check your connection and try again.');
     } finally {

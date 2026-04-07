@@ -5,6 +5,9 @@ import { ONBOARDING_GOALS_STORAGE_KEY } from './onboardingGoals';
 
 export const ONBOARDING_COMPLETE_STORAGE_KEY = '@split/onboarding_complete';
 export const ONBOARDING_NAME_SAVED_KEY = '@split/onboarding_name_saved';
+export const ONBOARDING_FIRST_NAME_KEY = '@split/onboarding_first_name';
+export const ONBOARDING_PHOTO_URI_KEY = '@split/onboarding_photo_uri';
+export const ONBOARDING_PHOTO_STEP_DONE_KEY = '@split/onboarding_photo_step_done';
 export const ONBOARDING_EMAIL_SAVED_KEY = '@split/onboarding_email_saved';
 /** Email string from step 4 for `createUserWithEmailAndPassword` / link on step 5. */
 export const ONBOARDING_SIGNUP_EMAIL_KEY = '@split/onboarding_signup_email';
@@ -29,6 +32,24 @@ export async function setOnboardingNameSaved(): Promise<void> {
   await AsyncStorage.setItem(ONBOARDING_NAME_SAVED_KEY, 'true');
 }
 
+export async function setOnboardingFirstName(firstName: string): Promise<void> {
+  const trimmed = firstName.trim();
+  if (!trimmed) {
+    await AsyncStorage.removeItem(ONBOARDING_FIRST_NAME_KEY);
+    return;
+  }
+  await AsyncStorage.setItem(ONBOARDING_FIRST_NAME_KEY, trimmed);
+}
+
+export async function readOnboardingFirstName(): Promise<string | null> {
+  try {
+    const v = await AsyncStorage.getItem(ONBOARDING_FIRST_NAME_KEY);
+    return v?.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
 export async function hasOnboardingNameSaved(): Promise<boolean> {
   try {
     return (await AsyncStorage.getItem(ONBOARDING_NAME_SAVED_KEY)) === 'true';
@@ -39,6 +60,38 @@ export async function hasOnboardingNameSaved(): Promise<boolean> {
 
 export async function setOnboardingEmailSaved(): Promise<void> {
   await AsyncStorage.setItem(ONBOARDING_EMAIL_SAVED_KEY, 'true');
+}
+
+export async function setOnboardingPhotoUri(uri: string): Promise<void> {
+  await AsyncStorage.setItem(ONBOARDING_PHOTO_URI_KEY, uri);
+}
+
+export async function readOnboardingPhotoUri(): Promise<string | null> {
+  try {
+    return await AsyncStorage.getItem(ONBOARDING_PHOTO_URI_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export async function clearOnboardingPhotoUri(): Promise<void> {
+  await AsyncStorage.removeItem(ONBOARDING_PHOTO_URI_KEY);
+}
+
+export async function setOnboardingPhotoStepDone(done: boolean): Promise<void> {
+  if (done) {
+    await AsyncStorage.setItem(ONBOARDING_PHOTO_STEP_DONE_KEY, 'true');
+  } else {
+    await AsyncStorage.removeItem(ONBOARDING_PHOTO_STEP_DONE_KEY);
+  }
+}
+
+export async function hasOnboardingPhotoStepDone(): Promise<boolean> {
+  try {
+    return (await AsyncStorage.getItem(ONBOARDING_PHOTO_STEP_DONE_KEY)) === 'true';
+  } catch {
+    return false;
+  }
 }
 
 export async function setOnboardingSignupEmail(email: string): Promise<void> {
@@ -144,6 +197,9 @@ export async function markOnboardingFullyComplete(uid: string | null): Promise<v
   await setOnboardingCompleteInStorage(true);
   await AsyncStorage.removeItem(ONBOARDING_GOALS_STORAGE_KEY);
   await AsyncStorage.removeItem(ONBOARDING_NAME_SAVED_KEY);
+  await AsyncStorage.removeItem(ONBOARDING_FIRST_NAME_KEY);
+  await AsyncStorage.removeItem(ONBOARDING_PHOTO_URI_KEY);
+  await AsyncStorage.removeItem(ONBOARDING_PHOTO_STEP_DONE_KEY);
   await AsyncStorage.removeItem(ONBOARDING_EMAIL_SAVED_KEY);
   await AsyncStorage.removeItem(ONBOARDING_SIGNUP_EMAIL_KEY);
   await AsyncStorage.removeItem(ONBOARDING_PASSWORD_SAVED_KEY);

@@ -7,6 +7,7 @@ import {
   getOnboardingCompleteFromStorage,
   hasOnboardingEmailSaved,
   hasOnboardingNameSaved,
+  hasOnboardingPhotoStepDone,
   hasOnboardingNotificationsStepDone,
   hasOnboardingPaymentStepDone,
   hasOnboardingPasswordSaved,
@@ -49,7 +50,11 @@ export default function IndexRoute() {
           }
           if (!user.isAnonymous) {
             if (await hasOnboardingFindUsStepDone()) {
-              setHref('/onboarding/complete');
+              if (await hasOnboardingPhotoStepDone()) {
+                setHref('/onboarding/complete');
+                return;
+              }
+              setHref('/onboarding/photo');
               return;
             }
             if (await hasOnboardingPaymentStepDone()) {

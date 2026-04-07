@@ -7,6 +7,7 @@ export default function OnboardingLayout() {
       <Stack.Screen name="index" options={{ gestureEnabled: false }} />
       <Stack.Screen name="goals" />
       <Stack.Screen name="name" />
+      <Stack.Screen name="photo" />
       <Stack.Screen name="email" />
       <Stack.Screen name="password" />
       <Stack.Screen name="notifications" options={{ gestureEnabled: false }} />

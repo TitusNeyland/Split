@@ -26,8 +26,10 @@ import {
 } from '../../../lib/onboarding/onboardingAccount';
 import {
   commitPendingBiometricToEnabledFlag,
+  readOnboardingPhotoUri,
   setOnboardingPasswordSaved,
 } from '../../../lib/onboarding/onboardingStorage';
+import { uploadOnboardingProfilePhoto } from '../../../lib/profile';
 
 const C = {
   bg: '#fff',
@@ -212,6 +214,14 @@ export default function OnboardingPasswordScreen() {
       await mergeOnboardingUserDocAfterSignup(user.uid);
       await commitPendingBiometricToEnabledFlag();
       await setOnboardingPasswordSaved();
+      const pendingPhotoUri = await readOnboardingPhotoUri();
+      if (pendingPhotoUri) {
+        void uploadOnboardingProfilePhoto(user.uid, pendingPhotoUri).catch((err: unknown) => {
+          if (__DEV__) {
+            console.warn('[onboarding photo upload]', err);
+          }
+        });
+      }
       // Drop screens 1–5 from the stack so the user cannot return to password/email after signup.
       navigation.dispatch(
         CommonActions.reset({

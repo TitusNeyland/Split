@@ -202,6 +202,37 @@ export async function uploadProfileAvatar(localUri: string): Promise<string> {
   return url;
 }
 
+export async function uploadOnboardingProfilePhoto(uid: string, localUri: string): Promise<string> {
+  const auth = getFirebaseAuth();
+  const storage = getFirebaseStorage();
+  const db = getFirebaseFirestore();
+  if (!auth || !storage || !db) throw new Error('Firebase is not configured.');
+
+  const response = await fetch(localUri);
+  const blob = await response.blob();
+  const storageRef = ref(storage, `profile_photos/${uid}.jpg`);
+  const contentType = blob.type && blob.type.startsWith('image/') ? blob.type : 'image/jpeg';
+  await uploadBytes(storageRef, blob, { contentType });
+  const downloadURL = await getDownloadURL(storageRef);
+
+  await setDoc(
+    doc(db, 'users', uid),
+    {
+      photoURL: downloadURL,
+      avatarUrl: downloadURL,
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true }
+  );
+
+  if (auth.currentUser?.uid === uid) {
+    await updateProfile(auth.currentUser, { photoURL: downloadURL });
+  }
+
+  primeUserInCache(uid, { photoURL: downloadURL, avatarUrl: downloadURL });
+  return downloadURL;
+}
+
 export async function removeProfileAvatar(): Promise<void> {
   const auth = getFirebaseAuth();
   const storage = getFirebaseStorage();
