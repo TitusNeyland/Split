@@ -23,6 +23,7 @@
     },
     "android": {
       "package": "com.innova.split",
+      "notificationIcon": "./assets/notification-icon.png",
       "intentFilters": [
         {
           "action": "VIEW",
