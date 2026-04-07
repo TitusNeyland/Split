@@ -1,17 +1,45 @@
-import React, { useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, Pressable, Alert, Platform } from 'react-native';
+import React, { useCallback, useMemo, useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  Pressable,
+  Alert,
+  Platform,
+  Modal,
+  TouchableWithoutFeedback,
+  TextInput,
+  ActivityIndicator,
+  Keyboard,
+} from 'react-native';
 import { router } from 'expo-router';
 import * as Linking from 'expo-linking';
 import Constants from 'expo-constants';
 import { Ionicons } from '@expo/vector-icons';
-import { signOut } from 'firebase/auth';
+import {
+  deleteUser,
+  signOut,
+} from 'firebase/auth';
+import {
+  arrayRemove,
+  collection,
+  deleteDoc,
+  doc,
+  getDocs,
+  query,
+  serverTimestamp,
+  Timestamp,
+  updateDoc,
+  where,
+} from 'firebase/firestore';
 import {
   APP_MARKETING_NAME,
   HELP_WEB_URL,
   SUPPORT_EMAIL,
   SUPPORT_MAILTO_SUBJECT,
 } from '../../constants/support';
-import { getFirebaseAuth, isFirebaseConfigured } from '../../lib/firebase';
+import { getFirebaseAuth, getFirebaseFirestore, isFirebaseConfigured } from '../../lib/firebase';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const C = {
   text: '#1a1a18',
@@ -54,9 +82,23 @@ function openContactSupport() {
 }
 
 export default function ProfileSupportLegalSection() {
+  const insets = useSafeAreaInsets();
   const versionLabel = useMemo(() => {
     const v = Constants.expoConfig?.version ?? '1.0.0';
     return `${APP_MARKETING_NAME} v${v} · Made with ♥`;
+  }, []);
+  const [warningOpen, setWarningOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const sheetBottomPadding = keyboardVisible ? 10 : Math.max(insets.bottom, 14);
+
+  React.useEffect(() => {
+    const showSub = Keyboard.addListener('keyboardDidShow', () => setKeyboardVisible(true));
+    const hideSub = Keyboard.addListener('keyboardDidHide', () => setKeyboardVisible(false));
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
   }, []);
 
   const onSignOut = useCallback(() => {
@@ -86,6 +128,96 @@ export default function ProfileSupportLegalSection() {
           })(),
       },
     ]);
+  }, []);
+
+  const handleDeleteAccountPress = useCallback(() => {
+    setWarningOpen(true);
+  }, []);
+
+  const performDeleteAccount = useCallback(async () => {
+    if (!isFirebaseConfigured()) {
+      Alert.alert('Unavailable', 'Account deletion requires Firebase configuration.');
+      return;
+    }
+
+    const auth = getFirebaseAuth();
+    const db = getFirebaseFirestore();
+    const currentUser = auth?.currentUser;
+    if (!auth || !db || !currentUser) {
+      Alert.alert('Not signed in', 'Sign in to delete your account.');
+      return;
+    }
+
+    setDeleting(true);
+    try {
+      const uid = currentUser.uid;
+      setWarningOpen(false);
+
+      const memberUidsSnap = await getDocs(
+        query(collection(db, 'subscriptions'), where('memberUids', 'array-contains', uid))
+      );
+      const legacyMembersSnap = await getDocs(
+        query(collection(db, 'subscriptions'), where('members', 'array-contains', uid))
+      );
+      const byId = new Map<string, (typeof memberUidsSnap.docs)[number]>();
+      for (const sub of memberUidsSnap.docs) byId.set(sub.id, sub);
+      for (const sub of legacyMembersSnap.docs) byId.set(sub.id, sub);
+
+      for (const sub of byId.values()) {
+        const data = sub.data() as {
+          ownerUid?: unknown;
+          status?: unknown;
+          members?: unknown[];
+          activeMemberUids?: unknown[];
+        };
+        const isOwner = String(data.ownerUid ?? '') === uid;
+        const isActive = String(data.status ?? '') === 'active';
+        if (isOwner && isActive) {
+          await updateDoc(sub.ref, {
+            status: 'ended',
+            endedAt: serverTimestamp(),
+            endedBy: uid,
+            endedReason: 'owner_account_deleted',
+          });
+          continue;
+        }
+
+        const activeMemberUids = Array.isArray(data.activeMemberUids) ? data.activeMemberUids : [];
+        if (!activeMemberUids.includes(uid)) continue;
+
+        const nextMembers = Array.isArray(data.members)
+          ? data.members.map((member) => {
+              if (!member || typeof member !== 'object') return member;
+              const row = member as { uid?: unknown };
+              if (String(row.uid ?? '') !== uid) return member;
+              return {
+                ...(member as Record<string, unknown>),
+                memberStatus: 'left',
+                leftAt: Timestamp.now(),
+              };
+            })
+          : [];
+
+        await updateDoc(sub.ref, {
+          members: nextMembers,
+          memberUids: arrayRemove(uid),
+          activeMemberUids: arrayRemove(uid),
+          splitUpdatedAt: serverTimestamp(),
+        });
+      }
+
+      await deleteDoc(doc(db, 'users', uid));
+      await deleteUser(currentUser);
+      router.replace('/');
+    } catch (e) {
+      const msg =
+        e instanceof Error
+          ? e.message
+          : 'Could not delete your account right now. Please try again.';
+      Alert.alert('Delete account failed', msg);
+    } finally {
+      setDeleting(false);
+    }
   }, []);
 
   return (
@@ -157,9 +289,59 @@ export default function ProfileSupportLegalSection() {
       >
         <Text style={styles.signOutText}>Sign out</Text>
       </Pressable>
+      <Pressable
+        style={({ pressed }) => [styles.deleteBtn, pressed && styles.signOutBtnPressed]}
+        onPress={handleDeleteAccountPress}
+        accessibilityRole="button"
+        accessibilityLabel="Delete account"
+      >
+        <Text style={styles.deleteBtnTxt}>Delete account</Text>
+      </Pressable>
 
       <Text style={styles.versionText}>{versionLabel}</Text>
       {Platform.OS === 'web' ? <View style={styles.webBottomPad} /> : null}
+
+      <Modal
+        visible={warningOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setWarningOpen(false)}
+      >
+        <View style={styles.modalWrap}>
+          <TouchableWithoutFeedback onPress={() => setWarningOpen(false)}>
+            <View style={styles.modalBackdrop} />
+          </TouchableWithoutFeedback>
+          <View style={[styles.sheet, { paddingBottom: sheetBottomPadding }]}>
+            <View style={styles.handle} />
+            <View style={styles.warnIconCircle}>
+              <Ionicons name="warning" size={22} color="#E24B4A" />
+            </View>
+            <Text style={styles.sheetTitle}>Delete your account?</Text>
+            <Text style={styles.sheetBody}>
+              This will permanently delete your Kilo account, all your splits, and your payment
+              history. This cannot be undone.
+            </Text>
+            <Pressable
+              style={[styles.primaryDangerBtn, deleting && styles.primaryDangerBtnDisabled]}
+              onPress={() => void performDeleteAccount()}
+              disabled={deleting}
+            >
+              {deleting ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Text style={styles.primaryDangerBtnText}>Delete account</Text>
+              )}
+            </Pressable>
+            <Pressable
+              style={[styles.ghostBtn, deleting && styles.ghostBtnDisabled]}
+              onPress={() => setWarningOpen(false)}
+              disabled={deleting}
+            >
+              <Text style={styles.ghostBtnText}>Cancel</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -234,6 +416,22 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: C.red,
   },
+  deleteBtn: {
+    width: '100%',
+    padding: 14,
+    backgroundColor: '#fff',
+    borderColor: 'rgba(226,75,74,0.3)',
+    borderWidth: 0.5,
+    borderRadius: 14,
+    alignItems: 'center',
+    marginTop: 8,
+    marginBottom: 12,
+  },
+  deleteBtnTxt: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#E24B4A',
+  },
   versionText: {
     textAlign: 'center',
     fontSize: 12,
@@ -242,5 +440,81 @@ const styles = StyleSheet.create({
   },
   webBottomPad: {
     height: 24,
+  },
+  modalWrap: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+  },
+  sheet: {
+    backgroundColor: '#F2F0EB',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: 14,
+    paddingTop: 10,
+  },
+  handle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#D3D1C7',
+    alignSelf: 'center',
+    marginBottom: 12,
+  },
+  warnIconCircle: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: '#FCEBEB',
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'center',
+    marginBottom: 10,
+  },
+  sheetTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1a1a18',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  sheetBody: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: '#555',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  primaryDangerBtn: {
+    backgroundColor: '#E24B4A',
+    borderRadius: 12,
+    paddingVertical: 13,
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  primaryDangerBtnDisabled: {
+    backgroundColor: '#D3D1C7',
+  },
+  primaryDangerBtnText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  ghostBtn: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    paddingVertical: 13,
+    alignItems: 'center',
+  },
+  ghostBtnDisabled: {
+    opacity: 0.65,
+  },
+  ghostBtnText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#1a1a18',
   },
 });
