@@ -57,6 +57,7 @@ import { HomeFloatCard } from '../../components/home/HomeFloatCard';
 import { HomeHeroDonutLegend } from '../../components/home/HomeHeroDonutLegend';
 import { HomeSavingsPill } from '../../components/home/HomeSavingsPill';
 import { HomeQuickActionsRow } from '../../components/home/HomeQuickActionsRow';
+import { HomePayNowSheet } from '../../components/home/HomePayNowSheet';
 import {
   HomeReminderPickerModal,
   type ReminderPickCandidate,
@@ -146,6 +147,7 @@ export default function HomeScreen() {
   const { avatarUrl: homeAvatarUrl, displayName: homeDisplayName, profileLoading: homeProfileLoading } =
     useProfileAvatarUrl();
   const [reminderPickerOpen, setReminderPickerOpen] = useState(false);
+  const [payNowSheetVisible, setPayNowSheetVisible] = useState(false);
   const [savings, setSavings] = useState<HomeSavingsSnapshot>({ lifetimeSaved: 0, joinedAt: null });
   const [recentActivityItems, setRecentActivityItems] = useState<HomeRecentActivityItem[]>([]);
   const [panelNotifications, setPanelNotifications] = useState<AppNotification[]>([]);
@@ -360,6 +362,14 @@ export default function HomeScreen() {
         onPress: () => router.push('/add-subscription'),
       },
       {
+        id: 'pay-now',
+        label: 'Pay now',
+        icon: 'cash-outline' as const,
+        circleBg: '#E1F5EE',
+        iconColor: C.green,
+        onPress: () => setPayNowSheetVisible(true),
+      },
+      {
         id: 'find-friends',
         label: 'Find friends',
         icon: 'people-outline' as const,
@@ -496,6 +506,13 @@ export default function HomeScreen() {
           onClose={() => setReminderPickerOpen(false)}
           candidates={reminderCandidates}
           onSelect={onReminderPick}
+        />
+
+        <HomePayNowSheet
+          visible={payNowSheetVisible}
+          onClose={() => setPayNowSheetVisible(false)}
+          subscriptions={subscriptions}
+          currentUid={uid}
         />
 
         <HomeNotificationsPanel
