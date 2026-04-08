@@ -308,25 +308,81 @@ export async function acceptSplitInviteFromNotification(params: {
     // Mark the corresponding activity feed card as accepted so it no longer shows the Join button.
     void updateActivityDocumentStatusBySubscription(uid, metadata.subscriptionId, 'split_invite_received', 'accepted').catch(() => {});
 
-    // Immediately clear invitePending on the share row so the owner's detail screen
-    // updates without waiting for the Cloud Function to run.
+    // Do a full client-side merge so acceptance is complete even if the Cloud Function
+    // is delayed or unavailable. Mirrors the logic in the legacy path below.
     try {
-      const subSnap2 = await getDoc(subRef);
-      if (subSnap2.exists()) {
-        const raw = subSnap2.data() as Record<string, unknown>;
-        const shares = Array.isArray(raw.splitMemberShares)
-          ? (raw.splitMemberShares as Record<string, unknown>[]).map((s) =>
-              s && typeof s === 'object' ? { ...(s as object) } : {}
-            )
-          : [];
-        const idx = shares.findIndex((s) => (s as Record<string, unknown>).inviteId === metadata.inviteId);
-        if (idx >= 0) {
-          shares[idx] = { ...shares[idx], invitePending: false };
-          await updateDoc(subRef, { splitMemberShares: shares, splitUpdatedAt: serverTimestamp() });
+      const memberUids: string[] = Array.isArray(rawPre.memberUids) ? [...rawPre.memberUids] : [];
+      const activeMemberUids: string[] = Array.isArray(rawPre.activeMemberUids)
+        ? [...rawPre.activeMemberUids]
+        : [];
+      const shares = Array.isArray(rawPre.splitMemberShares)
+        ? (rawPre.splitMemberShares as Record<string, unknown>[]).map((s) =>
+            s && typeof s === 'object' ? { ...(s as object) } : {}
+          )
+        : [];
+      const memberPaymentStatus: Record<string, string> =
+        rawPre.memberPaymentStatus &&
+        typeof rawPre.memberPaymentStatus === 'object' &&
+        !Array.isArray(rawPre.memberPaymentStatus)
+          ? { ...(rawPre.memberPaymentStatus as Record<string, string>) }
+          : {};
+
+      const dn = displayName.trim() || 'Member';
+      const init = initialsFromName(dn);
+      const totalCents = getTotalCents(rawPre);
+
+      const shareIdx = shares.findIndex(
+        (s) => (s as Record<string, unknown>).inviteId === metadata.inviteId
+      );
+      if (shareIdx >= 0) {
+        shares[shareIdx] = { ...shares[shareIdx], memberId: uid, displayName: dn, initials: init, invitePending: false };
+      }
+
+      const firstMem =
+        Array.isArray(rawPre.members) && rawPre.members.length > 0 ? rawPre.members[0] : undefined;
+      const isObjectRoster =
+        firstMem !== undefined && typeof firstMem === 'object' && firstMem !== null;
+      const membersRoster: Record<string, unknown>[] = isObjectRoster
+        ? (rawPre.members as Record<string, unknown>[]).map((m) =>
+            m && typeof m === 'object' ? { ...m } : {}
+          )
+        : [];
+
+      if (isObjectRoster) {
+        const roIdx = membersRoster.findIndex(
+          (m) => String((m as { uid?: string }).uid ?? '') === uid
+        );
+        if (roIdx >= 0) {
+          membersRoster[roIdx] = {
+            ...membersRoster[roIdx],
+            memberStatus: 'active',
+            acceptedAt: Timestamp.now(),
+            paymentStatus: 'pending',
+            firstChargeObligationStartsNextCycle: computeFirstChargeObligationStartsNextCycle(rawPre),
+          };
         }
       }
+
+      if (!memberUids.includes(uid)) memberUids.push(uid);
+      if (!activeMemberUids.includes(uid)) activeMemberUids.push(uid);
+      memberPaymentStatus[uid] = 'pending';
+
+      const syncedShares = isObjectRoster
+        ? syncOwnerShareForPendingInvites(shares, totalCents, membersRoster as SubscriptionMemberRosterRow[])
+        : shares;
+
+      const patch: Record<string, unknown> = {
+        memberUids,
+        activeMemberUids,
+        splitMemberShares: syncedShares,
+        memberPaymentStatus,
+        splitUpdatedAt: serverTimestamp(),
+      };
+      if (isObjectRoster) patch.members = membersRoster;
+
+      await updateDoc(subRef, patch);
     } catch {
-      // Non-critical — Cloud Function will complete the full merge
+      // Non-critical — Cloud Function will complete the full merge if this fails
     }
 
     await updateDoc(doc(db, 'users', uid, 'notifications', notificationId), {
