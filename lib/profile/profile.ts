@@ -1,9 +1,14 @@
 import {
+  collection,
   deleteField,
   doc,
+  getDocs,
+  limit,
   onSnapshot,
+  query,
   serverTimestamp,
   setDoc,
+  where,
   type Unsubscribe,
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
@@ -39,6 +44,10 @@ export type UserProfileDoc = {
   emailNormalized?: string | null;
   /** SHA-256 hex of E.164 phone; set for contact discovery (`findUsersByPhoneHash`). */
   phoneHash?: string | null;
+  /** Raw phone in E.164 or display format; shown in profile settings. */
+  phone?: string | null;
+  /** Unique @handle chosen by the user; lowercase, 3–20 chars. */
+  username?: string | null;
   /** Denormalized from `privacySettings.discoverableByName` for optional indexing. */
   discoverableByName?: boolean | null;
   /** Download URL for profile photo (Firebase Storage). Prefer over `avatarUrl` when both exist. */
@@ -366,6 +375,53 @@ export async function saveNotificationPreferences(prefs: NotificationPreferences
     doc(db, 'users', user.uid),
     {
       notificationPreferences: prefs,
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true }
+  );
+}
+
+/** Returns true if the username is not taken by any other user (or not taken at all). */
+export async function checkUsernameAvailable(username: string, currentUid: string): Promise<boolean> {
+  const db = getFirebaseFirestore();
+  if (!db) throw new Error('Firebase is not configured.');
+  const q = query(
+    collection(db, 'users'),
+    where('username', '==', username.toLowerCase()),
+    limit(2)
+  );
+  const snap = await getDocs(q);
+  return snap.docs.every((d) => d.id === currentUid);
+}
+
+/** Updates displayName (first+last) and username in Auth + Firestore. Phone is managed separately via its own screen. */
+export async function saveUserProfile(data: {
+  firstName: string;
+  lastName: string;
+  username: string;
+}): Promise<void> {
+  const auth = getFirebaseAuth();
+  const db = getFirebaseFirestore();
+  if (!auth || !db) throw new Error('Firebase is not configured.');
+  const user = auth.currentUser;
+  if (!user) throw new Error('Sign in to edit your profile.');
+
+  const first = data.firstName.trim();
+  const last = data.lastName.trim();
+  const displayName = `${first} ${last}`.trim();
+  const username = data.username.trim().toLowerCase() || null;
+
+  await updateProfile(user, { displayName: displayName || null });
+  await setDoc(
+    doc(db, 'users', user.uid),
+    {
+      displayName: displayName || null,
+      displayNameLower: displayName ? displayName.toLowerCase() : null,
+      firstName: first || null,
+      lastName: last || null,
+      username,
+      email: user.email ?? null,
+      emailNormalized: user.email ? normalizeInviteEmail(user.email) : null,
       updatedAt: serverTimestamp(),
     },
     { merge: true }
