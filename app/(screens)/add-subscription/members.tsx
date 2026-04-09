@@ -421,6 +421,7 @@ export default function AddSubscriptionMembersScreen() {
         isOwner: false,
       });
       setFriendQuery('');
+      setSearchResults([]);
       if (ok) {
         setSheetSessionAddedIds((prev) =>
           prev.includes(friend.memberId) ? prev : [...prev, friend.memberId],
