@@ -52,6 +52,8 @@ import { clearOwnerMemberLeftBanner } from '../../../lib/subscription/clearOwner
 import { clearSplitInviteDeclineNotices } from '../../../lib/subscription/splitInviteDeclineNoticesFirestore';
 import { removePendingSplitInvite } from '../../../lib/subscription/removePendingSplitInviteFirestore';
 import { useSubscriptions } from '../../../contexts/SubscriptionsContext';
+import { useMergedSplitPreferences } from '../../../lib/split-preferences/useMergedSplitPreferences';
+import { formatMemberAmount } from '../../../lib/format/memberAmount';
 
 const C = {
   bg: '#F2F0EB',
@@ -133,6 +135,7 @@ export default function SubscriptionDetailScreen() {
   const { firstName: viewerFirstName } = useViewerFirstName();
   const firebaseUid = useFirebaseUid();
   const { subscriptions } = useSubscriptions();
+  const splitPrefs = useMergedSplitPreferences();
   const [historyModalCycle, setHistoryModalCycle] = useState<SubscriptionHistoryCycle | null>(null);
   const [detailRetryKey, setDetailRetryKey] = useState(0);
   const [resendBusyId, setResendBusyId] = useState<string | null>(null);
@@ -870,7 +873,9 @@ export default function SubscriptionDetailScreen() {
                     <Text style={[styles.splitName, ended && styles.splitTextEnded]} numberOfLines={1}>
                       {m.displayName}
                     </Text>
-                    <Text style={[styles.splitPct, ended && styles.splitTextEnded]}>{m.percent}%</Text>
+                    {!splitPrefs.alwaysShowExactAmounts && (
+                      <Text style={[styles.splitPct, ended && styles.splitTextEnded]}>{m.percent}%</Text>
+                    )}
                   </View>
                   <View style={styles.splitRowRight}>
                     <Text
@@ -879,7 +884,7 @@ export default function SubscriptionDetailScreen() {
                       numberOfLines={1}
                       minimumFontScale={0.6}
                     >
-                      {fmtCents(m.amountCents)}
+                      {formatMemberAmount(m.amountCents, m.percent, splitPrefs.alwaysShowExactAmounts)}
                     </Text>
                     <View style={[styles.statusBadge, { backgroundColor: st.bg }]}>
                       <Text style={[styles.statusBadgeTxt, { color: st.fg }]}>{st.label}</Text>

@@ -34,6 +34,8 @@ export async function saveSubscriptionEditSplitToFirestore(opts: {
   /** Same values as create wizard. */
   splitMethod: WizardSplitMethod;
   members: WizardMemberRow[];
+  /** When the changes take effect: 'next_cycle' or 'immediate' (default: 'immediate') */
+  effectiveFrom?: 'next_cycle' | 'immediate';
 }): Promise<void> {
   const db = getFirebaseFirestore();
   if (!db) throw new Error('Firestore is not configured.');
@@ -273,7 +275,7 @@ export async function saveSubscriptionEditSplitToFirestore(opts: {
     actorUid: opts.ownerUid,
     method: opts.splitMethod,
     memberShares: syncedShares,
-    effectiveFrom: null,
+    effectiveFrom: opts.effectiveFrom ?? 'immediate',
     source: 'edit_split',
   });
 
