@@ -31,7 +31,6 @@ import {
 } from '../../../lib/subscription/billingDayFormat';
 import { getServiceIconBackgroundColor, ServiceIcon } from '../../../components/shared/ServiceIcon';
 import { UserAvatarCircle } from '../../../components/shared/UserAvatarCircle';
-import { useProfileAvatarUrl } from '../../../hooks/useProfileAvatarUrl';
 
 function formatCreateSplitError(e: unknown): string {
   if (e instanceof Error) return e.message;
@@ -158,7 +157,6 @@ function inviteFirstNames(members: ReviewMember[]): string {
 export default function AddSubscriptionReviewScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { avatarUrl: profileAvatarUrl } = useProfileAvatarUrl();
   const ownerUid = getFirebaseAuth()?.currentUser?.uid ?? null;
   const params = useLocalSearchParams<{
     serviceName?: string;
@@ -288,6 +286,7 @@ export default function AddSubscriptionReviewScreen() {
       initials: m.initials,
       avatarBg: m.avatarBg,
       avatarColor: m.avatarColor,
+      uid: m.memberId.startsWith('invite-email-') ? null : m.memberId,
     }));
     router.replace({
       pathname: '/split-created',
@@ -465,20 +464,18 @@ export default function AddSubscriptionReviewScreen() {
         <View style={styles.card}>
           {members.map((m, i) => {
             const isLast = i === members.length - 1;
+            const uid = m.memberId.startsWith('invite-email-') ? null : m.role === 'owner' ? ownerUid : m.memberId;
+            // For owner, don't pass imageUrl so component fetches fresh from Firestore via uid.
+            // For members, use the cached avatarUrl from member data.
+            const imageUrl = m.role !== 'owner' ? m.avatarUrl : undefined;
             return (
               <View key={m.memberId || String(i)} style={[styles.memRow, isLast && styles.memRowLast]}>
                 <View style={styles.memAv}>
                   <UserAvatarCircle
                     size={36}
-                    uid={
-                      m.memberId.startsWith('invite-email-')
-                        ? null
-                        : m.role === 'owner'
-                          ? ownerUid
-                          : m.memberId
-                    }
+                    uid={uid}
                     initials={m.initials}
-                    imageUrl={m.role === 'owner' ? profileAvatarUrl : m.avatarUrl}
+                    imageUrl={imageUrl}
                     initialsBackgroundColor={m.avatarBg}
                     initialsTextColor={m.avatarColor}
                   />
@@ -588,27 +585,27 @@ export default function AddSubscriptionReviewScreen() {
                 <View style={styles.modalDetailRow}>
                   <Text style={styles.modalDetailLbl}>Members</Text>
                   <View style={styles.modalAvatarStack}>
-                    {members.slice(0, 6).map((m, i) => (
+                    {members.slice(0, 6).map((m, i) => {
+                      const uid = m.memberId.startsWith('invite-email-') ? null : m.role === 'owner' ? ownerUid : m.memberId;
+                      // For owner, don't pass imageUrl so component fetches fresh from Firestore via uid.
+                      // For members, use the cached avatarUrl from member data.
+                      const imageUrl = m.role !== 'owner' ? m.avatarUrl : undefined;
+                      return (
                       <View
                         key={m.memberId || String(i)}
                         style={[styles.modalStackAv, { marginLeft: i > 0 ? -9 : 0, zIndex: 20 - i }]}
                       >
                         <UserAvatarCircle
                           size={28}
-                          uid={
-                            m.memberId.startsWith('invite-email-')
-                              ? null
-                              : m.role === 'owner'
-                                ? ownerUid
-                                : m.memberId
-                          }
+                          uid={uid}
                           initials={m.initials}
-                          imageUrl={m.role === 'owner' ? profileAvatarUrl : m.avatarUrl}
+                          imageUrl={imageUrl}
                           initialsBackgroundColor={m.avatarBg}
                           initialsTextColor={m.avatarColor}
                         />
                       </View>
-                    ))}
+                      );
+                    })}
                   </View>
                 </View>
 

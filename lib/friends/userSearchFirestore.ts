@@ -71,12 +71,13 @@ function mapUserDoc(snapshot: DocumentSnapshot<DocumentData>): FriendSearchUserR
       : email
         ? normalizeInviteEmail(email)
         : null;
+  const avatarUrl = userDocPhotoUrl(d as Record<string, unknown>);
   return {
     uid: snapshot.id,
     displayName,
     usernameHandle: usernameHandleFromEmailNormalized(normalized),
     maskedEmail: maskEmailForDisplay(email || null) || '—',
-    avatarUrl: userDocPhotoUrl(d as Record<string, unknown>),
+    avatarUrl,
     emailNormalized: normalized,
   };
 }

@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { fmtCents } from '../../lib/subscription/addSubscriptionSplitMath';
+import { UserAvatarCircle } from '../../components/shared/UserAvatarCircle';
 
 const C = {
   text: '#1a1a18',
@@ -159,6 +160,7 @@ type AvatarPip = {
   initials: string;
   avatarBg: string;
   avatarColor: string;
+  uid?: string | null;
 };
 
 function parseInviteAvatars(raw: string | undefined): AvatarPip[] {
@@ -171,6 +173,7 @@ function parseInviteAvatars(raw: string | undefined): AvatarPip[] {
       initials: String(a.initials ?? ''),
       avatarBg: String(a.avatarBg ?? '#EEEDFE'),
       avatarColor: String(a.avatarColor ?? C.purple),
+      uid: typeof a.uid === 'string' && a.uid.trim() ? a.uid.trim() : a.uid === null ? null : undefined,
     }));
   } catch {
     return [];
@@ -291,16 +294,20 @@ export default function SplitCreatedScreen() {
               {inviteAvatars.map((p, i) => (
                 <View
                   key={i}
-                  style={[
-                    styles.pip,
-                    {
-                      backgroundColor: p.avatarBg,
-                      marginLeft: i === 0 ? 0 : -12,
-                      zIndex: inviteAvatars.length - i,
-                    },
-                  ]}
+                  style={{
+                    marginLeft: i === 0 ? 0 : -12,
+                    zIndex: inviteAvatars.length - i,
+                  }}
                 >
-                  <Text style={[styles.pipTxt, { color: p.avatarColor }]}>{p.initials}</Text>
+                  <UserAvatarCircle
+                    size={42}
+                    uid={p.uid ?? null}
+                    initials={p.initials}
+                    initialsBackgroundColor={p.avatarBg}
+                    initialsTextColor={p.avatarColor}
+                    borderWidth={2}
+                    borderColor="#FFFFFF"
+                  />
                 </View>
               ))}
             </View>

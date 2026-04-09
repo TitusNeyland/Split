@@ -40,11 +40,19 @@ export function UserAvatarCircle({
   borderColor = 'transparent',
   style,
 }: Props) {
+  const [imageLoadFailed, setImageLoadFailed] = React.useState(false);
   const { profile } = useUserProfile(uid ?? null);
   const fromDoc = userDocPhotoUrl(profile as Record<string, unknown> | null | undefined);
   const explicit =
     typeof imageUrl === 'string' && imageUrl.trim().length > 0 ? imageUrl.trim() : null;
-  const resolvedUrl = explicit ?? fromDoc ?? null;
+  // Prefer fresh data from Firestore (fromDoc) over stale cached URL (explicit).
+  // This ensures we get fresh download tokens and avoid expired URLs.
+  const resolvedUrl = fromDoc ?? explicit ?? null;
+
+  // Reset image load failure when URL changes so we retry the new image
+  React.useEffect(() => {
+    setImageLoadFailed(false);
+  }, [resolvedUrl]);
 
   const r = size / 2;
   const inner = (
@@ -64,11 +72,15 @@ export function UserAvatarCircle({
     >
       {loading ? (
         <View style={[styles.shimmer, { borderRadius: r }]} />
-      ) : resolvedUrl ? (
+      ) : resolvedUrl && !imageLoadFailed ? (
         <Image
           source={{ uri: resolvedUrl }}
           style={{ width: size, height: size }}
           accessibilityLabel={accessibilityLabel ?? 'Profile photo'}
+          onError={() => {
+            console.log(`[UserAvatarCircle] Image failed to load: ${resolvedUrl}`);
+            setImageLoadFailed(true);
+          }}
         />
       ) : initialsBackgroundColor && initialsTextColor ? (
         <View style={[styles.solidInitials, { borderRadius: r, backgroundColor: initialsBackgroundColor }]}>
