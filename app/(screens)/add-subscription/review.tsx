@@ -31,6 +31,8 @@ import {
 } from '../../../lib/subscription/billingDayFormat';
 import { getServiceIconBackgroundColor, ServiceIcon } from '../../../components/shared/ServiceIcon';
 import { UserAvatarCircle } from '../../../components/shared/UserAvatarCircle';
+import { useMergedSplitPreferences } from '../../../lib/split-preferences/useMergedSplitPreferences';
+import { formatMemberAmount } from '../../../lib/format/memberAmount';
 
 function formatCreateSplitError(e: unknown): string {
   if (e instanceof Error) return e.message;
@@ -192,6 +194,7 @@ export default function AddSubscriptionReviewScreen() {
       : 'Me (owner)';
   const autoCharge = params.autoCharge !== '0';
   const splitMethodRaw = typeof params.splitMethod === 'string' ? params.splitMethod : '';
+  const splitPrefs = useMergedSplitPreferences();
 
   const members = useMemo(
     () => parseMembersJson(params.membersReviewJson),
@@ -495,8 +498,10 @@ export default function AddSubscriptionReviewScreen() {
                     <Text style={styles.memPending}>Invited · pending</Text>
                   ) : null}
                 </View>
-                <Text style={styles.memPct}>{formatPercent(m.percent)}</Text>
-                <Text style={styles.memAmt}>{fmtCents(m.amountCents)}</Text>
+                {!splitPrefs.alwaysShowExactAmounts && (
+                  <Text style={styles.memPct}>{formatPercent(m.percent)}</Text>
+                )}
+                <Text style={styles.memAmt}>{formatMemberAmount(m.amountCents, m.percent, splitPrefs.alwaysShowExactAmounts)}</Text>
               </View>
             );
           })}

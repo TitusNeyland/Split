@@ -31,6 +31,7 @@ import {
   parsePercent,
   percentTotalIsExactly100,
 } from '../../../lib/subscription/addSubscriptionSplitMath';
+import { formatUsdFromCents } from '../../../lib/format/currency';
 import { saveSubscriptionEditSplitToFirestore } from '../../../lib/subscription/editSplitFirestore';
 import { useSubscriptionDetailFromFirestore } from '../../../lib/subscription/subscriptionDetailFromFirestore';
 import type { SubscriptionDetailMember } from '../../../lib/subscription/subscriptionDetailTypes';
@@ -38,6 +39,9 @@ import type { WizardMemberRow, WizardSplitMethod } from '../../../lib/subscripti
 import { useFirebaseUid } from '../../../lib/auth/useFirebaseUid';
 import { useProfileAvatarUrl } from '../../../hooks/useProfileAvatarUrl';
 import { useViewerFirstName } from '../../../hooks/useViewerFirstName';
+import { useMergedSplitPreferences } from '../../../lib/split-preferences/useMergedSplitPreferences';
+import { formatMemberAmount } from '../../../lib/format/memberAmount';
+import { ConfirmSplitChangesBottomSheet, type ConfirmSplitChangeRow } from '../../../components/subscriptions/ConfirmSplitChangesBottomSheet';
 
 const HERO = ['#6B3FA0', '#4A1570', '#2D0D45'] as const;
 
@@ -114,6 +118,61 @@ function methodLabel(m: SplitEditorMode): string {
   return 'Fixed $';
 }
 
+function defaultMethodToEditor(method: string): SplitEditorMode {
+  if (method === 'customPercent') return 'customPercent';
+  if (method === 'fixedDollar') return 'fixedDollar';
+  return 'equal';
+}
+
+function buildSplitChangesList(
+  originalMembers: SubscriptionDetailMember[],
+  newMembers: WizardMemberRow[]
+): ConfirmSplitChangeRow[] {
+  const changes: ConfirmSplitChangeRow[] = [];
+  const originalById = new Map(originalMembers.map((m) => [m.memberId, m]));
+  const newById = new Map(newMembers.map((m) => [m.memberId, m]));
+
+  // Check for removed members
+  for (const [id, orig] of originalById) {
+    if (!newById.has(id)) {
+      const firstName = orig.displayName.split('(')[0]?.trim() || orig.displayName;
+      changes.push({
+        label: `${firstName} removed`,
+        newValue: '—',
+        variant: 'removed',
+      });
+    }
+  }
+
+  // Check for added and changed members
+  for (const newMem of newMembers) {
+    const orig = originalById.get(newMem.memberId);
+    if (!orig) {
+      // New member added
+      const firstName = newMem.displayName.split('(')[0]?.trim() || newMem.displayName;
+      changes.push({
+        label: `${firstName} added`,
+        newValue: `${formatUsdFromCents(newMem.amountCents)} · ${Math.round(newMem.percent)}%`,
+      });
+    } else {
+      // Check if amount or percent changed
+      if (
+        Math.abs(newMem.percent - orig.percent) > 0.01 ||
+        Math.abs(newMem.amountCents - orig.amountCents) > 1
+      ) {
+        const firstName = newMem.displayName.split('(')[0]?.trim() || newMem.displayName;
+        changes.push({
+          label: `${firstName}'s share`,
+          oldValue: `${formatUsdFromCents(orig.amountCents)} · ${Math.round(orig.percent)}%`,
+          newValue: `${formatUsdFromCents(newMem.amountCents)} · ${Math.round(newMem.percent)}%`,
+        });
+      }
+    }
+  }
+
+  return changes;
+}
+
 export default function EditSplitScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -122,6 +181,7 @@ export default function EditSplitScreen() {
   const firebaseUid = useFirebaseUid();
   const { avatarUrl: userAvatarUrl } = useProfileAvatarUrl();
   const { firstName: viewerFirstName } = useViewerFirstName();
+  const splitPrefs = useMergedSplitPreferences();
 
   const { detail, loading, error } = useSubscriptionDetailFromFirestore(
     subscriptionId,
@@ -136,6 +196,8 @@ export default function EditSplitScreen() {
   const [customPercentStr, setCustomPercentStr] = useState<string[]>([]);
   const [fixedDollarStr, setFixedDollarStr] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
+  const [confirmSheetVisible, setConfirmSheetVisible] = useState(false);
+  const [pendingSaveMembers, setPendingSaveMembers] = useState<WizardMemberRow[] | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const debouncedSearch = useDebouncedValue(searchQuery.trim(), 300);
   const [searchResults, setSearchResults] = useState<FriendSearchUserRow[]>([]);
@@ -185,18 +247,19 @@ export default function EditSplitScreen() {
     initialPercentByMemberIdRef.current = pctMap;
     initialFixedByMemberIdRef.current = fxMap;
     initialMemberIdsRef.current = new Set(r.map((x) => x.memberId));
+    const selectedMode = defaultMethodToEditor(splitPrefs.defaultSplitMethod);
     setRows(r);
     setCustomPercentStr(cp);
     setFixedDollarStr(fd);
-    setMode('equal');
+    setMode(selectedMode);
     didInit.current = true;
     initialSnapshotRef.current = JSON.stringify({
       rows: r,
-      mode: 'equal' as SplitEditorMode,
+      mode: selectedMode,
       customPercentStr: cp,
       fixedDollarStr: fd,
     });
-  }, [detail, firebaseUid]);
+  }, [detail, firebaseUid, splitPrefs.defaultSplitMethod]);
 
   useEffect(() => {
     if (!debouncedSearch || debouncedSearch.length < 3 || !firebaseUid) {
@@ -443,21 +506,46 @@ export default function EditSplitScreen() {
 
   const performSave = async () => {
     if (!canSave || !detail || !firebaseUid) return;
+    
+    const members = buildWizardMembers();
+    
+    // Check if confirmation is needed
+    if (splitPrefs.confirmBeforeSplitChanges) {
+      const changes = buildSplitChangesList(detail.members, members);
+      setPendingSaveMembers(members);
+      setConfirmSheetVisible(true);
+      return;
+    }
+    
+    // Save immediately without confirmation
+    await commitSave(members);
+  };
+
+  const commitSave = async (members: WizardMemberRow[]) => {
+    if (!detail || !firebaseUid) return;
     setSaving(true);
     try {
-      const members = buildWizardMembers();
+      const effectiveFrom = splitPrefs.changesEffectiveNextCycle ? 'next_cycle' : 'immediate';
       await saveSubscriptionEditSplitToFirestore({
         subscriptionId: detail.id,
         ownerUid: firebaseUid,
         totalCents: detail.totalCents,
         splitMethod: methodToWizard(mode),
         members,
+        effectiveFrom,
       });
       router.back();
     } catch (e) {
       Alert.alert('Could not save', e instanceof Error ? e.message : 'Try again.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const onConfirmChanges = async () => {
+    if (pendingSaveMembers) {
+      setConfirmSheetVisible(false);
+      await commitSave(pendingSaveMembers);
     }
   };
 
@@ -838,7 +926,9 @@ export default function EditSplitScreen() {
                       'Fix amounts to save'
                     ) : (
                       <>
-                        Save changes — <Text style={styles.primarySaveSub}>effective next cycle</Text>
+                        Save changes — <Text style={styles.primarySaveSub}>
+                          effective {splitPrefs.changesEffectiveNextCycle ? 'next cycle' : 'immediately'}
+                        </Text>
                       </>
                     )}
                   </Text>
@@ -851,6 +941,26 @@ export default function EditSplitScreen() {
           </View>
         </View>
       </ScrollView>
+
+      {detail && (
+        <ConfirmSplitChangesBottomSheet
+          isVisible={confirmSheetVisible}
+          onConfirm={onConfirmChanges}
+          onCancel={() => setConfirmSheetVisible(false)}
+          title="Confirm split changes"
+          changes={
+            pendingSaveMembers
+              ? buildSplitChangesList(detail.members, pendingSaveMembers)
+              : []
+          }
+          effectiveMessage={
+            splitPrefs.changesEffectiveNextCycle
+              ? 'Changes will take effect next cycle'
+              : 'Changes will take effect immediately'
+          }
+          loading={saving}
+        />
+      )}
     </KeyboardAvoidingView>
   );
 }
