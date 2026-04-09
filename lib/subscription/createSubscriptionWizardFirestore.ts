@@ -66,17 +66,34 @@ export function isLikelyFirebaseUid(uid: string): boolean {
 export async function runSubscriptionWizardSideEffects(
   subscriptionId: string,
   _input: CreateSubscriptionWizardInput,
-  opts?: { isUpdate?: boolean }
+  opts?: {
+    isUpdate?: boolean;
+    changeType?: 'member_added' | 'member_removed' | 'amounts_changed' | 'mixed';
+    addedMemberUid?: string;
+    addedMemberName?: string;
+  }
 ): Promise<void> {
   const fns = getFirebaseFunctions();
   if (!fns) return;
 
   try {
-    const finalize = httpsCallable<{ subscriptionId: string; isUpdate?: boolean }, { ok?: boolean; skipped?: boolean }>(
-      fns,
-      'finalizeSubscriptionWizard'
-    );
-    await finalize({ subscriptionId, isUpdate: opts?.isUpdate ?? false });
+    const finalize = httpsCallable<
+      {
+        subscriptionId: string;
+        isUpdate?: boolean;
+        changeType?: string;
+        addedMemberUid?: string;
+        addedMemberName?: string;
+      },
+      { ok?: boolean; skipped?: boolean }
+    >(fns, 'finalizeSubscriptionWizard');
+    await finalize({
+      subscriptionId,
+      isUpdate: opts?.isUpdate ?? false,
+      changeType: opts?.changeType,
+      addedMemberUid: opts?.addedMemberUid,
+      addedMemberName: opts?.addedMemberName,
+    });
   } catch (e) {
     const code =
       e && typeof e === 'object' && 'code' in e ? String((e as { code: string }).code) : '';

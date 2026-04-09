@@ -1664,6 +1664,16 @@ exports.onSubscriptionSplitLifecycleActivity = onDocumentUpdated('subscriptions/
   const ta = subscriptionTotalCents(after);
   if (tb != null && ta != null && tb !== ta) return;
 
+  // When the roster itself changed (member added or removed), the finalizeSubscriptionWizard
+  // callable sends the correct membership notification. Suppress the generic percentage push
+  // so members don't get both.
+  const bShareIds = new Set(bShares.map((s) => s?.memberId).filter(Boolean));
+  const aShareIds = new Set(aShares.map((s) => s?.memberId).filter(Boolean));
+  const rosterChanged =
+    aShares.some((s) => s?.memberId && !bShareIds.has(s.memberId)) ||
+    bShares.some((s) => s?.memberId && !aShareIds.has(s.memberId));
+  if (rosterChanged) return;
+
   const changes = buildSharePercentChanges(bShares, aShares);
   if (changes.length === 0) return;
 
@@ -2064,6 +2074,15 @@ exports.finalizeSubscriptionWizard = onCall(async (request) => {
     throw new HttpsError('invalid-argument', 'Expected { subscriptionId: string }.');
   }
   const isUpdate = request.data?.isUpdate === true;
+  const changeType = typeof request.data?.changeType === 'string' ? request.data.changeType : null;
+  const addedMemberUid =
+    typeof request.data?.addedMemberUid === 'string' && request.data.addedMemberUid.trim()
+      ? request.data.addedMemberUid.trim()
+      : null;
+  const addedMemberName =
+    typeof request.data?.addedMemberName === 'string' && request.data.addedMemberName.trim()
+      ? request.data.addedMemberName.trim()
+      : null;
 
   const db = admin.firestore();
   const subRef = db.collection('subscriptions').doc(subscriptionId.trim());
@@ -2093,31 +2112,70 @@ exports.finalizeSubscriptionWizard = onCall(async (request) => {
 
   const shares = Array.isArray(sub.splitMemberShares) ? sub.splitMemberShares : [];
   const notified = new Set();
-  const memberBody = isUpdate
-    ? `${senderName} updated the ${serviceName} split`
-    : `${senderName} added you to ${serviceName}`;
 
-  for (const share of shares) {
-    if (!share || share.role === 'owner' || share.invitePending) continue;
-    const mid = share.memberId;
-    if (typeof mid !== 'string' || !mid.trim() || mid === ownerUid) continue;
-    if (notified.has(mid)) continue;
-    notified.add(mid);
-
-    await sendMySplitPushToUser(db, mid, memberBody, {
-      type: isUpdate ? 'split_updated' : 'split_member_added',
+  if (!isUpdate) {
+    // Create flow: notify members they were added, confirm to owner.
+    for (const share of shares) {
+      if (!share || share.role === 'owner' || share.invitePending) continue;
+      const mid = share.memberId;
+      if (typeof mid !== 'string' || !mid.trim() || mid === ownerUid) continue;
+      if (notified.has(mid)) continue;
+      notified.add(mid);
+      await sendMySplitPushToUser(db, mid, `${senderName} added you to ${serviceName}`, {
+        type: 'split_member_added',
+        subscriptionId: subRef.id,
+        inviterUid: ownerUid,
+      });
+    }
+    await sendMySplitPushToUser(db, ownerUid, `Your ${serviceName} split is set up.`, {
+      type: 'subscription_wizard_complete',
       subscriptionId: subRef.id,
-      inviterUid: ownerUid,
+    });
+  } else if (changeType === 'member_added') {
+    // Notify existing active members (not owner, not the newly added member).
+    const addedDisplayName = addedMemberName || 'a new member';
+    for (const share of shares) {
+      if (!share || share.role === 'owner' || share.invitePending) continue;
+      const mid = share.memberId;
+      if (typeof mid !== 'string' || !mid.trim() || mid === ownerUid || mid === addedMemberUid) continue;
+      if (notified.has(mid)) continue;
+      notified.add(mid);
+      await sendMySplitPushToUser(db, mid, `${senderName} added ${addedDisplayName} to ${serviceName}`, {
+        type: 'split_member_added',
+        subscriptionId: subRef.id,
+        inviterUid: ownerUid,
+      });
+    }
+    // Notify the newly added member if they are active (not invite-pending).
+    if (addedMemberUid && addedMemberUid !== ownerUid) {
+      const addedShare = shares.find((s) => s && s.memberId === addedMemberUid);
+      if (addedShare && !addedShare.invitePending) {
+        await sendMySplitPushToUser(db, addedMemberUid, `${senderName} added you to ${serviceName}`, {
+          type: 'split_member_added',
+          subscriptionId: subRef.id,
+          inviterUid: ownerUid,
+        });
+      }
+    }
+  } else {
+    // Generic update (member removed, amounts changed, or mixed).
+    for (const share of shares) {
+      if (!share || share.role === 'owner' || share.invitePending) continue;
+      const mid = share.memberId;
+      if (typeof mid !== 'string' || !mid.trim() || mid === ownerUid) continue;
+      if (notified.has(mid)) continue;
+      notified.add(mid);
+      await sendMySplitPushToUser(db, mid, `${senderName} updated the ${serviceName} split`, {
+        type: 'split_updated',
+        subscriptionId: subRef.id,
+        inviterUid: ownerUid,
+      });
+    }
+    await sendMySplitPushToUser(db, ownerUid, `You updated the ${serviceName} split`, {
+      type: 'split_updated',
+      subscriptionId: subRef.id,
     });
   }
-
-  const ownerBody = isUpdate
-    ? `You updated the ${serviceName} split`
-    : `Your ${serviceName} split is set up.`;
-  await sendMySplitPushToUser(db, ownerUid, ownerBody, {
-    type: isUpdate ? 'split_updated' : 'subscription_wizard_complete',
-    subscriptionId: subRef.id,
-  });
 
   return { ok: true };
 });

@@ -209,6 +209,52 @@ export async function saveSubscriptionEditSplitToFirestore(opts: {
     rosterTyped
   );
 
+  // ── Detect what actually changed so the callable can send the right push ──
+  const prevNonOwnerIds = new Set(
+    prevShares
+      .filter((s) => s && s.role !== 'owner')
+      .map((s) => String((s as { memberId?: string }).memberId ?? ''))
+      .filter(Boolean)
+  );
+  const newNonOwnerIds = new Set(
+    (syncedShares as Record<string, unknown>[])
+      .filter((s) => (s as { role?: string }).role !== 'owner')
+      .map((s) => String((s as { memberId?: string }).memberId ?? ''))
+      .filter(Boolean)
+  );
+  const addedIds = [...newNonOwnerIds].filter((id) => !prevNonOwnerIds.has(id));
+  const removedIds = [...prevNonOwnerIds].filter((id) => !newNonOwnerIds.has(id));
+  const memberAmountsChanged = (syncedShares as Record<string, unknown>[]).some((s) => {
+    if ((s as { role?: string }).role === 'owner') return false;
+    const id = String((s as { memberId?: string }).memberId ?? '');
+    const prevRow = prevShares.find((p) => String((p as { memberId?: string }).memberId ?? '') === id);
+    return prevRow != null && (prevRow as { percent?: number }).percent !== (s as { percent?: number }).percent;
+  });
+
+  let changeType: 'member_added' | 'member_removed' | 'amounts_changed' | 'mixed';
+  if (addedIds.length > 0 && removedIds.length === 0) {
+    changeType = 'member_added';
+  } else if (removedIds.length > 0 && addedIds.length === 0) {
+    changeType = 'member_removed';
+  } else if (memberAmountsChanged && addedIds.length === 0 && removedIds.length === 0) {
+    changeType = 'amounts_changed';
+  } else {
+    changeType = 'mixed';
+  }
+
+  const addedShare =
+    changeType === 'member_added'
+      ? (syncedShares as Record<string, unknown>[]).find((s) =>
+          addedIds.includes(String((s as { memberId?: string }).memberId ?? ''))
+        )
+      : undefined;
+  const addedMemberUid = addedShare
+    ? String((addedShare as { memberId?: string }).memberId ?? '') || undefined
+    : undefined;
+  const addedMemberName = addedShare
+    ? String((addedShare as { displayName?: string }).displayName ?? '') || undefined
+    : undefined;
+
   await updateDoc(subRef, {
     splitMethod: input.splitMethod,
     splitMemberShares: syncedShares,
@@ -231,5 +277,10 @@ export async function saveSubscriptionEditSplitToFirestore(opts: {
     source: 'edit_split',
   });
 
-  await runSubscriptionWizardSideEffects(opts.subscriptionId, input, { isUpdate: true });
+  await runSubscriptionWizardSideEffects(opts.subscriptionId, input, {
+    isUpdate: true,
+    changeType,
+    addedMemberUid,
+    addedMemberName,
+  });
 }
