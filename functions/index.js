@@ -421,9 +421,20 @@ async function mergeSplitInviteMember(db, subscriptionId, inviteId, acceptedBy) 
 }
 
 /** Push to the split owner: "[Accepter] accepted your invite to [Subscription]". */
-async function sendSplitInviteAcceptedNotification(db, ownerUid, subscriptionId, acceptedBy) {
+async function sendSplitInviteAcceptedNotification(db, _inviteCreatedBy, subscriptionId, acceptedBy) {
   const subSnap = await db.collection('subscriptions').doc(subscriptionId).get();
+  if (!subSnap.exists) return;
   const sub = subSnap.data() || {};
+
+  // Derive the recipient exclusively from the subscription document — never trust the invite's
+  // createdBy field, which can be stale or point to the wrong user if ownership changed.
+  const subOwnerUid = typeof sub.ownerUid === 'string' && sub.ownerUid.trim() ? sub.ownerUid.trim() : null;
+  if (!subOwnerUid || subOwnerUid === acceptedBy) return;
+
+  // Confirm the accepter is actually a member of this specific split.
+  const memberUids = Array.isArray(sub.memberUids) ? sub.memberUids : [];
+  if (!memberUids.includes(acceptedBy)) return;
+
   const serviceName = subscriptionLabelFromData(sub);
   const accepterDoc = await db.collection('users').doc(acceptedBy).get();
   const ad = accepterDoc.data() || {};
@@ -433,7 +444,7 @@ async function sendSplitInviteAcceptedNotification(db, ownerUid, subscriptionId,
   const body = `${accepterName} accepted your invite to ${serviceName}`;
   await sendMySplitPushToUser(
     db,
-    ownerUid,
+    subOwnerUid,
     body,
     { type: 'split_invite_accepted', subscriptionId, acceptedByUid: acceptedBy },
     { title: 'mySplit' }
@@ -2188,6 +2199,7 @@ exports.notifySplitEnded = onCall(async (request) => {
   if (!request.auth) {
     throw new HttpsError('unauthenticated', 'Sign in required.');
   }
+  const callerUid = request.auth.uid;
   const { subscriptionId, recipientUids, title, body } = request.data ?? {};
   if (typeof subscriptionId !== 'string' || !subscriptionId.trim()) {
     throw new HttpsError('invalid-argument', 'Expected { subscriptionId: string }.');
@@ -2197,13 +2209,28 @@ exports.notifySplitEnded = onCall(async (request) => {
   }
 
   const db = admin.firestore();
+  const subSnap = await db.collection('subscriptions').doc(subscriptionId.trim()).get();
+  if (!subSnap.exists) {
+    throw new HttpsError('not-found', 'Subscription not found.');
+  }
+  const sub = subSnap.data();
+
+  // Only the subscription owner may send this notification.
+  if (sub.ownerUid !== callerUid) {
+    throw new HttpsError('permission-denied', 'Only the split owner can send end-split notifications.');
+  }
+
+  // Validate recipients against the subscription's own member list so the client cannot
+  // inject arbitrary UIDs and push to users unrelated to this split.
+  const authorizedUids = new Set(Array.isArray(sub.memberUids) ? sub.memberUids : []);
+
   const dataPayload = { type: 'split_ended', subscriptionId: subscriptionId.trim() };
   const notifTitle = typeof title === 'string' && title.trim() ? title.trim() : 'Split ended';
   const notifBody = typeof body === 'string' && body.trim() ? body.trim() : notifTitle;
 
   await Promise.all(
     recipientUids
-      .filter((uid) => typeof uid === 'string' && uid.trim())
+      .filter((uid) => typeof uid === 'string' && uid.trim() && authorizedUids.has(uid.trim()))
       .map((uid) =>
         sendMySplitPushToUser(db, uid.trim(), notifBody, dataPayload, { title: notifTitle })
       )
