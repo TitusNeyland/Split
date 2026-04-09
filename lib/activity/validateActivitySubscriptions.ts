@@ -45,12 +45,20 @@ export async function collectInvalidSubscriptionIds(
   const invalidSubscriptionIds = new Set<string>();
   await Promise.all(
     subIds.map(async (id) => {
-      const snap = await getDoc(doc(db, 'subscriptions', id));
-      const status = snap.exists()
-        ? String((snap.data() as { status?: string }).status ?? 'active').toLowerCase()
-        : '';
-      if (!snap.exists() || status !== 'active') {
-        invalidSubscriptionIds.add(id);
+      try {
+        const snap = await getDoc(doc(db, 'subscriptions', id));
+        const status = snap.exists()
+          ? String((snap.data() as { status?: string }).status ?? 'active').toLowerCase()
+          : '';
+        if (!snap.exists() || status !== 'active') {
+          invalidSubscriptionIds.add(id);
+        }
+      } catch (error) {
+        // If we can't read the subscription (e.g., permission denied because user is no longer
+        // a member), treat it as "valid" and don't mark the activity as stale. This gracefully
+        // handles the case where activity events reference subscriptions the user is no longer
+        // a member of (split left, invite declined, removed from group, etc.).
+        console.debug(`Failed to validate subscription ${id}:`, error);
       }
     })
   );

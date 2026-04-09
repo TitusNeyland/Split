@@ -828,7 +828,15 @@ export default function ActivityScreen() {
           ...e,
           ...activityEventPatchesRef.current[e.id],
         }));
-        const { invalidSubscriptionIds } = await collectInvalidSubscriptionIds(merged);
+        let invalidSubscriptionIds: Set<string> = new Set();
+        try {
+          const result = await collectInvalidSubscriptionIds(merged);
+          invalidSubscriptionIds = result.invalidSubscriptionIds;
+        } catch (error) {
+          // Log but don't crash if subscription validation fails. Some subscriptions may be
+          // inaccessible due to permission constraints when user is no longer a member.
+          console.error('Failed to collect invalid subscriptions:', error);
+        }
         if (invalidSubscriptionIds.size === 0) return;
 
         setActivityEventPatches((prev) => {
