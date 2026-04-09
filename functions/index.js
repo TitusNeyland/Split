@@ -1814,6 +1814,87 @@ exports.notifyUpcomingRenewals = onSchedule('every day 09:00', async () => {
 });
 
 /**
+ * Daily at 09:00 UTC: sends automatic payment reminders to defaulting members if the subscription
+ * owner has `autoReminders` preference enabled. Only sends to members who are overdue.
+ * Respects the `autoReminders` preference flag.
+ */
+exports.sendAutoPaymentReminders = onSchedule('every day 09:00', async () => {
+  const db = admin.firestore();
+  const now = new Date();
+
+  // Find subscriptions with autoCharge enabled and nextBillingAt in the past (overdue)
+  const snap = await db
+    .collection('subscriptions')
+    .where('status', '==', 'active')
+    .where('autoCharge', '==', true)
+    .where('nextBillingAt', '<=', admin.firestore.Timestamp.fromDate(now))
+    .limit(500)
+    .get();
+
+  for (const doc of snap.docs) {
+    const sub = doc.data();
+    const ownerUid = typeof sub.ownerUid === 'string' ? sub.ownerUid : '';
+    if (!ownerUid) continue;
+
+    // Check if owner has autoReminders enabled
+    const ownerDoc = await db.collection('users').doc(ownerUid).get();
+    const autoRemindersEnabled = ownerDoc.data()?.notificationPreferences?.autoReminders;
+    if (autoRemindersEnabled !== true) continue;
+
+    // Find members with pending payments
+    const memberPaymentStatus = sub.memberPaymentStatus || {};
+    const shares = Array.isArray(sub.splitMemberShares) ? sub.splitMemberShares : [];
+    const subName = subscriptionLabelFromData(sub);
+    const ownerName = await getUserDisplayName(db, ownerUid);
+
+    for (const [memberUid, status] of Object.entries(memberPaymentStatus)) {
+      if (status !== 'pending') continue; // only remind those who haven't paid
+
+      const share = shares.find((s) => s && s.memberId === memberUid);
+      const amountCents = share && typeof share.amountCents === 'number' ? share.amountCents : 0;
+      const dollars = (amountCents / 100).toFixed(2);
+      const memberName = await getUserDisplayName(db, memberUid);
+
+      try {
+        // Send reminder to member
+        await sendMySplitPushToUser(
+          db,
+          memberUid,
+          `${ownerName} sent you a payment reminder · $${dollars} for ${subName}`,
+          { type: 'reminder_received', subscriptionId: doc.id },
+          { title: `Reminder: ${subName}` }
+        );
+
+        // Log activity
+        await appendActivityEvent(db, ownerUid, {
+          type: 'reminder_sent',
+          subscriptionId: doc.id,
+          subscriptionName: subName,
+          serviceId: slugifyServiceIdFromName(subName),
+          actorUid: memberUid,
+          actorName: memberName,
+          amount: amountCents,
+          metadata: { isAutoReminder: true },
+        });
+
+        await appendActivityEvent(db, memberUid, {
+          type: 'reminder_received',
+          subscriptionId: doc.id,
+          subscriptionName: subName,
+          serviceId: slugifyServiceIdFromName(subName),
+          actorUid: ownerUid,
+          actorName: ownerName,
+          amount: amountCents,
+          metadata: { isAutoReminder: true },
+        });
+      } catch (e) {
+        console.warn('sendAutoPaymentReminders: failed for', memberUid, e?.message || e);
+      }
+    }
+  }
+});
+
+/**
  * Owner sends a payment reminder to a member: `reminder_sent` (owner) + `reminder_received` (member).
  *
  * Input: `{ subscriptionId: string, memberUid: string }`

@@ -44,6 +44,62 @@ function subscriptionLabelFromData(sub) {
 }
 
 /**
+ * Sends a push notification via Expo Push API.
+ * Respects user's notificationPreferences.
+ */
+async function sendPushNotification(db, uid, body, dataPayload, prefKey) {
+  if (!uid) return;
+  
+  // Check notification preferences
+  const userDoc = await db.collection('users').doc(uid).get();
+  const userData = userDoc.data();
+  const prefs = userData?.notificationPreferences;
+  
+  // Check master toggle
+  if (prefs && prefs.notificationsEnabled === false) return;
+  
+  // Check specific preference
+  if (prefKey && prefs && prefs[prefKey] === false) return;
+  
+  // Get FCM tokens
+  const sessionsSnap = await db.collection('users').doc(uid).collection('sessions').get();
+  const tokens = [];
+  sessionsSnap.docs.forEach((d) => {
+    const t = d.data().fcmToken;
+    if (typeof t === 'string' && t.trim()) tokens.push(t.trim());
+  });
+  
+  if (tokens.length === 0) return;
+  
+  // Send via Expo
+  const messages = tokens.map((token) => ({
+    to: token,
+    title: 'mySplit',
+    body,
+    data: dataPayload || {},
+    sound: 'default',
+  }));
+  
+  for (let i = 0; i < messages.length; i += 100) {
+    const batch = messages.slice(i, i + 100);
+    try {
+      const res = await fetch('https://exp.host/--/api/v2/push/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify(batch),
+      });
+      if (!res.ok) {
+        console.warn('sendPushNotification: Expo API error', res.status);
+      } else {
+        console.log(`sendPushNotification: sent ${batch.length} notification(s) to ${uid}`);
+      }
+    } catch (e) {
+      console.warn('sendPushNotification: Expo push failed', e?.message || e);
+    }
+  }
+}
+
+/**
  * Stripe webhook: `payment_intent.payment_failed` → activity on payer + subscription owner feeds.
  * Configure `STRIPE_WEBHOOK_SECRET` and point Stripe to `POST /api/stripe/webhook` (raw body).
  */
@@ -143,6 +199,20 @@ export async function stripeWebhookHandler(req, res) {
     .collection('activity')
     .doc(docId)
     .set({ ...payload, createdAt: ts }, { merge: true });
+
+  // Send push notification to subscription owner if they have paymentFailed preference enabled
+  try {
+    const dollars = (amountCents / 100).toFixed(2);
+    await sendPushNotification(
+      db,
+      ownerUid,
+      `${actorName} failed to pay $${dollars} for ${subName}`,
+      { type: 'payment_failed', subscriptionId },
+      'paymentFailed'
+    );
+  } catch (e) {
+    console.warn('Failed to send payment_failed notification:', e?.message || e);
+  }
 
   res.json({ received: true });
 }
