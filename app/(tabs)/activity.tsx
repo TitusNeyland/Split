@@ -1400,7 +1400,7 @@ const styles = StyleSheet.create({
   hstatValGreen: {
     fontSize: 30,
     fontWeight: '600',
-    color: '#86efac',
+    color: '#22c55e',
     marginBottom: 4,
     letterSpacing: -0.5,
     width: '100%',
