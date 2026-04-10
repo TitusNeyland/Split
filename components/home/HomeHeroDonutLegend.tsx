@@ -8,13 +8,13 @@ const DOT_GREEN = '#22C55E';
 const DOT_AMBER = '#EAB308';
 
 export type HomeHeroDonutLegendProps = {
-  youOwe: number;
+  saved: number;
   owedToYou: number;
   overdue: number;
 };
 
 export function HomeHeroDonutLegend({
-  youOwe,
+  saved,
   owedToYou,
   overdue,
 }: HomeHeroDonutLegendProps) {
@@ -22,20 +22,20 @@ export function HomeHeroDonutLegend({
     <View style={styles.legendCol}>
       <View style={styles.legItem}>
         <View style={styles.legDotWrap}>
-          <View style={[styles.legDot, { backgroundColor: DOT_RED }]} />
+          <View style={[styles.legDot, { backgroundColor: DOT_GREEN }]} />
         </View>
         <View style={styles.legContent}>
-          <Text style={styles.legLabel}>You owe</Text>
-          <Text style={[styles.legAmt, { color: DOT_RED }]}>{formatUsdDollarsFixed2(youOwe)}</Text>
+          <Text style={styles.legLabel}>Saved</Text>
+          <Text style={[styles.legAmt, { color: DOT_GREEN }]}>{formatUsdDollarsFixed2(saved)}</Text>
         </View>
       </View>
       <View style={styles.legItem}>
         <View style={styles.legDotWrap}>
-          <View style={[styles.legDot, { backgroundColor: DOT_GREEN }]} />
+          <View style={[styles.legDot, { backgroundColor: '#14B8A6' }]} />
         </View>
         <View style={styles.legContent}>
           <Text style={styles.legLabel}>Owed to you</Text>
-          <Text style={[styles.legAmt, { color: DOT_GREEN }]}>{formatUsdDollarsFixed2(owedToYou)}</Text>
+          <Text style={[styles.legAmt, { color: '#14B8A6' }]}>{formatUsdDollarsFixed2(owedToYou)}</Text>
         </View>
       </View>
       <View style={styles.legItem}>

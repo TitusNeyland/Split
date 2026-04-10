@@ -49,6 +49,8 @@ export type SubscriptionCardProps = {
   nameColor?: string;
   /** Cycle and billing date, e.g. "Monthly · Mar 18". */
   cycleLine: string;
+  /** Savings amount for this split, e.g. "$24.50"; omit to hide savings display. */
+  savedAmount?: string;
   /** User pays the subscription bill. */
   isOwner?: boolean;
   /** Auto-charge: shown as green Auto-on or gray Auto-off; omit both when not applicable. */
@@ -160,6 +162,7 @@ export function SubscriptionCard({
   name,
   nameColor = C.text,
   cycleLine,
+  savedAmount,
   isOwner,
   autoCharge,
   totalAmount,
@@ -213,7 +216,10 @@ export function SubscriptionCard({
           <View style={[styles.topRowRest, faded && styles.fadedContent]}>
             <View style={styles.info}>
               <Text style={[styles.name, { color: nameColor }]}>{name}</Text>
-              <Text style={styles.cycle}>{cycleLine}</Text>
+              <Text style={styles.cycle}>
+                {cycleLine}
+                {savedAmount ? ` · saved ${savedAmount}` : ''}
+              </Text>
               {isOwner || autoCharge === 'on' || autoCharge === 'off' ? (
                 <View style={styles.badgeRow}>
                   {isOwner ? (
