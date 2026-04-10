@@ -53,3 +53,6 @@ export function useRegisterPickMembersApi(api: AddSubscriptionPickMembersApi | n
     return () => setApi(null);
   }, [api, setApi]);
 }
+
+// Default export to satisfy file-based routing (this file should not be routed)
+export default AddSubscriptionPickMembersProvider;

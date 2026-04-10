@@ -21,6 +21,7 @@ import {
 import { getMemberPaymentStatusNormalized } from '../../lib/subscription/subscriptionDerivedMetrics';
 import { getMemberAmountCents } from '../../lib/subscription/memberAmount';
 import { formatUsdFromCents } from '../../lib/format/currency';
+import { useUserProfile } from '../../hooks/useUserProfile';
 import { markSubscriptionMemberPaid } from '../../lib/payment/markSubscriptionMemberPaid';
 import type { MemberSubscriptionDoc } from '../../lib/subscription/memberSubscriptionsFirestore';
 
@@ -54,7 +55,7 @@ type PendingRow = {
   serviceName: string;
   serviceId?: string;
   subName: string;
-  ownerName: string;
+  ownerUid: string;
   amountCents: number;
   isOverdue: boolean;
 };
@@ -144,10 +145,7 @@ export function HomePayNowSheet({
           typeof sub.serviceId === 'string' && sub.serviceId.trim()
             ? sub.serviceId.trim()
             : undefined;
-        const ownerName =
-          typeof sub.payerDisplay === 'string' && sub.payerDisplay.trim()
-            ? sub.payerDisplay.trim()
-            : 'Owner';
+        const ownerUid = getOwnerId(sub);
         const amountCents = getMemberAmountCents(sub, currentUid);
         const isOverdue = getMemberPaymentStatusNormalized(sub, currentUid) === 'overdue';
         return {
@@ -155,7 +153,7 @@ export function HomePayNowSheet({
           serviceName,
           serviceId,
           subName,
-          ownerName,
+          ownerUid,
           amountCents,
           isOverdue,
         };
@@ -278,6 +276,20 @@ type PendingPaymentRowProps = {
 
 function PendingPaymentRow({ row, onPayPress }: PendingPaymentRowProps) {
   return (
+    <PendingRowItem key={row.subId} row={row} onPayPress={onPayPress} />
+  );
+}
+
+type PendingRowItemProps = {
+  row: PendingRow;
+  onPayPress: (row: PendingRow) => void;
+};
+
+function PendingRowItem({ row, onPayPress }: PendingRowItemProps) {
+  const { profile } = useUserProfile(row.ownerUid);
+  const ownerName = profile?.displayName || 'Owner';
+
+  return (
     <View style={styles.paymentCard}>
       <View style={styles.paymentCardLeft}>
         <View style={styles.serviceIconWrap}>
@@ -299,7 +311,7 @@ function PendingPaymentRow({ row, onPayPress }: PendingPaymentRowProps) {
             ) : null}
           </View>
           <Text style={styles.paymentCardOwner} numberOfLines={1}>
-            Owned by {row.ownerName}
+            Owned by {ownerName}
           </Text>
         </View>
       </View>
@@ -330,6 +342,16 @@ function EmptyState() {
       <Text style={styles.emptySub}>Nothing to pay right now</Text>
     </View>
   );
+}
+
+type ConfirmOwnerLineProps = {
+  ownerUid: string;
+};
+
+function ConfirmOwnerLine({ ownerUid }: ConfirmOwnerLineProps) {
+  const { profile } = useUserProfile(ownerUid);
+  const ownerName = profile?.displayName || 'Owner';
+  return <Text style={styles.confirmOwnerLine}>Owned by {ownerName}</Text>;
 }
 
 // ─── Confirm view ─────────────────────────────────────────────────────────────
@@ -366,8 +388,8 @@ function ConfirmView({ row, method, onMethodChange, onConfirm, onBack, confirmin
         />
       </View>
 
+      <ConfirmOwnerLine ownerUid={row.ownerUid} />
       <Text style={styles.confirmSubName}>{row.subName}</Text>
-      <Text style={styles.confirmOwnerLine}>Owned by {row.ownerName}</Text>
       <Text style={styles.confirmAmount}>{formatUsdFromCents(row.amountCents)}</Text>
 
       {row.isOverdue ? (
@@ -564,7 +586,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     flexShrink: 0,
     marginLeft: 10,
-    gap: 6,
+    gap: 14,
   },
   paymentAmount: {
     fontSize: 15,

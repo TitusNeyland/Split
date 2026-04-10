@@ -19,3 +19,6 @@ export type SheetFriend = Omit<WizardMember, 'isOwner' | 'invitePending'> & {
   mutualSubscriptionsCount: number;
   avatarUrl?: string | null;
 };
+
+// Default export to satisfy file-based routing (this file should not be routed)
+export { WizardMember as default };
