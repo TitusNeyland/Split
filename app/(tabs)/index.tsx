@@ -17,7 +17,6 @@ import { useFocusEffect, useScrollToTop } from '@react-navigation/native';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { spacing } from '../../constants/theme';
 import { formatUsdDollarsFixed2 } from '../../lib/format/currency';
-import { getFriendAvatarColors } from '../../lib/friends/friendAvatar';
 import { getFirebaseAuth, isFirebaseConfigured } from '../../lib/firebase';
 import { initialsFromName } from '../../lib/profile';
 import { useProfileAvatarUrl } from '../../hooks/useProfileAvatarUrl';
@@ -700,17 +699,13 @@ export default function HomeScreen() {
           </View>
           {friendBalances.length > 0 ? (
             <View style={styles.listCard}>
-              {friendBalances.map((f, i) => {
-                const av = getFriendAvatarColors(f.id);
-                return (
+              {friendBalances.map((f, i) => (
                 <Pressable
                   key={f.id}
                   style={[styles.friendRow, i === friendBalances.length - 1 && styles.rowLast]}
                   onPress={() => router.push('/friends')}
                 >
-                  <View style={[styles.friendAv, { backgroundColor: av.backgroundColor }]}>
-                    <Text style={[styles.friendAvTxt, { color: av.color }]}>{f.initials}</Text>
-                  </View>
+                  <UserAvatarCircle uid={f.id} size={34} initials={f.initials} />
                   <View style={styles.friendMid}>
                     <Text style={styles.fnName}>{f.name}</Text>
                     <Text style={styles.fnSub}>{f.subLine}</Text>
@@ -720,8 +715,7 @@ export default function HomeScreen() {
                     <Text style={styles.fbAction}>{f.actionLabel}</Text>
                   </View>
                 </Pressable>
-                );
-              })}
+              ))}
             </View>
           ) : (
             <Pressable style={styles.emptyFriends}>
