@@ -189,9 +189,11 @@ export function mapFirestoreSubscriptionToDetailModel(
 
   const ownerRow = rows.find((r) => r.role === 'owner');
   const payerName =
-    ownerRow?.displayName?.trim() ||
-    (typeof data.payerDisplay === 'string' ? data.payerDisplay.trim() : '') ||
-    'Owner';
+    cleanOtherMemberDisplayName(
+      ownerRow?.displayName?.trim() ||
+      (typeof data.payerDisplay === 'string' ? data.payerDisplay.trim() : '') ||
+      'Owner'
+    ) || 'Owner';
 
   const members: SubscriptionDetailMember[] = rows.map((row) => {
     const memberId = String(row.memberId ?? '');
