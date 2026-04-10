@@ -730,7 +730,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   heroTitle: {
-    fontSize: 17,
+    fontSize: 18.5,
     fontWeight: '600',
     color: '#fff',
     letterSpacing: -0.3,
@@ -749,7 +749,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
   },
   invitePillTxt: {
-    fontSize: 11,
+    fontSize: 13.5,
     fontWeight: '500',
     color: '#fff',
   },
@@ -775,17 +775,17 @@ const styles = StyleSheet.create({
     borderColor: C.purple,
   },
   resultsCount: {
-    fontSize: 10,
+    fontSize: 11.5,
     color: C.muted,
   },
   searchInput: {
     flex: 1,
-    fontSize: 13,
+    fontSize: 14.5,
     color: C.text,
     paddingVertical: 0,
   },
   hint: {
-    fontSize: 12,
+    fontSize: 13.5,
     color: C.muted,
     lineHeight: 17,
     marginBottom: 10,
@@ -799,7 +799,7 @@ const styles = StyleSheet.create({
     marginBottom: 9,
   },
   sectionHeaderTitle: {
-    fontSize: 10,
+    fontSize: 12.5,
     fontWeight: '600',
     color: C.muted,
     letterSpacing: 0.7,
@@ -837,7 +837,7 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   friendAvTxt: {
-    fontSize: 12,
+    fontSize: 13.5,
     fontWeight: '600',
   },
   friendMid: {
@@ -845,17 +845,17 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   friendName: {
-    fontSize: 14,
+    fontSize: 16.5,
     fontWeight: '600',
     color: C.text,
   },
   friendSub: {
-    fontSize: 11,
+    fontSize: 13.5,
     color: C.muted,
     marginTop: 2,
   },
   friendMeta: {
-    fontSize: 10,
+    fontSize: 12.5,
     color: C.muted,
     marginTop: 2,
   },
@@ -865,7 +865,7 @@ const styles = StyleSheet.create({
     maxWidth: '36%',
   },
   friendAmt: {
-    fontSize: 12,
+    fontSize: 13.5,
     fontWeight: '700',
     textAlign: 'right',
   },
@@ -882,7 +882,7 @@ const styles = StyleSheet.create({
     opacity: 0.85,
   },
   swipeRemoveTxt: {
-    fontSize: 13,
+    fontSize: 14.5,
     fontWeight: '600',
     color: C.red,
   },
@@ -891,7 +891,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
   },
   filterEmptyTxt: {
-    fontSize: 13,
+    fontSize: 14.5,
     color: C.muted,
     textAlign: 'center',
   },
@@ -917,12 +917,12 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   findTitle: {
-    fontSize: 14,
+    fontSize: 15.5,
     fontWeight: '500',
     color: C.text,
   },
   findSub: {
-    fontSize: 11,
+    fontSize: 13.5,
     color: C.muted,
     marginTop: 2,
   },
@@ -942,7 +942,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   pendingAvTxt: {
-    fontSize: 14,
+    fontSize: 15.5,
     fontWeight: '600',
     color: C.muted,
   },
@@ -951,12 +951,12 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   pendingTitle: {
-    fontSize: 14,
+    fontSize: 15.5,
     fontWeight: '500',
     color: C.text,
   },
   pendingSub: {
-    fontSize: 11,
+    fontSize: 13.5,
     color: C.muted,
     marginTop: 2,
     lineHeight: 15,
@@ -977,7 +977,7 @@ const styles = StyleSheet.create({
     opacity: 0.88,
   },
   resendBtnTxt: {
-    fontSize: 11,
+    fontSize: 13.5,
     fontWeight: '500',
     color: '#5F5E5A',
   },
@@ -991,7 +991,7 @@ const styles = StyleSheet.create({
     opacity: 0.88,
   },
   cancelBtnTxt: {
-    fontSize: 11,
+    fontSize: 13.5,
     fontWeight: '600',
     color: C.red,
   },
@@ -1018,14 +1018,14 @@ const styles = StyleSheet.create({
     borderColor: C.sheetBg,
   },
   emptyHeroTitle: {
-    fontSize: 18,
+    fontSize: 19.5,
     fontWeight: '700',
     color: C.text,
     marginBottom: 8,
     letterSpacing: -0.3,
   },
   emptyHeroSub: {
-    fontSize: 13,
+    fontSize: 14.5,
     color: C.muted,
     textAlign: 'center',
     lineHeight: 20,
@@ -1043,7 +1043,7 @@ const styles = StyleSheet.create({
     opacity: 0.92,
   },
   emptyPrimaryBtnTxt: {
-    fontSize: 15,
+    fontSize: 16.5,
     fontWeight: '600',
     color: '#fff',
   },
@@ -1059,7 +1059,7 @@ const styles = StyleSheet.create({
     opacity: 0.88,
   },
   emptySecondaryBtnTxt: {
-    fontSize: 14,
+    fontSize: 15.5,
     color: C.muted,
     fontWeight: '500',
   },
@@ -1089,7 +1089,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   resultAvTxt: {
-    fontSize: 13,
+    fontSize: 14.5,
     fontWeight: '600',
   },
   resultMid: {
@@ -1097,12 +1097,12 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   resultTitle: {
-    fontSize: 14,
+    fontSize: 15.5,
     fontWeight: '600',
     color: C.text,
   },
   resultSub: {
-    fontSize: 11,
+    fontSize: 13.5,
     color: C.muted,
     marginTop: 2,
   },
@@ -1122,7 +1122,7 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   connectBtnTxt: {
-    fontSize: 12,
+    fontSize: 14.5,
     fontWeight: '600',
     color: '#fff',
   },
@@ -1135,12 +1135,12 @@ const styles = StyleSheet.create({
     borderRadius: 9,
   },
   friendsPillTxt: {
-    fontSize: 10,
+    fontSize: 11.5,
     fontWeight: '600',
     color: '#0F6E56',
   },
   invitedLbl: {
-    fontSize: 12,
+    fontSize: 13.5,
     fontWeight: '500',
     color: C.muted,
   },
@@ -1159,7 +1159,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   discoveryEmptyTxt: {
-    fontSize: 13,
+    fontSize: 14.5,
     fontWeight: '600',
     color: C.text,
     textAlign: 'center',
@@ -1177,7 +1177,7 @@ const styles = StyleSheet.create({
     opacity: 0.9,
   },
   discoveryInviteBtnTxt: {
-    fontSize: 13,
+    fontSize: 14.5,
     fontWeight: '600',
     color: C.purple,
   },
