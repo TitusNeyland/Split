@@ -3,19 +3,19 @@ import { View, Text, StyleSheet } from 'react-native';
 import { formatUsdDollarsFixed2 } from '../../lib/format/currency';
 
 /** Same hex as `HomeDonutChart` ring segments (dots + amounts). */
-const DOT_RED = '#EF4444';
 const DOT_GREEN = '#22C55E';
-const DOT_AMBER = '#EAB308';
+const PENDING_BLUE = '#60a5fa';
+const OVERDUE_AMBER = '#f59e0b';
 
 export type HomeHeroDonutLegendProps = {
   saved: number;
-  owedToYou: number;
+  pending: number;
   overdue: number;
 };
 
 export function HomeHeroDonutLegend({
   saved,
-  owedToYou,
+  pending,
   overdue,
 }: HomeHeroDonutLegendProps) {
   return (
@@ -31,20 +31,20 @@ export function HomeHeroDonutLegend({
       </View>
       <View style={styles.legItem}>
         <View style={styles.legDotWrap}>
-          <View style={[styles.legDot, { backgroundColor: '#14B8A6' }]} />
+          <View style={[styles.legDot, { backgroundColor: PENDING_BLUE }]} />
         </View>
         <View style={styles.legContent}>
-          <Text style={styles.legLabel}>Owed to you</Text>
-          <Text style={[styles.legAmt, { color: '#14B8A6' }]}>{formatUsdDollarsFixed2(owedToYou)}</Text>
+          <Text style={styles.legLabel}>Pending</Text>
+          <Text style={[styles.legAmt, { color: PENDING_BLUE }]}>{formatUsdDollarsFixed2(pending)}</Text>
         </View>
       </View>
       <View style={styles.legItem}>
         <View style={styles.legDotWrap}>
-          <View style={[styles.legDot, { backgroundColor: DOT_AMBER }]} />
+          <View style={[styles.legDot, { backgroundColor: OVERDUE_AMBER }]} />
         </View>
         <View style={styles.legContent}>
-          <Text style={styles.legLabel}>Pending</Text>
-          <Text style={[styles.legAmt, { color: DOT_AMBER }]}>{formatUsdDollarsFixed2(overdue)}</Text>
+          <Text style={styles.legLabel}>Owed to you</Text>
+          <Text style={[styles.legAmt, { color: OVERDUE_AMBER }]}>{formatUsdDollarsFixed2(overdue)}</Text>
         </View>
       </View>
     </View>

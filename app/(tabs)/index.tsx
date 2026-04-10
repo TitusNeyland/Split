@@ -140,7 +140,7 @@ export default function HomeScreen() {
     subscriptions,
     loading: subscriptionsLoading,
     youOweCents,
-    owedToYouCents,
+    pendingCents,
     overdueCents,
     savedThisMonthCents,
   } = useSubscriptions();
@@ -162,14 +162,14 @@ export default function HomeScreen() {
   const isEmpty = Boolean(uid) && !subscriptionsLoading && !hasSubscriptions;
 
   const financial = useMemo(() => {
-    if (!uid) return { youOwe: 0, owedToYou: 0, overdue: 0, savedThisMonth: 0 };
+    if (!uid) return { youOwe: 0, pending: 0, overdue: 0, savedThisMonth: 0 };
     return {
       youOwe: youOweCents / 100,
-      owedToYou: owedToYouCents / 100,
+      pending: pendingCents / 100,
       overdue: overdueCents / 100,
       savedThisMonth: savedThisMonthCents / 100,
     };
-  }, [uid, youOweCents, owedToYouCents, overdueCents, savedThisMonthCents]);
+  }, [uid, youOweCents, pendingCents, overdueCents, savedThisMonthCents]);
 
   const position: HomeFinancialPosition = useMemo(
     () => ({
@@ -470,14 +470,14 @@ export default function HomeScreen() {
             <View style={styles.heroDonutWrap}>
               <HomeDonutChart
                 saved={isEmpty ? 0 : position.savedThisMonth}
-                owedToYou={isEmpty ? 0 : position.owedToYou}
+                pending={isEmpty ? 0 : position.pending}
                 overdue={isEmpty ? 0 : position.overdue}
                 loading={!isEmpty && Boolean(user?.uid) && position.loading}
               />
             </View>
             <HomeHeroDonutLegend
               saved={isEmpty ? 0 : position.savedThisMonth}
-              owedToYou={isEmpty ? 0 : position.owedToYou}
+              pending={isEmpty ? 0 : position.pending}
               overdue={isEmpty ? 0 : position.overdue}
             />
           </View>

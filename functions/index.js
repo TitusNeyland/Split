@@ -2598,6 +2598,80 @@ exports.advanceBillingCycles = onSchedule('every day 02:00', async () => {
   }
 });
 
+/**
+ * Daily job at 01:00 UTC: marks member payments as 'overdue' if today >= their subscription's billingDay.
+ * Transitions members with paymentStatus 'pending' to 'overdue' when the billing day has passed.
+ */
+exports.markOverduePayments = onSchedule('every day 01:00', async () => {
+  const db = admin.firestore();
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const currentDay = today.getDate();
+
+  let startAfter = null;
+
+  while (true) {
+    let q = db
+      .collection('subscriptions')
+      .where('status', '==', 'active')
+      .orderBy(admin.firestore.FieldPath.documentId())
+      .limit(100);
+    if (startAfter) q = q.startAfter(startAfter);
+
+    const snap = await q.get();
+    if (snap.empty) break;
+
+    for (const doc of snap.docs) {
+      const sub = doc.data();
+      if (!sub || typeof sub !== 'object') continue;
+
+      const billingDay = typeof sub.billingDay === 'number' ? sub.billingDay : null;
+      if (billingDay === null) continue;
+
+      // If today >= billingDay, mark any 'pending' members as 'overdue'
+      if (currentDay < billingDay) continue;
+
+      const members = Array.isArray(sub.members) ? sub.members : [];
+      const updatedMembers = members.map((m) => {
+        if (!m || typeof m !== 'object') return m;
+        if (m.paymentStatus === 'pending') {
+          return { ...m, paymentStatus: 'overdue' };
+        }
+        return m;
+      });
+
+      // Check if any changes were made
+      const hasChanges = updatedMembers.some(
+        (m, i) =>
+          m &&
+          i < members.length &&
+          members[i] &&
+          m.paymentStatus !== members[i].paymentStatus
+      );
+
+      if (!hasChanges) continue;
+
+      try {
+        await doc.ref.update({
+          members: updatedMembers,
+          splitUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        console.log(
+          `markOverduePayments: marked pending→overdue for ${doc.id} (billingDay=${billingDay})`
+        );
+      } catch (e) {
+        console.warn(
+          `markOverduePayments: update failed for ${doc.id}`,
+          e?.message || e
+        );
+      }
+    }
+
+    if (snap.docs.length < 100) break;
+    startAfter = snap.docs[snap.docs.length - 1];
+  }
+});
+
 const INVITE_PENDING_MS = 7 * 24 * 60 * 60 * 1000;
 
 async function markInviteDocExpired(db, inviteId) {
