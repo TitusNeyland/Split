@@ -83,6 +83,12 @@ const C = {
 /** Rounded square corners for 38×38 tiles; matches `ServiceIcon` (`size * 0.28`). */
 const SERVICE_TILE_RADIUS = Math.round(38 * 0.28);
 
+function daysUntilDate(d: Date): number {
+  const t0 = new Date(); t0.setHours(0, 0, 0, 0);
+  const t1 = new Date(d); t1.setHours(0, 0, 0, 0);
+  return Math.ceil((t1.getTime() - t0.getTime()) / 86400000);
+}
+
 function getGreeting(): string {
   const hour = new Date().getHours();
   if (hour >= 5 && hour < 12) return 'Good morning';
@@ -98,6 +104,7 @@ type FriendRow = {
   subLine: string;
   balanceLabel: string;
   balanceColor: string;
+  balanceFontSize?: number;
   actionLabel: string;
 };
 
@@ -287,20 +294,39 @@ export default function HomeScreen() {
       const owe = r.iOweThemCents / 100;
       let balanceLabel: string;
       let balanceColor: string;
+      let balanceFontSize: number | undefined;
       let actionLabel: string;
       let subLine: string;
-      if (r.theyOweMeCents > 0) {
+      if (r.sortKey === 0) {
+        // overdue
         balanceLabel = `owes ${formatUsdDollarsFixed2(they)}`;
-        balanceColor = C.red;
+        balanceColor = '#f59e0b';
         actionLabel = 'send reminder';
         subLine = 'Subscription split';
-      } else if (r.iOweThemCents > 0) {
+      } else if (r.sortKey === 1) {
+        // pending — not yet due
+        const amt = formatUsdDollarsFixed2(they);
+        if (r.nextDueDate) {
+          const days = daysUntilDate(r.nextDueDate);
+          if (days === 0) { balanceLabel = `Due today · ${amt}`; balanceColor = '#fbbf24'; }
+          else if (days <= 3) { balanceLabel = `Due in ${days}d · ${amt}`; balanceColor = '#fbbf24'; }
+          else { balanceLabel = `Pending · ${amt}`; balanceColor = C.muted; }
+        } else {
+          balanceLabel = `Pending · ${amt}`;
+          balanceColor = C.muted;
+        }
+        balanceFontSize = 14.5;
+        actionLabel = 'send reminder';
+        subLine = 'Subscription split';
+      } else if (r.sortKey === 2) {
+        // you owe
         balanceLabel = `you owe ${formatUsdDollarsFixed2(owe)}`;
         balanceColor = C.purple;
         actionLabel = 'settle up';
         subLine = 'Subscription split';
       } else {
-        balanceLabel = 'settled';
+        // settled
+        balanceLabel = 'Settled';
         balanceColor = C.green;
         actionLabel = 'all clear';
         subLine = 'No pending splits';
@@ -312,6 +338,7 @@ export default function HomeScreen() {
         subLine,
         balanceLabel,
         balanceColor,
+        balanceFontSize,
         actionLabel,
       };
     });
@@ -711,7 +738,7 @@ export default function HomeScreen() {
                     <Text style={styles.fnSub}>{f.subLine}</Text>
                   </View>
                   <View style={styles.friendBal}>
-                    <Text style={[styles.fbAmt, { color: f.balanceColor }]}>{f.balanceLabel}</Text>
+                    <Text style={[styles.fbAmt, { color: f.balanceColor, fontSize: f.balanceFontSize ?? 16 }]}>{f.balanceLabel}</Text>
                     <Text style={styles.fbAction}>{f.actionLabel}</Text>
                   </View>
                 </Pressable>

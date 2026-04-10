@@ -318,7 +318,8 @@ export type FriendBalanceComputed = {
   theyOweMeCents: number;
   iOweThemCents: number;
   netCents: number;
-  sortKey: number;
+  sortKey: number; // 0=overdue, 1=pending, 2=you_owe, 3=settled
+  nextDueDate?: Date; // soonest billing date for a pending split with this friend
 };
 
 export function computeFriendBalances(
@@ -364,12 +365,25 @@ export function computeFriendBalances(
       sortKey = 2;
     }
 
+    let nextDueDate: Date | undefined;
+    if (sortKey === 1) {
+      let earliest: Date | undefined;
+      for (const s of chartSubs) {
+        if (getOwnerId(s) !== viewerUid) continue;
+        if (getMemberPaymentStatusRaw(s, friendUid) !== 'pending') continue;
+        const d = subscriptionNextBillingDate(s);
+        if (d && (!earliest || d < earliest)) earliest = d;
+      }
+      nextDueDate = earliest;
+    }
+
     rows.push({
       friendUid,
       theyOweMeCents,
       iOweThemCents,
       netCents,
       sortKey,
+      nextDueDate,
     });
   }
 
