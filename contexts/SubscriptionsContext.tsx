@@ -13,6 +13,7 @@ import {
   computeOverdueOwedToOwnerCents,
   computeOwedToYouCents,
   computeSavedBySplittingCents,
+  computeSavedThisMonthCents,
   computeYouOweCents,
 } from '../lib/subscription/subscriptionDerivedMetrics';
 
@@ -28,6 +29,7 @@ type SubscriptionsContextValue = {
   overdueCents: number;
   netBalanceCents: number;
   savedBySplittingCents: number;
+  savedThisMonthCents: number;
   collectedThisMonthCents: number;
 };
 
@@ -42,6 +44,7 @@ const SubscriptionsContext = createContext<SubscriptionsContextValue>({
   overdueCents: 0,
   netBalanceCents: 0,
   savedBySplittingCents: 0,
+  savedThisMonthCents: 0,
   collectedThisMonthCents: 0,
 });
 
@@ -84,6 +87,7 @@ export function SubscriptionsProvider({ children }: { children: React.ReactNode 
     const overdueCents = computeOverdueOwedToOwnerCents(subscriptions, uid);
     const netBalanceCents = computeNetBalanceCents(subscriptions, uid);
     const savedBySplittingCents = computeSavedBySplittingCents(subscriptions, uid);
+    const savedThisMonthCents = computeSavedThisMonthCents(subscriptions, uid);
     const collectedThisMonthCents = computeCollectedThisMonthCents(subscriptions, uid);
     return {
       activeCount,
@@ -94,6 +98,7 @@ export function SubscriptionsProvider({ children }: { children: React.ReactNode 
       overdueCents,
       netBalanceCents,
       savedBySplittingCents,
+      savedThisMonthCents,
       collectedThisMonthCents,
     };
   }, [subscriptions, uid]);

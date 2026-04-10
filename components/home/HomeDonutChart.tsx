@@ -47,14 +47,14 @@ function formatNet(n: number): string {
 }
 
 export type HomeDonutChartProps = {
-  youOwe: number;
+  saved: number;
   owedToYou: number;
   overdue: number;
   loading?: boolean;
 };
 
 export function HomeDonutChart({
-  youOwe,
+  saved,
   owedToYou,
   overdue,
   loading = false,
@@ -80,9 +80,9 @@ export function HomeDonutChart({
     ],
   }));
 
-  const total = youOwe + owedToYou + overdue;
-  const values = [youOwe, owedToYou, overdue];
-  const colors = [RED, GREEN, AMBER];
+  const total = saved + owedToYou + overdue;
+  const values = [saved, owedToYou, overdue];
+  const colors = [GREEN, '#14B8A6', AMBER];
   const thetaTotal = 2 * Math.PI - 3 * GAP_RAD;
 
   const segments: { d: string; color: string; opacity: number }[] = [];
@@ -111,12 +111,8 @@ export function HomeDonutChart({
     }
   }
 
-  const net = owedToYou - youOwe;
-  const netColor =
-    net > 0.005 ? '#4ADE80' : net < -0.005 ? '#FB7185' : '#ffffff';
-
   return (
-    <View style={styles.wrap} accessibilityRole="image" accessibilityLabel={`Net balance ${formatNet(net)} this month`}>
+    <View style={styles.wrap} accessibilityRole="image" accessibilityLabel={`Saved this month ${formatUsdDollarsFixed2(saved)} by splitting`}>
       <Animated.View style={[styles.svgClip, wrapStyle]}>
         <Svg width={SIZE} height={SIZE}>
           {segments.map((seg, i) => (
@@ -137,9 +133,9 @@ export function HomeDonutChart({
           <ActivityIndicator color="rgba(255,255,255,0.7)" size="large" />
         ) : (
           <>
-            <Text style={styles.dcLabel}>net balance</Text>
-            <Text style={[styles.dcAmount, { color: netColor }]}>{formatNet(net)}</Text>
-            <Text style={styles.dcSub}>this month</Text>
+            <Text style={styles.dcLabel}>saved this month</Text>
+            <Text style={[styles.dcAmount, { color: GREEN }]}>+{formatUsdDollarsFixed2(saved)}</Text>
+            <Text style={styles.dcSub}>by splitting</Text>
           </>
         )}
       </View>

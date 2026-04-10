@@ -1270,6 +1270,19 @@ exports.onSubscriptionMemberPaymentActivity = onDocumentUpdated('subscriptions/{
         amount: amountCents,
         metadata: { memberUid, cycleMonth },
       });
+      
+      // Increment owner's lifetime_saved by the member's payment amount
+      if (amountCents > 0) {
+        try {
+          await db.collection('users').doc(ownerUid).set(
+            { lifetime_saved: admin.firestore.FieldValue.increment(amountCents / 100) },
+            { merge: true }
+          );
+        } catch (e) {
+          console.warn('onSubscriptionMemberPaymentActivity: lifetime_saved increment failed', e?.message || e);
+        }
+      }
+      
       try {
         const dollars = (amountCents / 100).toFixed(2);
         await sendMySplitPushToUser(

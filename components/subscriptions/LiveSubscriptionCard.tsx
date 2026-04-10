@@ -9,7 +9,10 @@ import {
   getOwnerId,
   lastSeenMsForSubscription,
   normalizeSubscriptionStatus,
+  getTotalCents,
+  getMemberAmountCents,
 } from '../../lib/subscription/subscriptionToCardModel';
+import { formatUsdDollarsFixed2 } from '../../lib/format/currency';
 import type { MemberSubscriptionDoc } from '../../lib/subscription/memberSubscriptionsFirestore';
 
 type Props = {
@@ -44,6 +47,14 @@ export function LiveSubscriptionCard({
   const priceFields = useMemo(() => extractPriceBannerFields(doc), [doc]);
   const userLastSeen = lastSeenMsForSubscription(lastSeenPriceMap, doc.id);
 
+  const savedAmount = useMemo(() => {
+    if (splitEnded) return undefined;
+    const totalCents = getTotalCents(doc);
+    const memberAmountCents = getMemberAmountCents(doc, viewerUid);
+    const savingsCents = totalCents - memberAmountCents;
+    return savingsCents > 0 ? formatUsdDollarsFixed2(savingsCents / 100) : undefined;
+  }, [doc, viewerUid, splitEnded]);
+
   const { visible: priceBannerVisible, message: priceBannerMessage, dismiss: dismissPriceBanner } =
     useSubscriptionPriceBanner({
       subscriptionId: doc.id,
@@ -71,6 +82,7 @@ export function LiveSubscriptionCard({
   return (
     <SubscriptionCard
       {...base}
+      savedAmount={savedAmount}
       faded={splitEnded}
       hideEditSplit={splitEnded}
       splitEndedActions={

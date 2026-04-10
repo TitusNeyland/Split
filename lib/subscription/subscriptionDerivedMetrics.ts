@@ -165,6 +165,24 @@ export function computeSavedBySplittingCents(subs: MemberSubscriptionDoc[], view
   return sum;
 }
 
+/** Sum of (full subscription total − viewer member amount) for active splits where the viewer is a member. */
+export function computeSavedThisMonthCents(subs: MemberSubscriptionDoc[], viewerUid: string): number {
+  if (!viewerUid) return 0;
+  let sum = 0;
+  for (const doc of subs) {
+    const sub = doc as Record<string, unknown>;
+    if (!isActiveSubscription(sub)) continue;
+    const members = sub.members;
+    if (!Array.isArray(members) || !members.some((m) => m && typeof m === 'object' && (m as { uid?: string }).uid === viewerUid)) {
+      continue;
+    }
+    const total = getTotalCents(sub);
+    const myAmount = getMemberAmountCents(sub, viewerUid);
+    sum += total - myAmount;
+  }
+  return sum;
+}
+
 function firestoreTimestampToDate(raw: unknown): Date | null {
   if (raw == null) return null;
   if (
