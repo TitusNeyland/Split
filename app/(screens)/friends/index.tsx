@@ -8,7 +8,6 @@ import {
   TextInput,
   ActivityIndicator,
   Alert,
-  Image,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -17,6 +16,7 @@ import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { Swipeable } from 'react-native-gesture-handler';
 import { Toast } from '../../../components/shared/Toast';
+import { UserAvatarCircle } from '../../../components/shared/UserAvatarCircle';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { getFirebaseAuth, isFirebaseConfigured } from '../../../lib/firebase';
 import {
@@ -80,22 +80,18 @@ function SearchResultRow({
   busy: boolean;
   onConnect: () => void;
 }) {
-  const initials = initialsFromName(row.displayName);
   const colors = getFriendAvatarColors(row.uid);
 
   return (
     <View style={styles.resultRow}>
-      {row.avatarUrl ? (
-        <View style={styles.resultAv}>
-          <Image source={{ uri: row.avatarUrl }} style={styles.resultAvImg} accessibilityLabel="" />
-        </View>
-      ) : (
-        <View style={[styles.resultAv, { backgroundColor: colors.backgroundColor }]}>
-          <Text style={[styles.resultAvTxt, { color: colors.color }]} numberOfLines={1}>
-            {initials}
-          </Text>
-        </View>
-      )}
+      <UserAvatarCircle
+        size={40}
+        uid={row.uid}
+        initials={initialsFromName(row.displayName)}
+        imageUrl={row.avatarUrl}
+        initialsBackgroundColor={colors.backgroundColor}
+        initialsTextColor={colors.color}
+      />
       <View style={styles.resultMid}>
         <Text style={styles.resultTitle} numberOfLines={1}>
           {row.displayName}
@@ -123,9 +119,9 @@ function SearchResultRow({
           accessibilityLabel={`Connect with ${row.displayName}`}
         >
           {busy ? (
-            <ActivityIndicator size="small" color="#fff" />
+            <ActivityIndicator size="small" color={C.purple} />
           ) : (
-            <Text style={styles.connectBtnTxt}>Connect</Text>
+            <Ionicons name="person-add" size={18} color={C.purple} />
           )}
         </Pressable>
       ) : null}
@@ -480,14 +476,14 @@ export default function FriendsScreen() {
                         accessibilityRole="button"
                         accessibilityLabel={`${row.displayName}, ${row.balanceMain}`}
                       >
-                        <View style={[styles.friendAv, { backgroundColor: getFriendAvatarColors(row.id).backgroundColor }]}>
-                          <Text
-                            style={[styles.friendAvTxt, { color: getFriendAvatarColors(row.id).color }]}
-                            numberOfLines={1}
-                          >
-                            {row.initials}
-                          </Text>
-                        </View>
+                        <UserAvatarCircle
+                          size={36}
+                          uid={row.id}
+                          initials={row.initials}
+                          initialsBackgroundColor={getFriendAvatarColors(row.id).backgroundColor}
+                          initialsTextColor={getFriendAvatarColors(row.id).color}
+                          style={{ marginRight: 10 }}
+                        />
                         <View style={styles.friendMid}>
                           <Text style={styles.friendName} numberOfLines={1}>
                             {row.displayName}
@@ -828,18 +824,6 @@ const styles = StyleSheet.create({
   friendRowPressed: {
     opacity: 0.92,
   },
-  friendAv: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 10,
-  },
-  friendAvTxt: {
-    fontSize: 13.5,
-    fontWeight: '600',
-  },
   friendMid: {
     flex: 1,
     minWidth: 0,
@@ -1075,23 +1059,6 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: C.border,
   },
-  resultAv: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    overflow: 'hidden',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  resultAvImg: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-  },
-  resultAvTxt: {
-    fontSize: 14.5,
-    fontWeight: '600',
-  },
   resultMid: {
     flex: 1,
     minWidth: 0,
@@ -1107,11 +1074,11 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   connectBtn: {
-    backgroundColor: C.purple,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-    minWidth: 88,
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: C.purple,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1120,11 +1087,6 @@ const styles = StyleSheet.create({
   },
   connectBtnDisabled: {
     opacity: 0.7,
-  },
-  connectBtnTxt: {
-    fontSize: 14.5,
-    fontWeight: '600',
-    color: '#fff',
   },
   friendsPill: {
     flexDirection: 'row',
