@@ -12,6 +12,7 @@ import {
   computeNetBalanceCents,
   computeOverdueOwedToOwnerCents,
   computeOwedToYouCents,
+  computePendingOwedToOwnerCents,
   computeSavedBySplittingCents,
   computeSavedThisMonthCents,
   computeYouOweCents,
@@ -26,6 +27,7 @@ type SubscriptionsContextValue = {
   myShareCents: number;
   youOweCents: number;
   owedToYouCents: number;
+  pendingCents: number;
   overdueCents: number;
   netBalanceCents: number;
   savedBySplittingCents: number;
@@ -41,6 +43,7 @@ const SubscriptionsContext = createContext<SubscriptionsContextValue>({
   myShareCents: 0,
   youOweCents: 0,
   owedToYouCents: 0,
+  pendingCents: 0,
   overdueCents: 0,
   netBalanceCents: 0,
   savedBySplittingCents: 0,
@@ -84,6 +87,7 @@ export function SubscriptionsProvider({ children }: { children: React.ReactNode 
     const myShareCents = computeMyShareCents(subscriptions, uid);
     const youOweCents = computeYouOweCents(subscriptions, uid);
     const owedToYouCents = computeOwedToYouCents(subscriptions, uid);
+    const pendingCents = computePendingOwedToOwnerCents(subscriptions, uid);
     const overdueCents = computeOverdueOwedToOwnerCents(subscriptions, uid);
     const netBalanceCents = computeNetBalanceCents(subscriptions, uid);
     const savedBySplittingCents = computeSavedBySplittingCents(subscriptions, uid);
@@ -95,6 +99,7 @@ export function SubscriptionsProvider({ children }: { children: React.ReactNode 
       myShareCents,
       youOweCents,
       owedToYouCents,
+      pendingCents,
       overdueCents,
       netBalanceCents,
       savedBySplittingCents,

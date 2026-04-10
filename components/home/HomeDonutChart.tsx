@@ -26,7 +26,8 @@ const GAP_RAD = SPACING_PX / R_MID;
 /** Match hero legend segment dots. */
 const RED = '#EF4444';
 const GREEN = '#22C55E';
-const AMBER = '#EAB308';
+const PENDING_BLUE = '#60a5fa';
+const OVERDUE_AMBER = '#f59e0b';
 /** Single ring when all segments are zero (or loading with no totals yet). */
 const EMPTY_RING = 'rgba(255,255,255,0.28)';
 
@@ -48,14 +49,14 @@ function formatNet(n: number): string {
 
 export type HomeDonutChartProps = {
   saved: number;
-  owedToYou: number;
+  pending: number;
   overdue: number;
   loading?: boolean;
 };
 
 export function HomeDonutChart({
   saved,
-  owedToYou,
+  pending,
   overdue,
   loading = false,
 }: HomeDonutChartProps) {
@@ -80,9 +81,9 @@ export function HomeDonutChart({
     ],
   }));
 
-  const total = saved + owedToYou + overdue;
-  const values = [saved, owedToYou, overdue];
-  const colors = [GREEN, '#14B8A6', AMBER];
+  const total = saved + pending + overdue;
+  const values = [saved, pending, overdue];
+  const colors = [GREEN, PENDING_BLUE, OVERDUE_AMBER];
   const thetaTotal = 2 * Math.PI - 3 * GAP_RAD;
 
   const segments: { d: string; color: string; opacity: number }[] = [];

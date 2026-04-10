@@ -104,6 +104,23 @@ export function computeOwedToYouCents(subs: MemberSubscriptionDoc[], ownerUid: s
   return sum;
 }
 
+export function computePendingOwedToOwnerCents(subs: MemberSubscriptionDoc[], ownerUid: string): number {
+  if (!ownerUid) return 0;
+  let sum = 0;
+  for (const doc of subs) {
+    const sub = doc as Record<string, unknown>;
+    if (!isActiveSubscription(sub)) continue;
+    if (getOwnerId(sub) !== ownerUid) continue;
+    forEachNonOwnerMemberUid(sub, ownerUid, (mid) => {
+      if (!isActiveMemberForMetrics(sub, mid)) return;
+      const st = getMemberPaymentStatusNormalized(sub, mid);
+      if (st !== 'pending') return;
+      sum += getMemberAmountCents(sub, mid);
+    });
+  }
+  return sum;
+}
+
 export function computeOverdueOwedToOwnerCents(subs: MemberSubscriptionDoc[], ownerUid: string): number {
   if (!ownerUid) return 0;
   let sum = 0;
