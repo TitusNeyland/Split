@@ -8,6 +8,7 @@ import {
   fetchInviteById,
   fetchUserProfileForInvite,
 } from '../../lib/friends/friendSystemFirestore';
+import { updateActivityDocumentStatusBySubscription } from '../../lib/activity/activityFeedFirestore';
 import { inviteIsExpired } from '../../lib/friends/inviteHelpers';
 import { getPendingInviteId, setPendingInviteId } from '../../lib/friends/pendingInviteStorage';
 import { replaceWithSplitJoinedCelebration } from '../../lib/navigation/splitJoinedCelebration';
@@ -48,6 +49,11 @@ export default function PendingInviteAfterAuth() {
         handledRef.current = true;
 
         await acceptPendingInvite(pending, user.uid);
+        if (invite.splitId) {
+          void updateActivityDocumentStatusBySubscription(
+            user.uid, invite.splitId, 'split_invite_received', 'accepted'
+          ).catch(() => {});
+        }
         await setPendingInviteId(null);
 
         if (invite.splitId) {

@@ -30,6 +30,7 @@ import { formatMemberSince, initialsFromName } from '../../../lib/profile';
 import { openAppStoreDownload } from '../../../lib/storeLinks';
 import { setPendingInviteId } from '../../../lib/friends/pendingInviteStorage';
 import { buildInviteUrl } from '../../../lib/friends/inviteLinks';
+import { updateActivityDocumentStatusBySubscription } from '../../../lib/activity/activityFeedFirestore';
 import { Timestamp } from 'firebase/firestore';
 import { replaceWithSplitJoinedCelebration } from '../../../lib/navigation/splitJoinedCelebration';
 
@@ -143,6 +144,9 @@ export default function AcceptInviteScreen() {
     try {
       await acceptPendingInvite(inviteId, user.uid);
       if (invite.splitId) {
+        void updateActivityDocumentStatusBySubscription(
+          user.uid, invite.splitId, 'split_invite_received', 'accepted'
+        ).catch(() => {});
         const ok = await replaceWithSplitJoinedCelebration(router, invite.splitId, user.uid);
         if (!ok) {
           router.replace({ pathname: '/subscription/[id]', params: { id: invite.splitId } });
@@ -165,6 +169,11 @@ export default function AcceptInviteScreen() {
     setDeclining(true);
     try {
       await declinePendingInvite(inviteId, user.uid);
+      if (invite.splitId) {
+        void updateActivityDocumentStatusBySubscription(
+          user.uid, invite.splitId, 'split_invite_received', 'declined'
+        ).catch(() => {});
+      }
       router.back();
     } catch (e) {
       Alert.alert('Could not update invite', e instanceof Error ? e.message : 'Try again.');

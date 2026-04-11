@@ -2,6 +2,7 @@ import {
   collection,
   doc,
   getDoc,
+  getDocs,
   increment,
   limit,
   onSnapshot,
@@ -10,6 +11,7 @@ import {
   serverTimestamp,
   Timestamp,
   updateDoc,
+  where,
   writeBatch,
   type Unsubscribe,
 } from 'firebase/firestore';
@@ -254,6 +256,131 @@ function parseSplitInviteMetadata(m: Record<string, unknown> | null | undefined)
     billingCycle: typeof m.billingCycle === 'string' ? m.billingCycle : 'monthly',
     inviteId,
   };
+}
+
+/**
+ * Client-side subscription merge after a split invite is accepted.
+ * Mirrors what the Cloud Function does so the split detail and sub tab update immediately,
+ * without waiting for the Cloud Function to complete. Non-critical: the Cloud Function will
+ * complete the merge if this fails.
+ */
+export async function mergeSplitInviteAcceptance(params: {
+  uid: string;
+  displayName: string;
+  subscriptionId: string;
+  inviteId: string;
+}): Promise<void> {
+  const db = getFirebaseFirestore();
+  if (!db) return;
+
+  const { uid, displayName, subscriptionId, inviteId } = params;
+  const subRef = doc(db, 'subscriptions', subscriptionId);
+  const subSnap = await getDoc(subRef);
+  if (!subSnap.exists()) return;
+
+  const raw = subSnap.data() as Record<string, unknown>;
+  const memberUids: string[] = Array.isArray(raw.memberUids) ? [...raw.memberUids] : [];
+  const activeMemberUids: string[] = Array.isArray(raw.activeMemberUids) ? [...raw.activeMemberUids] : [];
+  const shares = Array.isArray(raw.splitMemberShares)
+    ? (raw.splitMemberShares as Record<string, unknown>[]).map((s) =>
+        s && typeof s === 'object' ? { ...(s as object) } : {}
+      )
+    : [];
+  const memberPaymentStatus: Record<string, string> =
+    raw.memberPaymentStatus && typeof raw.memberPaymentStatus === 'object' && !Array.isArray(raw.memberPaymentStatus)
+      ? { ...(raw.memberPaymentStatus as Record<string, string>) }
+      : {};
+
+  const dn = displayName.trim() || 'Member';
+  const init = initialsFromName(dn);
+  const totalCents = getTotalCents(raw);
+
+  // Update the share row matching this inviteId.
+  const shareIdx = shares.findIndex((s) => (s as Record<string, unknown>).inviteId === inviteId);
+  if (shareIdx >= 0) {
+    shares[shareIdx] = { ...shares[shareIdx], memberId: uid, displayName: dn, initials: init, invitePending: false };
+  }
+
+  const firstMem = Array.isArray(raw.members) && raw.members.length > 0 ? raw.members[0] : undefined;
+  const isObjectRoster = firstMem !== undefined && typeof firstMem === 'object' && firstMem !== null;
+  const membersRoster: Record<string, unknown>[] = isObjectRoster
+    ? (raw.members as Record<string, unknown>[]).map((m) =>
+        m && typeof m === 'object' ? { ...m } : {}
+      )
+    : [];
+
+  if (isObjectRoster) {
+    // Try real uid first, then fall back to the placeholder memberId on the share row
+    // (link/email invites store a placeholder uid in the roster until acceptance).
+    let roIdx = membersRoster.findIndex((m) => String((m as { uid?: string }).uid ?? '') === uid);
+    if (roIdx < 0 && shareIdx >= 0) {
+      const placeholderMemberId = String((shares[shareIdx] as Record<string, unknown>).memberId ?? '');
+      if (placeholderMemberId && placeholderMemberId !== uid) {
+        roIdx = membersRoster.findIndex((m) => String((m as { uid?: string }).uid ?? '') === placeholderMemberId);
+      }
+    }
+    if (roIdx >= 0) {
+      membersRoster[roIdx] = {
+        ...membersRoster[roIdx],
+        uid,
+        memberStatus: 'active',
+        acceptedAt: Timestamp.now(),
+        paymentStatus: 'pending',
+        firstChargeObligationStartsNextCycle: computeFirstChargeObligationStartsNextCycle(raw),
+      };
+    }
+  }
+
+  if (!memberUids.includes(uid)) memberUids.push(uid);
+  if (!activeMemberUids.includes(uid)) activeMemberUids.push(uid);
+  memberPaymentStatus[uid] = 'pending';
+
+  const syncedShares = isObjectRoster
+    ? syncOwnerShareForPendingInvites(shares, totalCents, membersRoster as SubscriptionMemberRosterRow[])
+    : shares;
+
+  const patch: Record<string, unknown> = {
+    memberUids,
+    activeMemberUids,
+    splitMemberShares: syncedShares,
+    memberPaymentStatus,
+    splitUpdatedAt: serverTimestamp(),
+  };
+  if (isObjectRoster) patch.members = membersRoster;
+
+  await updateDoc(subRef, patch);
+}
+
+/**
+ * Marks any pending split_invite notification for the given subscription as accepted.
+ * Called from the activity tab join flow where only the subscriptionId is known.
+ * Queries by type (top-level field) and filters in-memory on metadata.subscriptionId.
+ */
+export async function markSplitInviteNotificationAcceptedBySubscription(
+  uid: string,
+  subscriptionId: string,
+): Promise<void> {
+  const db = getFirebaseFirestore();
+  if (!db) return;
+
+  const snap = await getDocs(
+    query(
+      collection(db, 'users', uid, 'notifications'),
+      where('type', '==', 'split_invite'),
+    ),
+  );
+
+  const batch = writeBatch(db);
+  let hasUpdates = false;
+  for (const d of snap.docs) {
+    const data = d.data() as Record<string, unknown>;
+    const meta = data.metadata as Record<string, unknown> | null | undefined;
+    if (meta?.subscriptionId === subscriptionId && !data.actioned) {
+      batch.update(d.ref, { read: true, actioned: 'accepted' });
+      hasUpdates = true;
+    }
+  }
+  if (hasUpdates) await batch.commit();
 }
 
 /**
