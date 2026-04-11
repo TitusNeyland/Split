@@ -8,7 +8,7 @@ import {
   TouchableOpacity,
   Modal,
   Alert,
-  Share,
+  ActivityIndicator,
   BackHandler,
 } from 'react-native';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
@@ -17,6 +17,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { ServiceIcon } from '../../../components/shared/ServiceIcon';
+import { Toast } from '../../../components/shared/Toast';
 import { UserAvatarCircle } from '../../../components/shared/UserAvatarCircle';
 import { SubscriptionDetailSkeleton } from '../../../components/subscriptions/SubscriptionDetailSkeleton';
 import { spacing } from '../../../constants/theme';
@@ -26,7 +27,6 @@ import type {
   SubscriptionHistoryCycle,
 } from '../../../lib/subscription/subscriptionDetailTypes';
 import { resendSplitInvite } from '../../../lib/subscription/resendSplitInvite';
-import { buildSplitInviteShareMessage } from '../../../lib/friends/inviteLinks';
 import {
   mapFirestoreSubscriptionToDetailModel,
   useSubscriptionDetailFromFirestore,
@@ -139,6 +139,7 @@ export default function SubscriptionDetailScreen() {
   const [historyModalCycle, setHistoryModalCycle] = useState<SubscriptionHistoryCycle | null>(null);
   const [detailRetryKey, setDetailRetryKey] = useState(0);
   const [resendBusyId, setResendBusyId] = useState<string | null>(null);
+  const [resendToast, setResendToast] = useState<string | null>(null);
   const [removeBusyId, setRemoveBusyId] = useState<string | null>(null);
   const [endSplitSheetOpen, setEndSplitSheetOpen] = useState(false);
   const [endSplitBusy, setEndSplitBusy] = useState(false);
@@ -334,19 +335,14 @@ export default function SubscriptionDetailScreen() {
       if (!firebaseUid || !m.inviteId || !detail?.isOwner) return;
       setResendBusyId(m.memberId);
       try {
-        const newId = await resendSplitInvite({
+        await resendSplitInvite({
           subscriptionId: subscriptionId.trim(),
           ownerUid: firebaseUid,
           oldInviteId: m.inviteId,
           memberId: m.memberId,
           recipientEmailRaw: m.pendingInviteEmail,
         });
-        const msg = buildSplitInviteShareMessage(detail.displayName, newId);
-        try {
-          await Share.share({ message: msg });
-        } catch {
-          /* user dismissed share sheet */
-        }
+        setResendToast(`Invitation resent to ${pendingPrimaryLabel(m)}`);
         setDetailRetryKey((k) => k + 1);
       } catch (e) {
         Alert.alert('Could not resend', e instanceof Error ? e.message : 'Try again.');
@@ -760,9 +756,11 @@ export default function SubscriptionDetailScreen() {
                           accessibilityRole="button"
                           accessibilityLabel={`Resend invite to ${primaryExpired}`}
                         >
-                          <Text style={styles.resendPillTxt}>
-                            {resendBusyId === m.memberId ? '…' : 'Resend'}
-                          </Text>
+                          {resendBusyId === m.memberId ? (
+                            <ActivityIndicator size="small" color="#888780" />
+                          ) : (
+                            <Text style={styles.resendPillTxt}>Resend</Text>
+                          )}
                         </Pressable>
                         <Pressable
                           onPress={() => onRemovePendingInvite(m)}
@@ -834,9 +832,11 @@ export default function SubscriptionDetailScreen() {
                           accessibilityRole="button"
                           accessibilityLabel={`Resend invite to ${primary}`}
                         >
-                          <Text style={styles.resendPillTxt}>
-                            {resendBusyId === m.memberId ? '…' : 'Resend'}
-                          </Text>
+                          {resendBusyId === m.memberId ? (
+                            <ActivityIndicator size="small" color="#888780" />
+                          ) : (
+                            <Text style={styles.resendPillTxt}>Resend</Text>
+                          )}
                         </Pressable>
                         <Pressable
                           onPress={() => onRemovePendingInvite(m)}
@@ -1071,6 +1071,13 @@ export default function SubscriptionDetailScreen() {
           confirming={leaveBusy}
         />
       ) : null}
+
+      <Toast
+        message={resendToast}
+        onDismiss={() => setResendToast(null)}
+        type="success"
+        bottom={80}
+      />
     </View>
   );
 }

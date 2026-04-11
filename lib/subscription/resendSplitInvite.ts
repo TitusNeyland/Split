@@ -1,6 +1,6 @@
-import { deleteField, doc, getDoc, serverTimestamp, Timestamp, updateDoc } from 'firebase/firestore';
-import { createPendingInvite, expirePendingInvite } from '../friends/friendSystemFirestore';
-import { getFirebaseFirestore } from '../firebase';
+import { doc, getDoc, serverTimestamp, Timestamp, updateDoc } from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
+import { getFirebaseFirestore, getFirebaseFunctions } from '../firebase';
 import { syncOwnerShareForPendingInvites, type SubscriptionMemberRosterRow } from './subscriptionSplitRecalc';
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -12,16 +12,16 @@ export async function resendSplitInvite(opts: {
   memberId: string;
   recipientEmailRaw?: string | null;
 }): Promise<string> {
-  await expirePendingInvite(opts.oldInviteId);
-  const newId = await createPendingInvite({
-    creatorUid: opts.ownerUid,
-    splitId: opts.subscriptionId,
-    recipientEmailRaw: opts.recipientEmailRaw ?? undefined,
-    connectedVia: 'split_invite',
-  });
-
   const db = getFirebaseFirestore();
   if (!db) throw new Error('Firestore is not configured.');
+
+  // Guard: verify invite still exists before proceeding
+  const inviteRef = doc(db, 'invites', opts.oldInviteId);
+  const inviteSnap = await getDoc(inviteRef);
+  if (!inviteSnap.exists()) {
+    throw new Error('This invite has already expired. Remove it and send a new one.');
+  }
+
   const subRef = doc(db, 'subscriptions', opts.subscriptionId);
   const snap = await getDoc(subRef);
   if (!snap.exists()) throw new Error('Subscription not found.');
@@ -35,9 +35,8 @@ export async function resendSplitInvite(opts: {
 
   shares[idx] = {
     ...shares[idx],
-    inviteId: newId,
+    inviteId: opts.oldInviteId,
     invitePending: true,
-    inviteExpired: deleteField(),
     inviteExpiresAt: Timestamp.fromMillis(Date.now() + INVITE_TTL_MS),
   };
 
@@ -53,9 +52,8 @@ export async function resendSplitInvite(opts: {
     if (mi >= 0) {
       roster[mi] = {
         ...roster[mi],
-        inviteId: newId,
+        inviteId: opts.oldInviteId,
         memberStatus: 'pending',
-        invitedAt: Timestamp.now(),
         inviteExpiresAt: Timestamp.fromMillis(Date.now() + INVITE_TTL_MS),
       };
       patch.members = roster;
@@ -74,5 +72,20 @@ export async function resendSplitInvite(opts: {
 
   await updateDoc(subRef, patch);
 
-  return newId;
+  // Send push + activity reminder via Cloud Function (best-effort)
+  const fns = getFirebaseFunctions();
+  if (fns) {
+    try {
+      const remind = httpsCallable<{ inviteId: string; recipientUid: string; subscriptionId: string }, unknown>(
+        fns,
+        'resendSplitInviteReminder'
+      );
+      await remind({ inviteId: opts.oldInviteId, recipientUid: opts.memberId, subscriptionId: opts.subscriptionId });
+    } catch (e) {
+      const code = e && typeof e === 'object' && 'code' in e ? String((e as { code: string }).code) : '';
+      if (code !== 'functions/not-found') console.warn('resendSplitInviteReminder:', e);
+    }
+  }
+
+  return opts.oldInviteId;
 }

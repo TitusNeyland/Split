@@ -1989,6 +1989,141 @@ exports.sendPaymentReminder = onCall(async (request) => {
 });
 
 /**
+ * Extends a direct (non-split) pending invite's expiry in-place so existing share links remain
+ * valid after a resend. The client cannot change `expiresAt` directly (Firestore rules); this
+ * callable does it via Admin SDK.
+ *
+ * Input: `{ inviteId: string }`
+ */
+exports.resendDirectInvite = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Sign in required.');
+  }
+  const callerUid = request.auth.uid;
+  const inviteId = request.data?.inviteId;
+  if (typeof inviteId !== 'string' || !inviteId.trim()) {
+    throw new HttpsError('invalid-argument', 'inviteId required.');
+  }
+
+  const db = admin.firestore();
+  const inviteRef = db.collection('invites').doc(inviteId.trim());
+  const inviteSnap = await inviteRef.get();
+
+  if (!inviteSnap.exists) {
+    throw new HttpsError('not-found', 'Invite not found.');
+  }
+  const inv = inviteSnap.data();
+  if (inv.createdBy !== callerUid) {
+    throw new HttpsError('permission-denied', 'Not the invite creator.');
+  }
+  if (inv.status !== 'pending') {
+    throw new HttpsError('failed-precondition', 'Invite is no longer pending.');
+  }
+
+  await inviteRef.update({
+    expiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    resentAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+
+  return { ok: true };
+});
+
+/**
+ * Owner resends a split invite: extends the existing invite's expiry in-place, sends a push
+ * reminder to the invitee, and writes a new activity event to their feed.
+ *
+ * The invite document ID is intentionally never changed so existing bell notifications remain valid.
+ *
+ * Input: `{ inviteId: string, recipientUid: string, subscriptionId: string }`
+ */
+exports.resendSplitInviteReminder = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Sign in required.');
+  }
+  const callerUid = request.auth.uid;
+  const { inviteId, recipientUid, subscriptionId } = request.data ?? {};
+  if (typeof inviteId !== 'string' || !inviteId.trim()) {
+    throw new HttpsError('invalid-argument', 'inviteId required.');
+  }
+  if (typeof recipientUid !== 'string' || !recipientUid.trim()) {
+    throw new HttpsError('invalid-argument', 'recipientUid required.');
+  }
+  if (typeof subscriptionId !== 'string' || !subscriptionId.trim()) {
+    throw new HttpsError('invalid-argument', 'subscriptionId required.');
+  }
+
+  const db = admin.firestore();
+
+  const subSnap = await db.collection('subscriptions').doc(subscriptionId.trim()).get();
+  if (!subSnap.exists) {
+    throw new HttpsError('not-found', 'Subscription not found.');
+  }
+  const subData = subSnap.data();
+  if (subData.ownerUid !== callerUid) {
+    throw new HttpsError('permission-denied', 'Only the split owner can resend invites.');
+  }
+
+  // Extend invite expiry in-place via Admin SDK (client rules forbid changing expiresAt)
+  const inviteRef = db.collection('invites').doc(inviteId.trim());
+  const inviteSnap = await inviteRef.get();
+  if (!inviteSnap.exists) {
+    throw new HttpsError('not-found', 'Invite not found.');
+  }
+  if (inviteSnap.data().status !== 'pending') {
+    throw new HttpsError('failed-precondition', 'Invite is no longer pending.');
+  }
+  await inviteRef.update({
+    expiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    resentAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+
+  const subscriptionName = subscriptionLabelFromData(subData);
+  const serviceId = slugifyServiceIdFromName(subscriptionName);
+
+  const ownerDoc = await db.collection('users').doc(callerUid).get();
+  const od = ownerDoc.data() || {};
+  const ownerName =
+    typeof od.displayName === 'string' && od.displayName.trim() ? od.displayName.trim() : 'Someone';
+
+  const shares = Array.isArray(subData.splitMemberShares) ? subData.splitMemberShares : [];
+  const row = shares.find((s) => s && s.memberId === recipientUid.trim());
+  const memberShare = row && typeof row.amountCents === 'number' ? row.amountCents : 0;
+
+  try {
+    await sendMySplitPushToUser(
+      db,
+      recipientUid.trim(),
+      `${ownerName} reminded you to join the ${subscriptionName} split`,
+      { type: 'split_invite', subscriptionId: subscriptionId.trim(), inviteId: inviteId.trim() },
+      { title: 'Reminder: pending split invite' }
+    );
+  } catch (e) {
+    console.warn('resendSplitInviteReminder: push failed', e?.message || e);
+  }
+
+  try {
+    await appendActivityEvent(db, recipientUid.trim(), {
+      type: 'split_invite_received',
+      actorUid: callerUid,
+      actorName: ownerName,
+      subscriptionId: subscriptionId.trim(),
+      subscriptionName,
+      serviceId,
+      amount: memberShare,
+      metadata: {
+        inviterUid: callerUid,
+        inviteId: inviteId.trim(),
+        expiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      },
+    });
+  } catch (e) {
+    console.warn('resendSplitInviteReminder: activity failed', e?.message || e);
+  }
+
+  return { ok: true };
+});
+
+/**
  * payments/{paymentId} status → 'paid': push to the recipient (subscription owner) and write
  * a payment_received activity event. Covers manual settlements recorded by recordManualSettlement().
  */
