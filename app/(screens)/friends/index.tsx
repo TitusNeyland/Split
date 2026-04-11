@@ -22,7 +22,7 @@ import { getFirebaseAuth, isFirebaseConfigured } from '../../../lib/firebase';
 import {
   createDirectFriendshipFromSearch,
   deleteFriendshipBetween,
-  expirePendingInvite,
+  cancelPendingInvite,
   fetchOutgoingPendingInvites,
   fetchOutgoingPendingInviteEmails,
   type OutgoingPendingInviteSummary,
@@ -310,10 +310,11 @@ export default function FriendsScreen() {
   const onCancelPending = useCallback(
     async (row: OutgoingPendingInviteSummary) => {
       if (!isFirebaseConfigured() || !uid) return;
+      setFetchedPending((prev) => prev.filter((p) => p.inviteId !== row.inviteId));
       try {
-        await expirePendingInvite(row.inviteId);
-        setPendingRefresh((n) => n + 1);
+        await cancelPendingInvite(row.inviteId);
       } catch {
+        setFetchedPending((prev) => [row, ...prev]);
         Alert.alert('Could not cancel', 'Check your connection and try again.');
       }
     },

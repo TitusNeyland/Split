@@ -46,7 +46,7 @@ export type FirestoreFriendship = {
   initiatedBy: string;
 };
 
-export type InviteStatus = 'pending' | 'accepted' | 'expired' | 'declined';
+export type InviteStatus = 'pending' | 'accepted' | 'expired' | 'declined' | 'cancelled';
 
 /** `invites/{inviteId}` — `inviteId` matches document id (deep link). */
 export type FirestoreInvite = {
@@ -297,7 +297,8 @@ export async function fetchOutgoingPendingInvites(
     const q = query(
       collection(db, INVITES_COLLECTION),
       where('createdBy', '==', creatorUid),
-      where('status', '==', 'pending' satisfies InviteStatus)
+      where('status', '==', 'pending' satisfies InviteStatus),
+      where('expiresAt', '>', Timestamp.now())
     );
     const snap = await getDocs(q);
     const rows: OutgoingPendingInviteSummary[] = [];
@@ -325,11 +326,12 @@ export async function fetchOutgoingPendingInvites(
   }
 }
 
-export async function expirePendingInvite(inviteId: string): Promise<void> {
+export async function cancelPendingInvite(inviteId: string): Promise<void> {
   const db = getFirebaseFirestore();
   if (!db) throw new Error('Firestore is not configured.');
   await updateDoc(doc(db, INVITES_COLLECTION, inviteId), {
-    status: 'expired' satisfies InviteStatus,
+    status: 'cancelled' satisfies InviteStatus,
+    cancelledAt: serverTimestamp(),
   });
 }
 
