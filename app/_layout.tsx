@@ -119,7 +119,6 @@ export default function RootLayout() {
           />
           <Stack.Screen name="(screens)/invite/[inviteId]" options={{ headerShown: false }} />
           <Stack.Screen name="(screens)/friends/index" options={{ headerShown: false }} />
-          <Stack.Screen name="(screens)/friends/[friendUid]" options={{ headerShown: false }} />
           <Stack.Screen name="(screens)/friends-contacts" options={{ headerShown: false }} />
           <Stack.Screen name="(screens)/sign-in" options={{ headerShown: false, animation: 'fade' }} />
           <Stack.Screen name="(screens)/forgot-password" options={{ headerShown: false, animation: 'slide_from_right' }} />

@@ -154,7 +154,7 @@ export default function HomeNotificationsPanel({
     [uid]
   );
 
-  const onViewProfile = useCallback(
+  const onOpenFriendActivity = useCallback(
     async (n: AppNotification) => {
       const meta = getFriendConnectedMetadata(n);
       if (!meta) {
@@ -164,10 +164,10 @@ export default function HomeNotificationsPanel({
       setBusyId(n.id);
       try {
         onClose();
-        router.push(`/friends/${meta.friendUid}`);
+        router.push({ pathname: '/activity', params: { friendId: meta.friendUid } });
         await markFriendConnectedNotificationRead(uid, n.id);
       } catch {
-        Alert.alert('Something went wrong', 'Could not open profile.');
+        Alert.alert('Something went wrong', 'Could not open activity.');
       } finally {
         setBusyId(null);
       }
@@ -242,7 +242,7 @@ export default function HomeNotificationsPanel({
                   busy={busyId === n.id}
                   onJoinSplit={onJoinSplit}
                   onDecline={onDecline}
-                  onViewProfile={onViewProfile}
+                  onOpenFriendActivity={onOpenFriendActivity}
                 />
               ))}
               {hasMore && (
@@ -269,13 +269,13 @@ function NotificationRow({
   busy,
   onJoinSplit,
   onDecline,
-  onViewProfile,
+  onOpenFriendActivity,
 }: {
   n: AppNotification;
   busy: boolean;
   onJoinSplit: (n: AppNotification) => void;
   onDecline: (n: AppNotification) => void;
-  onViewProfile: (n: AppNotification) => void;
+  onOpenFriendActivity: (n: AppNotification) => void;
 }) {
   const t = formatNotificationRelativeTime(n.createdAt);
   const unread = !n.read;
@@ -392,7 +392,7 @@ function NotificationRow({
             <Text style={styles.rowTime}>{t}</Text>
             {showBtn ? (
               <Pressable
-                onPress={() => onViewProfile(n)}
+                onPress={() => onOpenFriendActivity(n)}
                 disabled={busy}
                 style={({ pressed }) => [
                   styles.btnView,
@@ -400,12 +400,12 @@ function NotificationRow({
                   busy && styles.btnDisabled,
                 ]}
                 accessibilityRole="button"
-                accessibilityLabel="View profile"
+                accessibilityLabel="View activity with this friend"
               >
                 {busy ? (
                   <ActivityIndicator size="small" color={C.purple} />
                 ) : (
-                  <Text style={styles.btnJoinTxt}>View profile</Text>
+                  <Text style={styles.btnJoinTxt}>View activity</Text>
                 )}
               </Pressable>
             ) : null}
