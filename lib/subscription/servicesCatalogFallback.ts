@@ -1,6 +1,7 @@
 /**
  * Bundled fallback when Firestore is unavailable (first launch / offline).
- * Keep in sync with Firestore seed; run `npm run seed:services` or `node scripts/seedServices.js` after editing.
+ * Keep in sync with Firestore seed and `scripts/seedServices.js`. After editing, run `npm run seed:services`
+ * (with service account credentials) for hosted Firestore, or `npm run seed:services:js` if you use the JS seed path.
  */
 import type { CatalogService, FirestoreServiceTierRow, ServiceCategoryId } from './servicesCatalogTypes';
 
@@ -61,7 +62,7 @@ const SVC: Svc[] = [
   },
   { id: 'hulu', name: 'Hulu', category: 'streaming', brandColor: '#1CE783', iconType: 'tv-panel', sortOrder: 1006 },
   { id: 'paramount', name: 'Paramount+', category: 'streaming', brandColor: '#0064FF', iconType: 'tv-panel', sortOrder: 1007 },
-  { id: 'appletv', name: 'Apple TV+', category: 'streaming', brandColor: '#000000', iconType: 'tv-screen', sortOrder: 1008 },
+  { id: 'appletv', name: 'Apple TV', category: 'streaming', brandColor: '#000000', iconType: 'tv-screen', sortOrder: 1008 },
   { id: 'peacock', name: 'Peacock', category: 'streaming', brandColor: '#000000', iconType: 'tv-panel', sortOrder: 1009 },
   { id: 'crunchyroll', name: 'Crunchyroll', category: 'streaming', brandColor: '#F47521', iconType: 'tv-panel', sortOrder: 1010 },
   { id: 'spotify', name: 'Spotify', category: 'music', brandColor: '#1DB954', iconType: 'music', sortOrder: 2001 },
@@ -72,6 +73,10 @@ const SVC: Svc[] = [
   { id: 'xbox-gp', name: 'Xbox Game Pass', category: 'gaming', brandColor: '#107C10', iconType: 'gamepad', sortOrder: 3001 },
   { id: 'ps-plus', name: 'PlayStation Plus', category: 'gaming', brandColor: '#003791', iconType: 'gamepad', sortOrder: 3002 },
   { id: 'nintendo', name: 'Nintendo Online', category: 'gaming', brandColor: '#E4000F', iconType: 'gamepad', sortOrder: 3003 },
+  { id: 'ea-play', name: 'EA Play', category: 'gaming', brandColor: '#000000', iconType: 'gamepad', sortOrder: 3004 },
+  { id: 'apple-arcade', name: 'Apple Arcade', category: 'gaming', brandColor: '#7D57C1', iconType: 'gamepad', sortOrder: 3005 },
+  { id: 'google-play-pass', name: 'Google Play Pass', category: 'gaming', brandColor: '#01875F', iconType: 'gamepad', sortOrder: 3006 },
+  { id: 'ubisoft-plus', name: 'Ubisoft+', category: 'gaming', brandColor: '#0474B5', iconType: 'gamepad', sortOrder: 3007 },
   { id: 'chatgpt', name: 'ChatGPT Plus', category: 'ai', brandColor: '#10A37F', iconType: 'brain', sortOrder: 4001 },
   { id: 'claude', name: 'Claude Pro', category: 'ai', brandColor: '#CC785C', iconType: 'brain', sortOrder: 4002 },
   { id: 'copilot', name: 'Copilot Pro', category: 'ai', brandColor: '#0078D4', iconType: 'brain', sortOrder: 4003 },
@@ -89,6 +94,10 @@ const SVC: Svc[] = [
   { id: 'shipt', name: 'Shipt', category: 'shopping', brandColor: '#C8102E', iconType: 'cart', sortOrder: 6006 },
   { id: 'thrive', name: 'Thrive Market', category: 'shopping', brandColor: '#2A5934', iconType: 'cart', sortOrder: 6007 },
   { id: 'chewy', name: 'Chewy Autoship', category: 'shopping', brandColor: '#0051A5', iconType: 'cart', sortOrder: 6008 },
+  { id: 'sams-club', name: "Sam's Club", category: 'shopping', brandColor: '#0073CE', iconType: 'cart', sortOrder: 6009 },
+  { id: 'costco', name: 'Costco', category: 'shopping', brandColor: '#005DAA', iconType: 'cart', sortOrder: 6010 },
+  { id: 'bjs', name: "BJ's Wholesale", category: 'shopping', brandColor: '#E31837', iconType: 'cart', sortOrder: 6011 },
+  { id: 'target-circle', name: 'Target Circle 360', category: 'shopping', brandColor: '#CC0000', iconType: 'cart', sortOrder: 6012 },
   { id: 'adobe', name: 'Adobe CC', category: 'apps', brandColor: '#FF0000', iconType: 'phone', sortOrder: 7001 },
   { id: 'm365', name: 'Microsoft 365', category: 'apps', brandColor: '#D83B01', iconType: 'phone', sortOrder: 7002 },
   { id: 'duolingo', name: 'Duolingo Plus', category: 'apps', brandColor: '#58CC02', iconType: 'phone', sortOrder: 7003 },
@@ -110,49 +119,66 @@ const SVC: Svc[] = [
 
 const TIERS: Record<string, FirestoreServiceTierRow[]> = {
   netflix: [
-    tierRow('netflix', 0, 'Standard with ads', 699, 'monthly'),
-    tierRow('netflix', 1, 'Standard', 1549, 'monthly'),
-    tierRow('netflix', 2, 'Premium', 2299, 'monthly'),
+    tierRow('netflix', 0, 'Standard with ads', 899, 'monthly'),
+    tierRow('netflix', 1, 'Standard', 1999, 'monthly'),
+    tierRow('netflix', 2, 'Premium', 2699, 'monthly'),
   ],
-  'amazon-prime-video': [tierRow('amazon-prime-video', 0, 'Prime', 1499, 'monthly')],
+  'amazon-prime-video': [tierRow('amazon-prime-video', 0, 'Prime Video (standalone)', 899, 'monthly')],
   disney: [
-    tierRow('disney', 0, 'Basic with ads', 799, 'monthly'),
-    tierRow('disney', 1, 'Premium', 1399, 'monthly'),
+    tierRow('disney', 0, 'Basic (with ads)', 1199, 'monthly'),
+    tierRow('disney', 1, 'Premium (no ads)', 1899, 'monthly'),
   ],
   hbo: [
-    tierRow('hbo', 0, 'With ads', 999, 'monthly'),
-    tierRow('hbo', 1, 'Ad-free', 1599, 'monthly'),
+    tierRow('hbo', 0, 'Basic with ads', 1099, 'monthly'),
+    tierRow('hbo', 1, 'Standard', 1849, 'monthly'),
+    tierRow('hbo', 2, 'Premium', 2299, 'monthly'),
   ],
   'youtube-premium': [
-    tierRow('youtube-premium', 0, 'Individual', 1399, 'monthly'),
-    tierRow('youtube-premium', 1, 'Family', 2299, 'monthly'),
-    tierRow('youtube-premium', 2, 'Student', 799, 'monthly'),
+    tierRow('youtube-premium', 0, 'Individual', 1599, 'monthly'),
+    tierRow('youtube-premium', 1, 'Family (up to 6 members)', 2699, 'monthly'),
+    tierRow('youtube-premium', 2, 'Student', 899, 'monthly'),
   ],
   hulu: [
-    tierRow('hulu', 0, 'With ads', 799, 'monthly'),
-    tierRow('hulu', 1, 'No ads', 1799, 'monthly'),
-    tierRow('hulu', 2, 'Live TV + ads', 8299, 'monthly'),
-    tierRow('hulu', 3, 'Live TV no ads', 9599, 'monthly'),
+    tierRow('hulu', 0, 'Hulu (With Ads)', 1199, 'monthly'),
+    tierRow('hulu', 1, 'Hulu (No Ads)', 1899, 'monthly'),
+    tierRow(
+      'hulu',
+      2,
+      'Hulu + Live TV, Disney+, ESPN Select (with ads)',
+      8999,
+      'monthly',
+    ),
+    tierRow(
+      'hulu',
+      3,
+      'Hulu + Live TV, Disney+, ESPN Select (no ads on Hulu & Disney+)',
+      9999,
+      'monthly',
+    ),
+    tierRow('hulu', 4, 'Live TV Only', 8899, 'monthly'),
+    tierRow('hulu', 5, 'Hulu + Live TV Español, Disney+', 2999, 'monthly'),
+    tierRow('hulu', 6, 'Live TV Only Español', 2899, 'monthly'),
   ],
   paramount: [
-    tierRow('paramount', 0, 'Essential', 599, 'monthly'),
-    tierRow('paramount', 1, 'Showtime bundle', 1199, 'monthly'),
+    tierRow('paramount', 0, 'Essential (with ads)', 900, 'monthly'),
+    tierRow('paramount', 1, 'Premium (no ads)', 1400, 'monthly'),
   ],
-  appletv: [tierRow('appletv', 0, 'Apple TV+', 999, 'monthly')],
+  appletv: [tierRow('appletv', 0, 'Apple TV', 1299, 'monthly')],
   peacock: [
-    tierRow('peacock', 0, 'Premium', 799, 'monthly'),
-    tierRow('peacock', 1, 'Premium Plus', 1399, 'monthly'),
+    tierRow('peacock', 0, 'Select', 799, 'monthly'),
+    tierRow('peacock', 1, 'Standard', 1099, 'monthly'),
+    tierRow('peacock', 2, 'Premium Plus', 1699, 'monthly'),
   ],
   crunchyroll: [
-    tierRow('crunchyroll', 0, 'Fan', 799, 'monthly'),
-    tierRow('crunchyroll', 1, 'Mega Fan', 999, 'monthly'),
-    tierRow('crunchyroll', 2, 'Ultimate Fan', 1499, 'monthly'),
+    tierRow('crunchyroll', 0, 'Fan', 1000, 'monthly'),
+    tierRow('crunchyroll', 1, 'Mega Fan', 1400, 'monthly'),
+    tierRow('crunchyroll', 2, 'Ultimate Fan', 1800, 'monthly'),
   ],
   spotify: [
-    tierRow('spotify', 0, 'Individual', 1199, 'monthly'),
-    tierRow('spotify', 1, 'Duo', 1699, 'monthly'),
-    tierRow('spotify', 2, 'Family', 1999, 'monthly'),
-    tierRow('spotify', 3, 'Student', 599, 'monthly'),
+    tierRow('spotify', 0, 'Individual', 1299, 'monthly'),
+    tierRow('spotify', 1, 'Duo', 1899, 'monthly'),
+    tierRow('spotify', 2, 'Family', 2199, 'monthly'),
+    tierRow('spotify', 3, 'Student', 699, 'monthly'),
   ],
   'apple-music': [
     tierRow('apple-music', 0, 'Individual', 1099, 'monthly'),
@@ -164,8 +190,8 @@ const TIERS: Record<string, FirestoreServiceTierRow[]> = {
     tierRow('tidal', 1, 'Family', 1699, 'monthly'),
   ],
   'youtube-music': [
-    tierRow('youtube-music', 0, 'Individual', 1099, 'monthly'),
-    tierRow('youtube-music', 1, 'Family', 1699, 'monthly'),
+    tierRow('youtube-music', 0, 'Individual', 1199, 'monthly'),
+    tierRow('youtube-music', 1, 'Family', 1899, 'monthly'),
     tierRow('youtube-music', 2, 'Student', 599, 'monthly'),
   ],
   audible: [
@@ -174,9 +200,9 @@ const TIERS: Record<string, FirestoreServiceTierRow[]> = {
     tierRow('audible', 2, 'Premium Plus Two Credits', 2295, 'monthly'),
   ],
   'xbox-gp': [
-    tierRow('xbox-gp', 0, 'Core', 999, 'monthly'),
-    tierRow('xbox-gp', 1, 'Standard', 1499, 'monthly'),
-    tierRow('xbox-gp', 2, 'Ultimate', 1999, 'monthly'),
+    tierRow('xbox-gp', 0, 'Essential', 999, 'monthly'),
+    tierRow('xbox-gp', 1, 'Premium', 1499, 'monthly'),
+    tierRow('xbox-gp', 2, 'Ultimate', 2999, 'monthly'),
   ],
   'ps-plus': [
     tierRow('ps-plus', 0, 'Essential', 999, 'monthly'),
@@ -186,8 +212,26 @@ const TIERS: Record<string, FirestoreServiceTierRow[]> = {
   nintendo: [
     tierRow('nintendo', 0, 'Individual', 399, 'monthly'),
     tierRow('nintendo', 1, 'Family', 799, 'monthly'),
-    tierRow('nintendo', 2, 'Individual + Expansion', 799, 'monthly'),
-    tierRow('nintendo', 3, 'Family + Expansion', 1399, 'monthly'),
+    tierRow('nintendo', 2, 'Individual + Expansion Pack', 4999, 'yearly'),
+    tierRow('nintendo', 3, 'Family + Expansion Pack', 7999, 'yearly'),
+  ],
+  'ea-play': [
+    tierRow('ea-play', 0, 'EA Play', 600, 'monthly'),
+    tierRow('ea-play', 1, 'EA Play (Annual)', 4000, 'yearly'),
+    tierRow('ea-play', 2, 'EA Play Pro', 1700, 'monthly'),
+    tierRow('ea-play', 3, 'EA Play Pro (Annual)', 12000, 'yearly'),
+  ],
+  'apple-arcade': [
+    tierRow('apple-arcade', 0, 'Monthly', 500, 'monthly'),
+    tierRow('apple-arcade', 1, 'Annual', 5000, 'yearly'),
+  ],
+  'google-play-pass': [
+    tierRow('google-play-pass', 0, 'Monthly', 500, 'monthly'),
+    tierRow('google-play-pass', 1, 'Annual', 3000, 'yearly'),
+  ],
+  'ubisoft-plus': [
+    tierRow('ubisoft-plus', 0, 'Classics', 799, 'monthly'),
+    tierRow('ubisoft-plus', 1, 'Premium', 1799, 'monthly'),
   ],
   chatgpt: [
     tierRow('chatgpt', 0, 'Plus', 2000, 'monthly'),
@@ -220,8 +264,8 @@ const TIERS: Record<string, FirestoreServiceTierRow[]> = {
   ],
   onedrive: [
     tierRow('onedrive', 0, '100GB', 199, 'monthly'),
-    tierRow('onedrive', 1, 'Microsoft 365 Personal', 699, 'monthly'),
-    tierRow('onedrive', 2, 'Family', 999, 'monthly'),
+    tierRow('onedrive', 1, 'Microsoft 365 Personal', 999, 'monthly'),
+    tierRow('onedrive', 2, 'Microsoft 365 Family', 1299, 'monthly'),
   ],
   'amazon-prime': [
     tierRow('amazon-prime', 0, 'Monthly', 1499, 'monthly'),
@@ -238,7 +282,7 @@ const TIERS: Record<string, FirestoreServiceTierRow[]> = {
     tierRow('uber-one', 1, 'Annual', 9999, 'yearly'),
   ],
   shipt: [
-    tierRow('shipt', 0, 'Monthly', 1400, 'monthly'),
+    tierRow('shipt', 0, 'Monthly', 1099, 'monthly'),
     tierRow('shipt', 1, 'Annual', 9900, 'yearly'),
   ],
   thrive: [tierRow('thrive', 0, 'Annual', 5995, 'yearly')],
@@ -252,25 +296,41 @@ const TIERS: Record<string, FirestoreServiceTierRow[]> = {
       'No fixed fee — discount applied automatically on autoship orders',
     ),
   ],
+  'sams-club': [
+    tierRow('sams-club', 0, 'Club', 6000, 'yearly'),
+    tierRow('sams-club', 1, 'Club Plus', 12000, 'yearly'),
+  ],
+  costco: [
+    tierRow('costco', 0, 'Gold Star', 6500, 'yearly'),
+    tierRow('costco', 1, 'Executive', 13500, 'yearly'),
+  ],
+  bjs: [
+    tierRow('bjs', 0, 'Club', 6000, 'yearly'),
+    tierRow('bjs', 1, 'Club+', 12000, 'yearly'),
+  ],
+  'target-circle': [
+    tierRow('target-circle', 0, 'Monthly', 1099, 'monthly'),
+    tierRow('target-circle', 1, 'Annual', 9900, 'yearly'),
+  ],
   adobe: [
-    tierRow('adobe', 0, 'Photography', 1999, 'monthly'),
-    tierRow('adobe', 1, 'All Apps', 5499, 'monthly'),
+    tierRow('adobe', 0, 'Creative Cloud Standard', 5499, 'monthly'),
+    tierRow('adobe', 1, 'Creative Cloud Pro', 6999, 'monthly'),
   ],
   m365: [
-    tierRow('m365', 0, 'Personal', 699, 'monthly'),
-    tierRow('m365', 1, 'Family', 999, 'monthly'),
+    tierRow('m365', 0, 'Personal', 999, 'monthly'),
+    tierRow('m365', 1, 'Family', 1299, 'monthly'),
   ],
   duolingo: [
-    tierRow('duolingo', 0, 'Super', 699, 'monthly'),
-    tierRow('duolingo', 1, 'Max', 1399, 'monthly'),
+    tierRow('duolingo', 0, 'Super', 1299, 'monthly'),
+    tierRow('duolingo', 1, 'Max', 2999, 'monthly'),
   ],
   nyt: [
-    tierRow('nyt', 0, 'Basic', 1700, 'monthly'),
+    tierRow('nyt', 0, 'Basic', 2000, 'monthly'),
     tierRow('nyt', 1, 'All Access', 2500, 'monthly'),
   ],
   athletic: [
-    tierRow('athletic', 0, 'Monthly', 1299, 'monthly'),
-    tierRow('athletic', 1, 'Annual', 7999, 'yearly'),
+    tierRow('athletic', 0, 'Monthly', 899, 'monthly'),
+    tierRow('athletic', 1, 'Annual', 7188, 'yearly'),
   ],
   masterclass: [
     tierRow('masterclass', 0, 'Individual', 12000, 'yearly'),
@@ -278,18 +338,22 @@ const TIERS: Record<string, FirestoreServiceTierRow[]> = {
     tierRow('masterclass', 2, 'Family', 2000, 'monthly'),
   ],
   peloton: [
-    tierRow('peloton', 0, 'App+', 1299, 'monthly'),
-    tierRow('peloton', 1, 'All-Access', 4400, 'monthly'),
+    tierRow('peloton', 0, 'App One', 1299, 'monthly'),
+    tierRow('peloton', 1, 'App+', 2899, 'monthly'),
+    tierRow('peloton', 2, 'All-Access (equipment)', 4999, 'monthly'),
   ],
-  strava: [tierRow('strava', 0, 'Individual', 799, 'monthly')],
-  mfp: [tierRow('mfp', 0, 'Premium', 999, 'monthly')],
+  strava: [tierRow('strava', 0, 'Individual', 1199, 'monthly')],
+  mfp: [
+    tierRow('mfp', 0, 'Premium', 1999, 'monthly'),
+    tierRow('mfp', 1, 'Premium+', 2499, 'monthly'),
+  ],
   headspace: [
     tierRow('headspace', 0, 'Monthly', 1299, 'monthly'),
     tierRow('headspace', 1, 'Annual', 6999, 'yearly'),
     tierRow('headspace', 2, 'Family', 9999, 'yearly'),
   ],
   ipsy: [
-    tierRow('ipsy', 0, 'Glam Bag', 1400, 'monthly'),
+    tierRow('ipsy', 0, 'Glam Bag', 1500, 'monthly'),
     tierRow('ipsy', 1, 'Glam Bag Plus', 3200, 'monthly'),
     tierRow('ipsy', 2, 'Glam Bag X', 5500, 'monthly'),
   ],

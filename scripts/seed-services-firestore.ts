@@ -8,6 +8,8 @@
  * to the full path of that file, then:
  *
  *   npm run seed:services
+ *
+ * Re-run after changing tier prices so staging/production `service_tiers` match the app fallback.
  */
 import { existsSync, readFileSync } from 'fs';
 import admin from 'firebase-admin';

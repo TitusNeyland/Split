@@ -18,30 +18,41 @@ export type ServiceTier = {
  */
 export const SERVICE_TIERS_STATIC: Record<string, ServiceTier[]> = {
   Netflix: [
-    { name: 'Standard with ads', price: 6.99, cycle: 'month' },
-    { name: 'Standard', price: 15.49, cycle: 'month' },
-    { name: 'Premium', price: 22.99, cycle: 'month' },
+    { name: 'Standard with ads', price: 8.99, cycle: 'month' },
+    { name: 'Standard', price: 19.99, cycle: 'month' },
+    { name: 'Premium', price: 26.99, cycle: 'month' },
   ],
   Hulu: [
-    { name: 'With ads', price: 7.99, cycle: 'month' },
-    { name: 'No ads', price: 17.99, cycle: 'month' },
-    { name: 'Live TV + ads', price: 82.99, cycle: 'month' },
-    { name: 'Live TV no ads', price: 95.99, cycle: 'month' },
+    { name: 'Hulu (With Ads)', price: 11.99, cycle: 'month' },
+    { name: 'Hulu (No Ads)', price: 18.99, cycle: 'month' },
+    {
+      name: 'Hulu + Live TV, Disney+, ESPN Select (with ads)',
+      price: 89.99,
+      cycle: 'month',
+    },
+    {
+      name: 'Hulu + Live TV, Disney+, ESPN Select (no ads on Hulu & Disney+)',
+      price: 99.99,
+      cycle: 'month',
+    },
+    { name: 'Live TV Only', price: 88.99, cycle: 'month' },
+    { name: 'Hulu + Live TV Español, Disney+', price: 29.99, cycle: 'month' },
+    { name: 'Live TV Only Español', price: 28.99, cycle: 'month' },
   ],
   Spotify: [
-    { name: 'Individual', price: 11.99, cycle: 'month' },
-    { name: 'Duo', price: 16.99, cycle: 'month' },
-    { name: 'Family', price: 19.99, cycle: 'month' },
-    { name: 'Student', price: 5.99, cycle: 'month' },
+    { name: 'Individual', price: 12.99, cycle: 'month' },
+    { name: 'Duo', price: 18.99, cycle: 'month' },
+    { name: 'Family', price: 21.99, cycle: 'month' },
+    { name: 'Student', price: 6.99, cycle: 'month' },
   ],
   'Disney+': [
-    { name: 'Basic (with ads)', price: 7.99, cycle: 'month' },
-    { name: 'Premium', price: 13.99, cycle: 'month' },
+    { name: 'Basic (with ads)', price: 11.99, cycle: 'month' },
+    { name: 'Premium (no ads)', price: 18.99, cycle: 'month' },
   ],
   'Xbox Game Pass': [
-    { name: 'Core', price: 9.99, cycle: 'month' },
-    { name: 'Standard', price: 14.99, cycle: 'month' },
-    { name: 'Ultimate', price: 19.99, cycle: 'month' },
+    { name: 'Essential', price: 9.99, cycle: 'month' },
+    { name: 'Premium', price: 14.99, cycle: 'month' },
+    { name: 'Ultimate', price: 29.99, cycle: 'month' },
   ],
   iCloud: [
     { name: '50GB', price: 0.99, cycle: 'month' },
@@ -50,6 +61,9 @@ export const SERVICE_TIERS_STATIC: Record<string, ServiceTier[]> = {
     { name: '6TB', price: 29.99, cycle: 'month' },
     { name: '12TB', price: 59.99, cycle: 'month' },
   ],
+  /** Matches bundled catalog; keep `Apple TV+` alias for older subscription titles. */
+  'Apple TV': [{ name: 'Apple TV', price: 12.99, cycle: 'month' }],
+  'Apple TV+': [{ name: 'Apple TV', price: 12.99, cycle: 'month' }],
 };
 
 function tiersForKeyExact(key: string): ServiceTier[] {
