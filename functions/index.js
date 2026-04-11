@@ -1523,8 +1523,9 @@ exports.onSubscriptionSplitLifecycleActivity = onDocumentUpdated('subscriptions/
   const after = event.data.after.data();
   if (!after) return;
   const subId = event.params.subscriptionId;
-  const ownerUid = after.ownerUid;
-  if (typeof ownerUid !== 'string' || !ownerUid) return;
+  const ownerRaw = after.ownerUid ?? after.ownerId;
+  const ownerUid = typeof ownerRaw === 'string' && ownerRaw.trim() ? ownerRaw.trim() : '';
+  if (!ownerUid) return;
 
   const subName = subscriptionLabelFromData(after);
   const slugId = slugifyServiceIdFromName(subName);
@@ -1582,14 +1583,15 @@ exports.onSubscriptionSplitLifecycleActivity = onDocumentUpdated('subscriptions/
       } catch (e) {
         console.warn('split_member_left', ownerUid, e?.message || e);
       }
-      const pushBody = `${removedName} left your ${subName} split`;
+      const pushTitle = `${removedName} left your ${subName} split`;
+      const pushBody = 'They are no longer splitting the cost with you';
       try {
         await sendMySplitPushToUser(
           db,
           ownerUid,
           pushBody,
-          { type: 'split_member_left', subscriptionId: subId },
-          { title: 'mySplit' }
+          { type: 'split_member_left', subscriptionId: subId, actorUid: rid },
+          { title: pushTitle }
         );
       } catch (e) {
         console.warn('leave split push', e?.message || e);
