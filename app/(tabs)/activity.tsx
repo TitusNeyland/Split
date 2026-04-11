@@ -38,7 +38,7 @@ import {
   collectInvalidSubscriptionIds,
   markActivityDocsSubscriptionDeleted,
 } from '../../lib/activity/validateActivitySubscriptions';
-import { getFirebaseFirestore } from '../../lib/firebase';
+import { getFirebaseFirestore, getFirebaseAuth } from '../../lib/firebase';
 import { activityEventToFeedRow } from '../../lib/activity/activityEventToFeedItem';
 import {
   activityEventMatchesFilter,
@@ -47,6 +47,7 @@ import {
 import { resolveActivityRoute } from '../../lib/activity/activityNavigation';
 import { sendPaymentReminderCallable } from '../../lib/activity/sendPaymentReminderCallable';
 import { acceptPendingInvite } from '../../lib/friends/friendSystemFirestore';
+import { mergeSplitInviteAcceptance, markSplitInviteNotificationAcceptedBySubscription } from '../../lib/home/homeNotificationsFirestore';
 import { replaceWithSplitJoinedCelebration } from '../../lib/navigation/splitJoinedCelebration';
 import { formatUsdFromCents, formatUsdDollarsFixed2 } from '../../lib/format/currency';
 import { computeActivityOwnerSummaryStats } from '../../lib/activity/activityOwnerSummaryStats';
@@ -701,6 +702,8 @@ export default function ActivityScreen() {
   >({});
   /** Optimistic read state before the activity snapshot reflects `read: true`. */
   const [readOptimisticById, setReadOptimisticById] = useState<Record<string, boolean>>({});
+  /** Optimistically hides the Join button by subscriptionId — stable across Cloud Function rewrites of the activity event. */
+  const [joinedSubscriptionIds, setJoinedSubscriptionIds] = useState<Set<string>>(new Set());
   const lastSubscriptionValidateAtRef = useRef(0);
   const [searchActive, setSearchActive] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -1234,7 +1237,7 @@ export default function ActivityScreen() {
                     }}
                     receiptNavigateMode={false}
                     onReceiptPress={() => router.push(`/receipt/${item.id}`)}
-                    onJoinSplitPress={async (subscriptionId, inviteId) => {
+                    onJoinSplitPress={joinedSubscriptionIds.has(item.joinSubscriptionId ?? '') ? undefined : async (subscriptionId, inviteId) => {
                       if (!uid) return;
                       const trimmed = typeof inviteId === 'string' ? inviteId.trim() : '';
                       if (!trimmed) {
@@ -1263,13 +1266,27 @@ export default function ActivityScreen() {
                             void markActivityDocumentRead(uid, item.id).catch(() => {});
                             return;
                           }
-                          if (!member || String(member.memberStatus ?? '') !== 'pending') {
+                          if (member && String(member.memberStatus ?? '') !== 'pending') {
                             void updateActivityDocumentStatus(uid, item.id, 'cancelled').catch(() => {});
                             Alert.alert('Invite no longer valid', 'This invite may have expired or been cancelled.');
                             return;
                           }
                         }
-                        await acceptPendingInvite(trimmed, uid);
+                        setJoinedSubscriptionIds((prev) => new Set([...prev, subscriptionId]));
+                        try {
+                          await acceptPendingInvite(trimmed, uid);
+                        } catch (e) {
+                          setJoinedSubscriptionIds((prev) => {
+                            const next = new Set(prev);
+                            next.delete(subscriptionId);
+                            return next;
+                          });
+                          Alert.alert('Could not join', e instanceof Error ? e.message : 'Try again.');
+                          return;
+                        }
+                        const displayName = getFirebaseAuth()?.currentUser?.displayName ?? '';
+                        void mergeSplitInviteAcceptance({ uid, displayName, subscriptionId, inviteId: trimmed }).catch(() => {});
+                        void markSplitInviteNotificationAcceptedBySubscription(uid, subscriptionId).catch(() => {});
                         void updateActivityDocumentStatus(uid, item.id, 'accepted').catch(() => {});
                         void markActivityDocumentRead(uid, item.id).catch(() => {});
                         setReadOptimisticById((prev) => ({ ...prev, [item.id]: true }));
@@ -1281,7 +1298,7 @@ export default function ActivityScreen() {
                         Alert.alert('Could not join', e instanceof Error ? e.message : 'Try again.');
                       }
                     }}
-                  />
+                    />
                 ))}
               </View>
             ))
