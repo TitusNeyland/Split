@@ -20,17 +20,15 @@ import { UserAvatarCircle } from '../../../components/shared/UserAvatarCircle';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { getFirebaseAuth, isFirebaseConfigured } from '../../../lib/firebase';
 import {
-  countActiveSubscriptionsForUser,
-  countFriendshipsForUser,
   createDirectFriendshipFromSearch,
-  createPendingInvite,
   deleteFriendshipBetween,
   expirePendingInvite,
-  fetchInviteById,
   fetchOutgoingPendingInvites,
   fetchOutgoingPendingInviteEmails,
   type OutgoingPendingInviteSummary,
 } from '../../../lib/friends/friendSystemFirestore';
+import { httpsCallable } from 'firebase/functions';
+import { getFirebaseFunctions } from '../../../lib/firebase';
 import { searchUsersForFriendConnect, type FriendSearchUserRow } from '../../../lib/friends/userSearchFirestore';
 import { initialsFromName, buildFriendsHubFriendRowsFromSubscriptions, type FriendsHubFriendRow } from '../../../lib/profile';
 import { useHomeFriendDirectory } from '../../../lib/home/useFriendUidsFromFirestore';
@@ -152,6 +150,8 @@ export default function FriendsScreen() {
   const [pendingRefresh, setPendingRefresh] = useState(0);
   const [connectingUid, setConnectingUid] = useState<string | null>(null);
   const [connectToast, setConnectToast] = useState<string | null>(null);
+  const [resendBusyId, setResendBusyId] = useState<string | null>(null);
+  const [resendToast, setResendToast] = useState<string | null>(null);
   const [inviteModalOpen, setInviteModalOpen] = useState(false);
   const [prefilledInviteId, setPrefilledInviteId] = useState<string | null>(null);
 
@@ -323,32 +323,18 @@ export default function FriendsScreen() {
   const onResendPending = useCallback(
     async (row: OutgoingPendingInviteSummary) => {
       if (!uid || !isFirebaseConfigured()) return;
+      setResendBusyId(row.inviteId);
       try {
-        const inv = await fetchInviteById(row.inviteId);
-        if (!inv) {
-          Alert.alert('Could not resend', 'Invite not found.');
-          return;
-        }
-        await expirePendingInvite(row.inviteId);
-        const [splits, friends] = await Promise.all([
-          countActiveSubscriptionsForUser(uid),
-          countFriendshipsForUser(uid),
-        ]);
-        const newId = await createPendingInvite({
-          creatorUid: uid,
-          connectedVia: inv.connectedVia ?? 'direct_invite',
-          recipientEmailRaw:
-            typeof inv.recipientEmail === 'string' && inv.recipientEmail.length > 0
-              ? inv.recipientEmail
-              : undefined,
-          senderActiveSplits: splits,
-          senderFriendCount: friends,
-        });
-        setPrefilledInviteId(newId);
-        setInviteModalOpen(true);
+        const fns = getFirebaseFunctions();
+        if (!fns) throw new Error('Functions not configured.');
+        const resend = httpsCallable<{ inviteId: string }, unknown>(fns, 'resendDirectInvite');
+        await resend({ inviteId: row.inviteId });
+        setResendToast(`Invitation resent to ${row.recipientLabel}`);
         setPendingRefresh((n) => n + 1);
       } catch (e) {
         Alert.alert('Could not resend', e instanceof Error ? e.message : 'Try again.');
+      } finally {
+        setResendBusyId(null);
       }
     },
     [uid]
@@ -663,12 +649,18 @@ export default function FriendsScreen() {
                     <View style={styles.pendingActions}>
                       <Pressable
                         onPress={() => void onResendPending(p)}
+                        disabled={resendBusyId === p.inviteId}
                         style={({ pressed }) => [styles.resendBtn, pressed && styles.resendBtnPressed]}
                       >
-                        <Text style={styles.resendBtnTxt}>Resend</Text>
+                        {resendBusyId === p.inviteId ? (
+                          <ActivityIndicator size="small" color="#888780" />
+                        ) : (
+                          <Text style={styles.resendBtnTxt}>Resend</Text>
+                        )}
                       </Pressable>
                       <Pressable
                         onPress={() => void onCancelPending(p)}
+                        disabled={resendBusyId === p.inviteId}
                         style={({ pressed }) => [styles.cancelBtn, pressed && styles.cancelBtnPressed]}
                       >
                         <Text style={styles.cancelBtnTxt}>Cancel</Text>
@@ -688,6 +680,12 @@ export default function FriendsScreen() {
         duration={3000}
         type="success"
         showIcon
+        bottomInsetExtra={20}
+      />
+      <Toast
+        message={resendToast}
+        onDismiss={() => setResendToast(null)}
+        type="success"
         bottomInsetExtra={20}
       />
 
