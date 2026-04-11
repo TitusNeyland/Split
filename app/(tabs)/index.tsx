@@ -373,14 +373,14 @@ export default function HomeScreen() {
 
   const homeQuickActions = useMemo(
     () => [
-      {
-        id: 'scan',
-        label: 'Scan receipt',
-        icon: 'phone-portrait-outline' as const,
-        circleBg: '#EEEDFE',
-        iconColor: C.purple,
-        onPress: () => router.push('/scan'),
-      },
+      // {
+      //   id: 'scan',
+      //   label: 'Scan receipt',
+      //   icon: 'phone-portrait-outline' as const,
+      //   circleBg: '#EEEDFE',
+      //   iconColor: C.purple,
+      //   onPress: () => router.push('/scan'),
+      // },
       {
         id: 'add',
         label: 'Add sub',
