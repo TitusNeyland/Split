@@ -38,6 +38,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="scan"
         options={{
+          href: null,
           title: 'Scan',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="phone-portrait-outline" color={color} size={size} />
