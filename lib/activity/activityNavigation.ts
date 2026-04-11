@@ -14,8 +14,7 @@ export function resolveActivityRoute(input: {
   }
   const t = input.activityType;
   if (t === 'friend_connected' || t === 'friend_invite_accepted') {
-    const uid = input.friendLinkIds?.[0];
-    if (uid) return `/friends/${uid}`;
+    // Friend profile screen removed — stay on Activity (expand detail if present).
     return null;
   }
   const sub =

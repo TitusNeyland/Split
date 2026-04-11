@@ -995,6 +995,16 @@ export default function ActivityScreen() {
         router.push(path as never);
         return;
       }
+      const friendFilterUid =
+        (item.activityType === 'friend_connected' || item.activityType === 'friend_invite_accepted') &&
+        item.friendLinkIds?.[0]
+          ? item.friendLinkIds[0]
+          : null;
+      if (friendFilterUid) {
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+        router.setParams({ friendId: friendFilterUid });
+        return;
+      }
       const hasDetail = Boolean(
         item.detail &&
           (item.detail.rows.length > 0 || (item.detail.actions?.length ?? 0) > 0),

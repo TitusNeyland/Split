@@ -39,7 +39,8 @@
       "Skill(update-config)",
       "Bash(mkdir -p \"C:/Users/neyla/workspaces/Split/app/\\(screens\\)\")",
       "Bash(mv \"C:/Users/neyla/workspaces/Split/app/onboarding\" \"C:/Users/neyla/workspaces/Split/app/add-subscription\" \"C:/Users/neyla/workspaces/Split/app/forgot-password\" \"C:/Users/neyla/workspaces/Split/app/profile\" \"C:/Users/neyla/workspaces/Split/app/invite\" \"C:/Users/neyla/workspaces/Split/app/receipt\" \"C:/Users/neyla/workspaces/Split/app/\\(screens\\)/\")",
-      "Bash(mv \"C:/Users/neyla/workspaces/Split/app/sign-in.tsx\" \"C:/Users/neyla/workspaces/Split/app/billing-calendar.tsx\" \"C:/Users/neyla/workspaces/Split/app/friends.tsx\" \"C:/Users/neyla/workspaces/Split/app/friends-contacts.tsx\" \"C:/Users/neyla/workspaces/Split/app/invite-share.tsx\" \"C:/Users/neyla/workspaces/Split/app/receipt-assign.tsx\" \"C:/Users/neyla/workspaces/Split/app/split-created.tsx\" \"C:/Users/neyla/workspaces/Split/app/\\(screens\\)/\")"
+      "Bash(mv \"C:/Users/neyla/workspaces/Split/app/sign-in.tsx\" \"C:/Users/neyla/workspaces/Split/app/billing-calendar.tsx\" \"C:/Users/neyla/workspaces/Split/app/friends.tsx\" \"C:/Users/neyla/workspaces/Split/app/friends-contacts.tsx\" \"C:/Users/neyla/workspaces/Split/app/invite-share.tsx\" \"C:/Users/neyla/workspaces/Split/app/receipt-assign.tsx\" \"C:/Users/neyla/workspaces/Split/app/split-created.tsx\" \"C:/Users/neyla/workspaces/Split/app/\\(screens\\)/\")",
+      "WebSearch"
     ]
   }
 }

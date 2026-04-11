@@ -952,7 +952,7 @@ exports.onFriendshipCreatedNotify = onDocumentCreated('friendships/{friendshipId
       body: 'You can now split subscriptions together',
       read: false,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      deepLink: `/friends/${initiatedBy}`,
+      deepLink: `/activity?friendId=${encodeURIComponent(initiatedBy)}`,
       metadata: {
         friendUid: initiatedBy,
         friendName: senderName,
