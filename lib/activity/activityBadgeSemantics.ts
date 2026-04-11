@@ -84,8 +84,9 @@ export function getActivitySemanticBadgeVariant(
     case 'reminder_received':
     case 'split_invite_declined_owner':
     case 'split_invite_expired':
-    case 'split_member_left':
       return 'reminder';
+    case 'split_member_left':
+      return 'ended';
     case 'split_price_updated':
     case 'split_percentage_updated':
       return 'updated';
