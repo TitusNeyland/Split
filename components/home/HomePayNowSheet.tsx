@@ -1,4 +1,4 @@
-import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -65,6 +65,8 @@ export type HomePayNowSheetProps = {
   onClose: () => void;
   subscriptions: MemberSubscriptionDoc[];
   currentUid: string;
+  /** When set, the sheet opens directly to the confirm step for this subscription. */
+  initialSubscriptionId?: string;
 };
 
 function slideDistance(windowH: number): number {
@@ -76,6 +78,7 @@ export function HomePayNowSheet({
   onClose,
   subscriptions,
   currentUid,
+  initialSubscriptionId,
 }: HomePayNowSheetProps) {
   const insets = useSafeAreaInsets();
   const { height: windowH } = useWindowDimensions();
@@ -160,6 +163,16 @@ export function HomePayNowSheet({
       });
   }, [subscriptions, currentUid]);
 
+  // When opened from a specific subscription, jump straight to confirm view.
+  useEffect(() => {
+    if (!visible || !initialSubscriptionId) return;
+    const row = pendingRows.find((r) => r.subId === initialSubscriptionId) ?? null;
+    if (row) {
+      setSelectedRow(row);
+      setMethod('cash');
+    }
+  }, [visible, initialSubscriptionId, pendingRows]);
+
   const handleConfirmPay = useCallback(async () => {
     if (!selectedRow || !currentUid) return;
     setConfirming(true);
@@ -217,7 +230,7 @@ export function HomePayNowSheet({
               method={method}
               onMethodChange={setMethod}
               onConfirm={() => void handleConfirmPay()}
-              onBack={handleBackToList}
+              onBack={initialSubscriptionId ? dismiss : handleBackToList}
               confirming={confirming}
             />
           ) : (

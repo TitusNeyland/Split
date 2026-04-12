@@ -47,6 +47,7 @@ import {
   setPendingSubscriptionsTabToast,
 } from '../../../lib/subscription/endSplitNavigationToast';
 import { LeaveSplitConfirmSheet } from '../../../components/subscriptions/LeaveSplitConfirmSheet';
+import { HomePayNowSheet } from '../../../components/home/HomePayNowSheet';
 import { leaveSubscriptionSplit } from '../../../lib/subscription/leaveSplitFirestore';
 import { clearOwnerMemberLeftBanner } from '../../../lib/subscription/clearOwnerMemberLeftBannerFirestore';
 import { clearSplitInviteDeclineNotices } from '../../../lib/subscription/splitInviteDeclineNoticesFirestore';
@@ -145,6 +146,7 @@ export default function SubscriptionDetailScreen() {
   const [endSplitBusy, setEndSplitBusy] = useState(false);
   const [leaveSheetOpen, setLeaveSheetOpen] = useState(false);
   const [leaveBusy, setLeaveBusy] = useState(false);
+  const [payNowSheetVisible, setPayNowSheetVisible] = useState(false);
 
   const { detail: liveDetail, loading: liveLoading, error: liveError, errorMessage: liveErrorMessage } =
     useSubscriptionDetailFromFirestore(subscriptionId, firebaseUid, userAvatarUrl, viewerFirstName, {
@@ -886,9 +888,22 @@ export default function SubscriptionDetailScreen() {
                     >
                       {formatMemberAmount(m.amountCents, m.percent, splitPrefs.alwaysShowExactAmounts)}
                     </Text>
-                    <View style={[styles.statusBadge, { backgroundColor: st.bg }]}>
-                      <Text style={[styles.statusBadgeTxt, { color: st.fg }]}>{st.label}</Text>
-                    </View>
+                    {!ended && m.memberId === firebaseUid && (m.cycleStatus === 'pending' || m.cycleStatus === 'overdue') ? (
+                      <TouchableOpacity
+                        style={[styles.payBtn, m.cycleStatus === 'overdue' && styles.payBtnOverdue]}
+                        onPress={() => setPayNowSheetVisible(true)}
+                        accessibilityRole="button"
+                        accessibilityLabel={m.cycleStatus === 'overdue' ? 'Pay now' : 'Pay'}
+                      >
+                        <Text style={styles.payBtnTxt}>
+                          {m.cycleStatus === 'overdue' ? 'Pay now' : 'Pay'}
+                        </Text>
+                      </TouchableOpacity>
+                    ) : (
+                      <View style={[styles.statusBadge, { backgroundColor: st.bg }]}>
+                        <Text style={[styles.statusBadgeTxt, { color: st.fg }]}>{st.label}</Text>
+                      </View>
+                    )}
                   </View>
                 </View>
               );
@@ -1071,6 +1086,14 @@ export default function SubscriptionDetailScreen() {
           confirming={leaveBusy}
         />
       ) : null}
+
+      <HomePayNowSheet
+        visible={payNowSheetVisible}
+        onClose={() => setPayNowSheetVisible(false)}
+        subscriptions={subscriptions}
+        currentUid={firebaseUid ?? ''}
+        initialSubscriptionId={subscriptionId}
+      />
 
       <Toast
         message={resendToast}
@@ -1519,6 +1542,20 @@ const styles = StyleSheet.create({
   statusBadgeTxt: {
     fontSize: 11,
     fontWeight: '600',
+  },
+  payBtn: {
+    backgroundColor: '#1D9E75',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+  },
+  payBtnOverdue: {
+    backgroundColor: '#E24B4A',
+  },
+  payBtnTxt: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#fff',
   },
   progTrack: {
     height: 4,
