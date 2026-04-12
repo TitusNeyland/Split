@@ -1,4 +1,4 @@
-import { doc, getDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, serverTimestamp, Timestamp, updateDoc } from 'firebase/firestore';
 import { getFirebaseFirestore } from '../firebase';
 
 /**
@@ -35,11 +35,10 @@ export async function markSubscriptionMemberPaid(
     rawMembers[0] != null &&
     typeof rawMembers[0] === 'object'
   ) {
-    const now = serverTimestamp();
     updatePayload.members = (rawMembers as Record<string, unknown>[]).map((m) => {
       if (!m || typeof m !== 'object') return m;
       if ((m as { uid?: string }).uid !== memberUid) return m;
-      return { ...m, paymentStatus: 'paid', paidAt: now };
+      return { ...m, paymentStatus: 'paid', paidAt: Timestamp.now() };
     });
   }
 
